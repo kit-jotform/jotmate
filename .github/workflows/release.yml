@@ -42,8 +42,8 @@ jobs:
         if: matrix.cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Install Linux dependencies (x86_64-linux)
-        if: matrix.os == 'ubuntu-latest' && !matrix.cross
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libdbus-1-dev pkg-config
