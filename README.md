@@ -13,7 +13,7 @@ cargo install --path .
 ### Global (from release)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jotform/jotmate/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/kit-jotform/Jotmate/main/install.sh | sh
 ```
 
 Installs to `~/.local/bin` by default. For a system-wide install:

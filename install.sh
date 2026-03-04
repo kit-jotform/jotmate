@@ -1,11 +1,11 @@
 #!/bin/sh
 # jotmate installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/jotform/jotmate/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/kit-jotform/Jotmate/main/install.sh | sh
 # Or: ./install.sh [--prefix /usr/local]
 
 set -e
 
-REPO="jotform/jotmate"
+REPO="kit-jotform/Jotmate"
 BINARY="jotmate"
 INSTALL_DIR="${HOME}/.local/bin"
 
