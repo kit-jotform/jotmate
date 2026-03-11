@@ -315,7 +315,7 @@ run_settings() {
 
         local choice
         choice="$(gum choose \
-            --header "  SETTINGS  (↑↓ navigate · Enter select · Esc back)" \
+            --header "  SETTINGS  (↑↓ navigate · Enter toggle · Esc back)" \
             --header.foreground "$C_SECONDARY" \
             --header.bold \
             --cursor "  ▸ " \
@@ -356,32 +356,11 @@ run_settings() {
                 break
                 ;;
             *)
-                # Repo row selected — extract name from "[ON/OFF]  name  <url>"
+                # Repo row selected — extract name and toggle directly
                 local repo_name
                 repo_name="$(echo "$choice" | sed 's/^\[...\]  //;s/  <.*//')"
                 [[ -z "$repo_name" ]] && continue
-
-                local action
-                action="$(gum choose \
-                    --header "  ${repo_name}  — choose action" \
-                    --header.foreground "$C_SECONDARY" \
-                    --cursor "  ▸ " \
-                    --cursor.foreground "$C_PRIMARY" \
-                    "Toggle on/off" \
-                    "Remove" \
-                    "Cancel" \
-                )" || action=""
-
-                case "$action" in
-                    "Toggle on/off")
-                        "$JOTMATE_BIN" _settings-toggle-repo "$repo_name" >/dev/null
-                        ;;
-                    "Remove")
-                        if gum confirm "Remove '${repo_name}' from upstream repos?"; then
-                            "$JOTMATE_BIN" _settings-remove-repo "$repo_name" >/dev/null
-                        fi
-                        ;;
-                esac
+                "$JOTMATE_BIN" _settings-toggle-repo "$repo_name" >/dev/null
                 ;;
         esac
     done
