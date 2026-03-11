@@ -11,12 +11,7 @@ pub enum Screen {
 
 // ── Main menu ─────────────────────────────────────────────────────────────────
 
-pub const MAIN_ITEMS: &[&str] = &[
-    "Sync        —  Sync repos to upstream",
-    "Time Doctor —  Track your work hours",
-    "Settings    —  Configure jotmate",
-    "Exit",
-];
+pub const MAIN_ITEM_COUNT: usize = 4; // Sync, Time Doctor, Settings, Exit
 
 // ── App ───────────────────────────────────────────────────────────────────────
 

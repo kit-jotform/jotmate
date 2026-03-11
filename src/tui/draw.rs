@@ -1,3 +1,4 @@
+use chrono::Local;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -5,16 +6,29 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, Screen, MAIN_ITEMS};
+use super::app::{App, Screen};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
-const C_PRIMARY: Color = Color::Rgb(124, 58, 237);  // purple
-const C_ACCENT: Color = Color::Rgb(244, 114, 182);  // pink
-const C_SUCCESS: Color = Color::Rgb(16, 185, 129);  // green
-const C_MUTED: Color = Color::Rgb(107, 114, 128);   // gray
-const C_TEXT: Color = Color::Rgb(229, 231, 235);    // near-white
+const C_LOGO: Color = Color::Indexed(189);   // lavender — original logo colour
+const C_PRIMARY: Color = Color::LightMagenta;
+const C_ACCENT: Color = Color::LightCyan;
+const C_SELECT: Color = Color::Indexed(141); // medium purple — selection highlight
+const C_SUCCESS: Color = Color::LightGreen;
+const C_MUTED: Color = Color::DarkGray;
+const C_TEXT: Color = Color::White;
+
+// ── Main menu items: (name, description) ──────────────────────────────────────
+
+const MAIN_ITEMS: &[(&str, &str)] = &[
+    ("Sync",        "Sync repos to upstream"),
+    ("Time Doctor", "Track your work hours"),
+    ("Settings",    "Configure jotmate"),
+    ("Exit",        ""),
+];
+
+const NAME_COL_W: u16 = 16; // fixed width for the name column
 
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
@@ -26,84 +40,142 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
 fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
 
-    // Vertical: header block | tagline | divider | hint | menu
+    // Layout: header | tagline | time-version | blank | divider | blank | select-header | menu | blank | hint
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(7), // icon (7 rows) / logo (6 rows) — take max
+            Constraint::Length(7), // header (icon + logo)
             Constraint::Length(1), // tagline
+            Constraint::Length(1), // time | version
+            Constraint::Length(1), // blank
             Constraint::Length(1), // divider
+            Constraint::Length(1), // blank
+            Constraint::Length(1), // "SELECT TOOL" header
+            Constraint::Length(4), // menu list (4 items)
+            Constraint::Length(1), // blank
             Constraint::Length(1), // hint
-            Constraint::Min(0),    // menu list
         ])
         .margin(1)
         .split(area);
 
-    // Header row: icon (14 cols + 2 gap) | logo text
+    // Header row: icon | gap | logo
     let header_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(14), // icon width
-            Constraint::Length(2),  // gap
-            Constraint::Min(0),     // logo text
+            Constraint::Length(14),
+            Constraint::Length(2),
+            Constraint::Min(0),
         ])
         .split(rows[0]);
 
     // ── Icon ──
     f.render_widget(IconWidget, header_cols[0]);
 
-    // ── Logo text (vertically centered: logo is 6 lines, area is 7) ──
+    // ── Logo (lavender, vertically centred in 7-row area) ──
     let logo_area = Rect { y: header_cols[2].y + 1, height: 6, ..header_cols[2] };
     let logo_lines: Vec<Line> = LOGO
         .iter()
-        .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_TEXT).add_modifier(Modifier::BOLD))))
+        .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_LOGO).add_modifier(Modifier::BOLD))))
         .collect();
     f.render_widget(Paragraph::new(logo_lines), logo_area);
 
-    // ── Tagline ──
+    // Divider anchored at logo x, logo width
+    let logo_x = header_cols[2].x;
+
+    const DIV_W: u16 = 49;
+
+    let centered = |row: Rect, text_len: u16| -> Rect {
+        let pad = DIV_W.saturating_sub(text_len) / 2;
+        Rect { x: logo_x + pad, width: DIV_W.min(text_len), ..row }
+    };
+
+    // ── Divider — fixed 49 chars ──
+    let divider = "─".repeat(DIV_W as usize);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(divider.clone(), Style::default().fg(C_MUTED)))),
+        Rect { x: logo_x, width: DIV_W, ..rows[4] },
+    );
+
+    // ── Tagline — centered within divider width ──
+    let tagline = "The lazy engineer's Swiss Army knife";
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "The lazy engineer's Swiss Army knife",
+            tagline,
             Style::default().fg(C_MUTED).add_modifier(Modifier::ITALIC),
         ))),
-        rows[1],
+        centered(rows[1], tagline.chars().count() as u16),
     );
 
-    // ── Divider ──
+    // ── Time | version — centered within divider width ──
+    let now = Local::now().format("%H:%M").to_string();
+    let version = env!("CARGO_PKG_VERSION");
+    let time_str = format!("{}  |  v{}", now, version);
+    let time_len = time_str.chars().count() as u16;
     f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "─────────────────────────────────────────────────",
-            Style::default().fg(C_MUTED),
-        ))),
-        rows[2],
+        Paragraph::new(Line::from(vec![
+            Span::styled(now, Style::default().fg(C_MUTED)),
+            Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("v{version}"), Style::default().fg(C_MUTED)),
+        ])),
+        centered(rows[2], time_len),
     );
 
-    // ── Hint ──
+    // rows[3] blank
+
+    // rows[5] blank
+
+    // ── "SELECT TOOL" header with keys ──
     f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "↑↓ navigate  ·  Enter select  ·  Esc/q exit",
-            Style::default().fg(C_MUTED),
-        ))),
-        rows[3],
+        Paragraph::new(Line::from(vec![
+            Span::styled("SELECT TOOL", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled("  (←↓↑→ navigate  •  ↵ submit)", Style::default().fg(C_MUTED)),
+        ])),
+        rows[6],
     );
 
     // ── Menu list ──
     let items: Vec<ListItem> = MAIN_ITEMS
         .iter()
         .enumerate()
-        .map(|(i, label)| {
+        .map(|(i, (name, desc))| {
             let selected = app.main_state.selected() == Some(i);
-            let style = if selected {
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+            if selected {
+                let name_padded = format!("{:<width$}", name, width = NAME_COL_W as usize);
+                let mut spans = vec![
+                    Span::styled("▸ ", Style::default().fg(C_SELECT)),
+                    Span::styled(name_padded, Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD)),
+                ];
+                if !desc.is_empty() {
+                    spans.push(Span::styled("— ", Style::default().fg(C_SELECT)));
+                    spans.push(Span::styled(*desc, Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD)));
+                }
+                ListItem::new(Line::from(spans))
             } else {
-                Style::default().fg(C_TEXT)
-            };
-            let prefix = if selected { "▸ " } else { "  " };
-            ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+                let name_padded = format!("{:<width$}", name, width = NAME_COL_W as usize);
+                let mut spans = vec![
+                    Span::raw("  "),
+                    Span::styled(name_padded, Style::default().fg(C_TEXT)),
+                ];
+                if !desc.is_empty() {
+                    spans.push(Span::styled("— ", Style::default().fg(C_MUTED)));
+                    spans.push(Span::styled(*desc, Style::default().fg(C_TEXT)));
+                }
+                ListItem::new(Line::from(spans))
+            }
         })
         .collect();
 
-    f.render_stateful_widget(List::new(items), rows[4], &mut app.main_state.clone());
+    f.render_stateful_widget(List::new(items), rows[7], &mut app.main_state.clone());
+
+    // rows[8] blank
+
+    // ── Hint ──
+    f.render_widget(
+        Paragraph::new(Line::from(
+            Span::styled("Esc exit", Style::default().fg(C_MUTED)),
+        )),
+        rows[9],
+    );
 }
 
 fn draw_settings(f: &mut ratatui::Frame, app: &App) {

@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use super::app::{App, Screen, MAIN_ITEMS};
+use super::app::{App, Screen, MAIN_ITEM_COUNT};
 
 // Returns None to keep looping, Some(None) to quit, Some(Some("sync")) etc to run a tool
 pub fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {
@@ -11,7 +11,7 @@ pub fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {
         }
         KeyCode::Down | KeyCode::Right => {
             let i = app.main_state.selected().unwrap_or(0);
-            app.main_state.select(Some((i + 1).min(MAIN_ITEMS.len() - 1)));
+            app.main_state.select(Some((i + 1).min(MAIN_ITEM_COUNT - 1)));
         }
         KeyCode::Enter => {
             let i = app.main_state.selected().unwrap_or(0);
