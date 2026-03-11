@@ -130,36 +130,56 @@ show_tool_header() {
 
     enter_alt_screen
     clear_screen
+
+    _print_tool_header "$tool_name" "$tool_desc" "$tw"
+}
+
+# Fast plain-printf header — no gum subprocess overhead
+_print_tool_header() {
+    local tool_name="$1"
+    local tool_desc="${2:-}"
+    local tw="${3:-$(term_width)}"
+
+    local logo_line
+    local pad=$(( (tw - 22) / 2 ))
+    [[ $pad -lt 0 ]] && pad=0
+    local indent
+    printf -v indent '%*s' "$pad" ''
+
     echo ""
-    render_small_logo "$tw"
+    while IFS= read -r logo_line; do
+        printf '%s\033[38;5;141m%s\033[0m\n' "$indent" "$logo_line"
+    done <<< "$JOTMATE_LOGO_SMALL"
     echo ""
 
-    gum style \
-        --foreground "$C_ACCENT" \
-        --bold \
-        --border rounded \
-        --border-foreground "$C_PRIMARY" \
-        --padding "0 4" \
-        --align center \
-        --width 50 \
-        --margin "0 $(( (tw - 54) / 2 > 0 ? (tw - 54) / 2 : 0 ))" \
-        "$tool_name"
+    # Title box using ANSI — rounded corners
+    local title_pad="    ${tool_name}    "
+    local title_len=${#title_pad}
+    local box_pad=$(( (tw - title_len - 2) / 2 ))
+    [[ $box_pad -lt 0 ]] && box_pad=0
+    local box_indent
+    printf -v box_indent '%*s' "$box_pad" ''
+    local top_border="╭$(printf '─%.0s' $(seq 1 $title_len))╮"
+    local bot_border="╰$(printf '─%.0s' $(seq 1 $title_len))╯"
+    printf '%s\033[38;5;141m%s\033[0m\n' "$box_indent" "$top_border"
+    printf '%s\033[38;5;141m│\033[0m\033[1;38;5;213m%s\033[0m\033[38;5;141m│\033[0m\n' "$box_indent" "$title_pad"
+    printf '%s\033[38;5;141m%s\033[0m\n' "$box_indent" "$bot_border"
 
     if [[ -n "$tool_desc" ]]; then
-        gum style \
-            --foreground "$C_MUTED" \
-            --italic \
-            --align center \
-            --width "$tw" \
-            "$tool_desc"
+        local desc_pad=$(( (tw - ${#tool_desc}) / 2 ))
+        [[ $desc_pad -lt 0 ]] && desc_pad=0
+        local desc_indent
+        printf -v desc_indent '%*s' "$desc_pad" ''
+        printf '%s\033[3;38;5;245m%s\033[0m\n' "$desc_indent" "$tool_desc"
     fi
 
     echo ""
-    gum style \
-        --foreground "$C_MUTED" \
-        --align center \
-        --width "$tw" \
-        "─────────────────────────────────────────────────"
+    local div="─────────────────────────────────────────────────"
+    local div_pad=$(( (tw - ${#div}) / 2 ))
+    [[ $div_pad -lt 0 ]] && div_pad=0
+    local div_indent
+    printf -v div_indent '%*s' "$div_pad" ''
+    printf '%s\033[38;5;245m%s\033[0m\n' "$div_indent" "$div"
     echo ""
 }
 
@@ -287,9 +307,14 @@ _settings_repo_names() {
 
 # ── Run Settings ──────────────────────────────────────────────
 run_settings() {
+    enter_alt_screen
+    show_cursor
+    local tw
+    tw="$(term_width)"
+
     while true; do
-        show_tool_header "Settings" "Configure jotmate"
-        show_cursor
+        clear_screen
+        _print_tool_header "Settings" "Configure jotmate" "$tw"
 
         # Read current values
         local sync_all use_cache
