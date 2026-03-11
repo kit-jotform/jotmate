@@ -1,110 +1,471 @@
-use anyhow::{bail, Result};
-use std::io::Write;
+use anyhow::Result;
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{List, ListItem, ListState, Paragraph},
+    Terminal,
+};
+use std::io::stdout;
 
-const TUI_SH: &str = include_str!("../../scripts/tui.sh");
+// ── Palette ──────────────────────────────────────────────────────────────────
 
-fn exec_tui_sh() -> Result<()> {
-    let mut tmpfile = tempfile::NamedTempFile::new()?;
-    tmpfile.write_all(TUI_SH.as_bytes())?;
+const C_PRIMARY: Color = Color::Rgb(124, 58, 237);  // purple
+const C_ACCENT: Color = Color::Rgb(244, 114, 182);  // pink
+const C_SUCCESS: Color = Color::Rgb(16, 185, 129);  // green
+const C_MUTED: Color = Color::Rgb(107, 114, 128);   // gray
+const C_TEXT: Color = Color::Rgb(229, 231, 235);    // near-white
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(tmpfile.path())?.permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(tmpfile.path(), perms)?;
-    }
+// ── Logo ─────────────────────────────────────────────────────────────────────
 
-    let current_exe = std::env::current_exe()?;
-    let status = std::process::Command::new("bash")
-        .arg(tmpfile.path())
-        .arg(&current_exe)
-        .status()?;
+const LOGO: &str = include_str!("../../assets/icon.txt");
 
-    drop(tmpfile);
+const LOGO_SMALL: [&str; 3] = [
+    " ╦╔═╗╔╦╗╔╦╗╔═╗╔╦╗╔═╗",
+    "║║ ║ ║ ║║║╠═╣ ║ ║╣ ",
+    "╚╝╚═╝ ╩ ╩ ╩╩ ╩ ╩ ╚═╝",
+];
 
-    if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
-    }
-    Ok(())
+// ── Screens ───────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq)]
+enum Screen {
+    MainMenu,
+    Settings,
 }
+
+// ── Main menu ─────────────────────────────────────────────────────────────────
+
+const MAIN_ITEMS: &[&str] = &[
+    "Sync        —  Sync repos to upstream",
+    "Time Doctor —  Track your work hours",
+    "Settings    —  Configure jotmate",
+    "Exit",
+];
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+struct App {
+    screen: Screen,
+    main_state: ListState,
+    settings_state: ListState,
+    // in-memory settings state
+    sync_all: bool,
+    use_cache: bool,
+    repos: Vec<RepoEntry>,
+}
+
+#[derive(Clone)]
+struct RepoEntry {
+    name: String,
+    url: String,
+    enabled: bool,
+}
+
+impl App {
+    fn new() -> Result<Self> {
+        let config = crate::config::load()?;
+        let mut main_state = ListState::default();
+        main_state.select(Some(0));
+        let mut settings_state = ListState::default();
+        settings_state.select(Some(0));
+        let repos = config
+            .sync
+            .upstream_repos
+            .iter()
+            .map(|r| RepoEntry { name: r.name.clone(), url: r.url.clone(), enabled: r.enabled })
+            .collect();
+        Ok(Self {
+            screen: Screen::MainMenu,
+            main_state,
+            settings_state,
+            sync_all: config.sync.sync_all_by_default,
+            use_cache: config.sync.use_cache,
+            repos,
+        })
+    }
+
+    fn settings_items(&self) -> Vec<String> {
+        let sa = if self.sync_all { "ON " } else { "OFF" };
+        let uc = if self.use_cache { "ON " } else { "OFF" };
+        let mut items = vec![
+            format!("[{sa}]  Sync all by default  (--sync-all)"),
+            format!("[{uc}]  Use repo path cache"),
+            "── Upstream Repositories ───────────────────────".to_string(),
+        ];
+        for r in &self.repos {
+            let b = if r.enabled { "ON " } else { "OFF" };
+            items.push(format!("[{b}]  {}  <{}>", r.name, r.url));
+        }
+        items.push("  ← Back".to_string());
+        items
+    }
+
+    fn settings_item_count(&self) -> usize {
+        // 2 toggles + 1 separator + repos + back
+        3 + self.repos.len() + 1
+    }
+
+    fn toggle_selected_setting(&mut self) {
+        let idx = self.settings_state.selected().unwrap_or(0);
+        match idx {
+            0 => {
+                self.sync_all = !self.sync_all;
+                self.persist_settings();
+            }
+            1 => {
+                self.use_cache = !self.use_cache;
+                self.persist_settings();
+            }
+            2 => {} // separator — do nothing
+            n => {
+                let repo_idx = n - 3;
+                if repo_idx < self.repos.len() {
+                    self.repos[repo_idx].enabled = !self.repos[repo_idx].enabled;
+                    self.persist_settings();
+                }
+                // "← Back" row (last item) is handled by the caller
+            }
+        }
+    }
+
+    fn persist_settings(&self) {
+        if let Ok(mut config) = crate::config::load() {
+            config.sync.sync_all_by_default = self.sync_all;
+            config.sync.use_cache = self.use_cache;
+            for repo in &mut config.sync.upstream_repos {
+                if let Some(r) = self.repos.iter().find(|r| r.name == repo.name) {
+                    repo.enabled = r.enabled;
+                }
+            }
+            let _ = crate::config::save(&config);
+        }
+    }
+}
+
+// ── Terminal setup / teardown ─────────────────────────────────────────────────
+
+fn setup_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>> {
+    enable_raw_mode()?;
+    let mut out = stdout();
+    execute!(out, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(out);
+    Ok(Terminal::new(backend)?)
+}
+
+fn teardown_terminal(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) {
+    let _ = disable_raw_mode();
+    let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
+    let _ = terminal.show_cursor();
+}
+
+// ── Entry points ──────────────────────────────────────────────────────────────
 
 pub async fn run_interactive() -> Result<()> {
-    exec_tui_sh()
+    run_tui(Screen::MainMenu).await
 }
 
-/// Called by `jotmate settings` — the shell TUI handles UI; this is a no-op placeholder
-/// (the real settings UI lives in tui.sh as run_settings()).
 pub async fn run_settings() -> Result<()> {
-    Ok(())
+    run_tui(Screen::Settings).await
 }
 
-// ── Data operations for the shell settings TUI ───────────────────────────────
-
-/// Print all settings as key=value lines for the shell to parse.
-/// Repos are printed as: repo.<name>.url=... and repo.<name>.enabled=...
-pub fn settings_get() -> Result<()> {
-    let config = crate::config::load()?;
-    println!("sync_all_by_default={}", config.sync.sync_all_by_default);
-    println!("use_cache={}", config.sync.use_cache);
-    for repo in &config.sync.upstream_repos {
-        println!("repo.{}.url={}", repo.name, repo.url);
-        println!("repo.{}.enabled={}", repo.name, repo.enabled);
+async fn run_tui(initial_screen: Screen) -> Result<()> {
+    let mut terminal = setup_terminal()?;
+    let mut app = App::new()?;
+    app.screen = initial_screen;
+    if initial_screen == Screen::Settings {
+        app.settings_state.select(Some(0));
     }
-    Ok(())
-}
 
-/// Toggle a boolean field. Supported: sync_all_by_default, use_cache
-pub fn settings_toggle(field: &str) -> Result<()> {
-    let mut config = crate::config::load()?;
-    match field {
-        "sync_all_by_default" => {
-            config.sync.sync_all_by_default = !config.sync.sync_all_by_default;
-            println!("{}", config.sync.sync_all_by_default);
+    let result = event_loop(&mut terminal, &mut app).await;
+    teardown_terminal(&mut terminal);
+
+    // If the user selected Sync or Time from the main menu, run them now
+    // (after restoring the terminal so their output is visible)
+    if let Ok(Some(action)) = result {
+        match action.as_str() {
+            "sync" => crate::sync::run(Default::default()).await?,
+            "time" => crate::time::run(Default::default()).await?,
+            _ => {}
         }
-        "use_cache" => {
-            config.sync.use_cache = !config.sync.use_cache;
-            println!("{}", config.sync.use_cache);
+    }
+
+    Ok(())
+}
+
+async fn event_loop(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    app: &mut App,
+) -> Result<Option<String>> {
+    loop {
+        terminal.draw(|f| draw(f, app))?;
+
+        if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            match app.screen {
+                Screen::MainMenu => {
+                    if let Some(action) = handle_main_key(app, key.code) {
+                        return Ok(action);
+                    }
+                }
+                Screen::Settings => {
+                    handle_settings_key(app, key.code);
+                }
+            }
         }
-        other => bail!("Unknown field: {}", other),
     }
-    crate::config::save(&config)?;
-    Ok(())
 }
 
-/// Add a new upstream repo.
-pub fn settings_add_repo(url: &str, name: &str) -> Result<()> {
-    let mut config = crate::config::load()?;
-    if config.sync.upstream_repos.iter().any(|r| r.name == name) {
-        bail!("A repo named '{}' already exists", name);
-    }
-    config.sync.upstream_repos.push(crate::config::UpstreamRepo::new(url, name));
-    crate::config::save(&config)?;
-    Ok(())
-}
-
-/// Remove an upstream repo by name.
-pub fn settings_remove_repo(name: &str) -> Result<()> {
-    let mut config = crate::config::load()?;
-    let before = config.sync.upstream_repos.len();
-    config.sync.upstream_repos.retain(|r| r.name != name);
-    if config.sync.upstream_repos.len() == before {
-        bail!("No repo named '{}' found", name);
-    }
-    crate::config::save(&config)?;
-    Ok(())
-}
-
-/// Toggle the enabled flag on an upstream repo by name.
-pub fn settings_toggle_repo(name: &str) -> Result<()> {
-    let mut config = crate::config::load()?;
-    match config.sync.upstream_repos.iter_mut().find(|r| r.name == name) {
-        Some(repo) => {
-            repo.enabled = !repo.enabled;
-            println!("{}", repo.enabled);
-            crate::config::save(&config)?;
+// Returns None to keep looping, Some(None) to quit, Some(Some("sync")) etc to run a tool
+fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {
+    match code {
+        KeyCode::Up | KeyCode::Char('k') => {
+            let i = app.main_state.selected().unwrap_or(0);
+            app.main_state.select(Some(i.saturating_sub(1)));
         }
-        None => bail!("No repo named '{}' found", name),
+        KeyCode::Down | KeyCode::Char('j') => {
+            let i = app.main_state.selected().unwrap_or(0);
+            app.main_state.select(Some((i + 1).min(MAIN_ITEMS.len() - 1)));
+        }
+        KeyCode::Enter => {
+            let i = app.main_state.selected().unwrap_or(0);
+            match i {
+                0 => return Some(Some("sync".to_string())),
+                1 => return Some(Some("time".to_string())),
+                2 => {
+                    app.screen = Screen::Settings;
+                    app.settings_state.select(Some(0));
+                }
+                _ => return Some(None), // Exit
+            }
+        }
+        KeyCode::Esc | KeyCode::Char('q') => return Some(None),
+        _ => {}
     }
-    Ok(())
+    None
+}
+
+fn handle_settings_key(app: &mut App, code: KeyCode) {
+    let count = app.settings_item_count();
+    match code {
+        KeyCode::Up | KeyCode::Char('k') => {
+            let i = app.settings_state.selected().unwrap_or(0);
+            // skip separator (idx 2)
+            let next = if i == 0 { 0 } else { i - 1 };
+            let next = if next == 2 { 1 } else { next };
+            app.settings_state.select(Some(next));
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            let i = app.settings_state.selected().unwrap_or(0);
+            let next = (i + 1).min(count - 1);
+            let next = if next == 2 { 3 } else { next };
+            app.settings_state.select(Some(next));
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let i = app.settings_state.selected().unwrap_or(0);
+            if i == count - 1 {
+                // "← Back"
+                app.screen = Screen::MainMenu;
+            } else {
+                app.toggle_selected_setting();
+            }
+        }
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.screen = Screen::MainMenu;
+        }
+        _ => {}
+    }
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+
+fn draw(f: &mut ratatui::Frame, app: &App) {
+    match app.screen {
+        Screen::MainMenu => draw_main_menu(f, app),
+        Screen::Settings => draw_settings(f, app),
+    }
+}
+
+fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    // Outer vertical split: logo region + menu region
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(10), // logo + tagline
+            Constraint::Length(1),  // divider
+            Constraint::Min(0),     // menu list
+        ])
+        .split(area);
+
+    // ── Logo ──
+    let logo_lines: Vec<Line> = LOGO
+        .lines()
+        .map(|l| Line::from(Span::styled(l, Style::default().fg(C_TEXT).add_modifier(Modifier::BOLD))))
+        .collect();
+    let logo_para = Paragraph::new(logo_lines)
+        .alignment(Alignment::Center);
+    f.render_widget(logo_para, chunks[0]);
+
+    // ── Divider ──
+    let div = Paragraph::new(Line::from(Span::styled(
+        "─────────────────────────────────────────────────",
+        Style::default().fg(C_MUTED),
+    )))
+    .alignment(Alignment::Center);
+    f.render_widget(div, chunks[1]);
+
+    // ── Menu list ──
+    let items: Vec<ListItem> = MAIN_ITEMS
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let selected = app.main_state.selected() == Some(i);
+            let style = if selected {
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(C_TEXT)
+            };
+            let prefix = if selected { "  ▸ " } else { "    " };
+            ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+        })
+        .collect();
+
+    let list = List::new(items);
+
+    // Center the list horizontally
+    let list_width = 50u16;
+    let x_offset = area.width.saturating_sub(list_width) / 2;
+    let list_area = ratatui::layout::Rect {
+        x: area.x + x_offset,
+        y: chunks[2].y,
+        width: list_width.min(area.width),
+        height: chunks[2].height,
+    };
+
+    let hint = Paragraph::new(Line::from(Span::styled(
+        "↑↓ navigate  ·  Enter select  ·  Esc exit",
+        Style::default().fg(C_MUTED),
+    )))
+    .alignment(Alignment::Center);
+    f.render_widget(hint, ratatui::layout::Rect {
+        x: area.x,
+        y: chunks[2].y,
+        width: area.width,
+        height: 1,
+    });
+
+    let list_area_below = ratatui::layout::Rect {
+        x: list_area.x,
+        y: list_area.y + 2,
+        width: list_area.width,
+        height: list_area.height.saturating_sub(2),
+    };
+    f.render_stateful_widget(list, list_area_below, &mut app.main_state.clone());
+}
+
+fn draw_settings(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(5),  // small logo + title
+            Constraint::Length(1),  // divider
+            Constraint::Length(1),  // hint
+            Constraint::Min(0),     // list
+        ])
+        .split(area);
+
+    // ── Header ──
+    let mut header_lines: Vec<Line> = LOGO_SMALL
+        .iter()
+        .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD))))
+        .collect();
+    header_lines.push(Line::default());
+    header_lines.push(Line::from(Span::styled(
+        "Settings",
+        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+    )));
+    let header = Paragraph::new(header_lines).alignment(Alignment::Center);
+    f.render_widget(header, chunks[0]);
+
+    // ── Divider ──
+    let div = Paragraph::new(Line::from(Span::styled(
+        "─────────────────────────────────────────────────",
+        Style::default().fg(C_MUTED),
+    )))
+    .alignment(Alignment::Center);
+    f.render_widget(div, chunks[1]);
+
+    // ── Hint ──
+    let hint = Paragraph::new(Line::from(Span::styled(
+        "↑↓ navigate  ·  Enter/Space toggle  ·  Esc back",
+        Style::default().fg(C_MUTED),
+    )))
+    .alignment(Alignment::Center);
+    f.render_widget(hint, chunks[2]);
+
+    // ── Settings list ──
+    let setting_items = app.settings_items();
+    let count = setting_items.len();
+    let selected = app.settings_state.selected().unwrap_or(0);
+
+    let items: Vec<ListItem> = setting_items
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            if label.starts_with("──") {
+                // separator row
+                return ListItem::new(Line::from(Span::styled(
+                    label.clone(),
+                    Style::default().fg(C_MUTED),
+                )));
+            }
+            let is_back = i == count - 1;
+            let is_sel = selected == i;
+
+            let style = if is_sel {
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+            } else if is_back {
+                Style::default().fg(C_MUTED)
+            } else {
+                // color the ON/OFF badge
+                let on = label.starts_with("[ON");
+                let badge_color = if on { C_SUCCESS } else { C_MUTED };
+                // render badge separately
+                let (badge, rest) = label.split_at(5); // "[ON ]" or "[OFF]"
+                return ListItem::new(Line::from(vec![
+                    Span::styled(if is_sel { "  ▸ " } else { "    " },
+                        Style::default().fg(C_PRIMARY)),
+                    Span::styled(badge.to_string(), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(rest.to_string(), Style::default().fg(C_TEXT)),
+                ]));
+            };
+
+            let prefix = if is_sel { "  ▸ " } else { "    " };
+            ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+        })
+        .collect();
+
+    let list = List::new(items);
+    let list_width = 60u16;
+    let x_offset = area.width.saturating_sub(list_width) / 2;
+    let list_area = ratatui::layout::Rect {
+        x: area.x + x_offset,
+        y: chunks[3].y,
+        width: list_width.min(area.width),
+        height: chunks[3].height,
+    };
+
+    f.render_stateful_widget(list, list_area, &mut app.settings_state.clone());
 }

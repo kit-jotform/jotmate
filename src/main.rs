@@ -23,24 +23,6 @@ async fn main() -> Result<()> {
         Some(Commands::Settings) => {
             tui::run_settings().await?;
         }
-        Some(Commands::Icon) => {
-            print!("{}", include_str!("../assets/icon.txt"));
-        }
-        Some(Commands::SettingsGet) => {
-            tui::settings_get()?;
-        }
-        Some(Commands::SettingsToggle(args)) => {
-            tui::settings_toggle(&args.field)?;
-        }
-        Some(Commands::SettingsAddRepo(args)) => {
-            tui::settings_add_repo(&args.url, &args.name)?;
-        }
-        Some(Commands::SettingsRemoveRepo(args)) => {
-            tui::settings_remove_repo(&args.name)?;
-        }
-        Some(Commands::SettingsToggleRepo(args)) => {
-            tui::settings_toggle_repo(&args.name)?;
-        }
         None => {
             tui::run_interactive().await?;
         }

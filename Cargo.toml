@@ -23,6 +23,8 @@ thiserror   = "2.0"
 rpassword   = "7.3"
 tempfile    = "3.14"
 futures     = "0.3"
+ratatui     = "0.29"
+crossterm   = { version = "0.28", features = ["event-stream"] }
 
 [profile.release]
 opt-level = 3
