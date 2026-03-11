@@ -312,31 +312,41 @@ run_settings() {
     local tw
     tw="$(term_width)"
 
+    # Load all settings once from disk
+    local _all_settings
+    _all_settings="$("$JOTMATE_BIN" _settings-get 2>/dev/null)"
+
+    _sf() { printf '%s' "$_all_settings" | grep "^${1}=" | cut -d= -f2-; }
+
+    local sync_all use_cache
+    sync_all="$(_sf sync_all_by_default)"
+    use_cache="$(_sf use_cache)"
+
+    # Build repo name/url/enabled arrays from the single settings dump
+    local repo_names=() repo_urls=() repo_enabled=()
+    local _name
+    while IFS= read -r _name; do
+        [[ -z "$_name" ]] && continue
+        repo_names+=("$_name")
+        repo_urls+=("$(_sf "repo.${_name}.url")")
+        repo_enabled+=("$(_sf "repo.${_name}.enabled")")
+    done < <(printf '%s' "$_all_settings" | grep "^repo\." | sed 's/^repo\.\([^.]*\)\..*/\1/' | sort -u)
+
     while true; do
         clear_screen
         _print_tool_header "Settings" "Configure jotmate" "$tw"
-
-        # Read current values
-        local sync_all use_cache
-        sync_all="$(_settings_get_field sync_all_by_default)"
-        use_cache="$(_settings_get_field use_cache)"
 
         local sa_badge uc_badge
         [[ "$sync_all" == "true" ]] && sa_badge="ON " || sa_badge="OFF"
         [[ "$use_cache" == "true"  ]] && uc_badge="ON " || uc_badge="OFF"
 
-        # Build repo rows
         local repo_items=()
-        local name
-        while IFS= read -r name; do
-            [[ -z "$name" ]] && continue
-            local enabled url
-            enabled="$(_settings_get_field "repo.${name}.enabled")"
-            url="$(_settings_get_field "repo.${name}.url")"
+        local i
+        for (( i=0; i<${#repo_names[@]}; i++ )); do
             local badge
-            [[ "$enabled" == "true" ]] && badge="ON " || badge="OFF"
-            repo_items+=("[${badge}]  ${name}  <${url}>")
-        done < <(_settings_repo_names)
+            [[ "${repo_enabled[$i]}" == "true" ]] && badge="ON " || badge="OFF"
+            repo_items+=("[${badge}]  ${repo_names[$i]}  <${repo_urls[$i]}>")
+        done
 
         local choice
         choice="$(gum choose \
@@ -358,9 +368,11 @@ run_settings() {
         case "$choice" in
             *"Sync all by default"*)
                 "$JOTMATE_BIN" _settings-toggle sync_all_by_default >/dev/null
+                [[ "$sync_all" == "true" ]] && sync_all="false" || sync_all="true"
                 ;;
             *"Use repo path cache"*)
                 "$JOTMATE_BIN" _settings-toggle use_cache >/dev/null
+                [[ "$use_cache" == "true" ]] && use_cache="false" || use_cache="true"
                 ;;
             *"Add new upstream"*)
                 local new_url new_name
@@ -370,9 +382,11 @@ run_settings() {
                 default_name="$(echo "$new_url" | sed 's|/$||;s|\.git$||;s|.*/||')"
                 new_name="$(gum input --prompt "Name: " --placeholder "$default_name" --value "$default_name")" || continue
                 [[ -z "$new_name" ]] && continue
-                "$JOTMATE_BIN" _settings-add-repo "$new_url" "$new_name" \
-                    && echo "" \
-                    || gum style --foreground "$C_ACCENT" "Error adding repo"
+                if "$JOTMATE_BIN" _settings-add-repo "$new_url" "$new_name"; then
+                    repo_names+=("$new_name")
+                    repo_urls+=("$new_url")
+                    repo_enabled+=("true")
+                fi
                 ;;
             "── Upstream"*)
                 continue
@@ -386,6 +400,12 @@ run_settings() {
                 repo_name="$(echo "$choice" | sed 's/^\[...\]  //;s/  <.*//')"
                 [[ -z "$repo_name" ]] && continue
                 "$JOTMATE_BIN" _settings-toggle-repo "$repo_name" >/dev/null
+                for (( i=0; i<${#repo_names[@]}; i++ )); do
+                    if [[ "${repo_names[$i]}" == "$repo_name" ]]; then
+                        [[ "${repo_enabled[$i]}" == "true" ]] && repo_enabled[$i]="false" || repo_enabled[$i]="true"
+                        break
+                    fi
+                done
                 ;;
         esac
     done
