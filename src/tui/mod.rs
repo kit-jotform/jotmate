@@ -6,7 +6,7 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, ListState, Paragraph},
@@ -24,7 +24,14 @@ const C_TEXT: Color = Color::Rgb(229, 231, 235);    // near-white
 
 // ── Logo ─────────────────────────────────────────────────────────────────────
 
-const LOGO: &str = include_str!("../../assets/icon.txt");
+const LOGO: [&str; 6] = [
+    "     ██╗ ██████╗ ████████╗███╗   ███╗ █████╗ ████████╗███████╗",
+    "     ██║██╔═══██╗╚══██╔══╝████╗ ████║██╔══██╗╚══██╔══╝██╔════╝",
+    "     ██║██║   ██║   ██║   ██╔████╔██║███████║   ██║   █████╗  ",
+    "██   ██║██║   ██║   ██║   ██║╚██╔╝██║██╔══██║   ██║   ██╔══╝  ",
+    "╚█████╔╝╚██████╔╝   ██║   ██║ ╚═╝ ██║██║  ██║   ██║   ███████╗",
+    " ╚════╝  ╚═════╝    ╚═╝   ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝",
+];
 
 const LOGO_SMALL: [&str; 3] = [
     " ╦╔═╗╔╦╗╔╦╗╔═╗╔╦╗╔═╗",
@@ -297,32 +304,52 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
 fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
 
-    // Outer vertical split: logo region + menu region
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(10), // logo + tagline
-            Constraint::Length(1),  // divider
-            Constraint::Min(0),     // menu list
+            Constraint::Length(6), // logo (6 lines)
+            Constraint::Length(1), // tagline
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // divider
+            Constraint::Length(1), // hint
+            Constraint::Min(0),    // menu list
         ])
+        .margin(1)
         .split(area);
 
     // ── Logo ──
     let logo_lines: Vec<Line> = LOGO
-        .lines()
-        .map(|l| Line::from(Span::styled(l, Style::default().fg(C_TEXT).add_modifier(Modifier::BOLD))))
+        .iter()
+        .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_TEXT).add_modifier(Modifier::BOLD))))
         .collect();
-    let logo_para = Paragraph::new(logo_lines)
-        .alignment(Alignment::Center);
-    f.render_widget(logo_para, chunks[0]);
+    f.render_widget(Paragraph::new(logo_lines), chunks[0]);
+
+    // ── Tagline ──
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "The lazy engineer's Swiss Army knife",
+            Style::default().fg(C_MUTED).add_modifier(Modifier::ITALIC),
+        ))),
+        chunks[1],
+    );
 
     // ── Divider ──
-    let div = Paragraph::new(Line::from(Span::styled(
-        "─────────────────────────────────────────────────",
-        Style::default().fg(C_MUTED),
-    )))
-    .alignment(Alignment::Center);
-    f.render_widget(div, chunks[1]);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "─────────────────────────────────────────────────",
+            Style::default().fg(C_MUTED),
+        ))),
+        chunks[3],
+    );
+
+    // ── Hint ──
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "↑↓/jk navigate  ·  Enter select  ·  Esc exit",
+            Style::default().fg(C_MUTED),
+        ))),
+        chunks[4],
+    );
 
     // ── Menu list ──
     let items: Vec<ListItem> = MAIN_ITEMS
@@ -335,42 +362,12 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             } else {
                 Style::default().fg(C_TEXT)
             };
-            let prefix = if selected { "  ▸ " } else { "    " };
+            let prefix = if selected { "▸ " } else { "  " };
             ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
         })
         .collect();
 
-    let list = List::new(items);
-
-    // Center the list horizontally
-    let list_width = 50u16;
-    let x_offset = area.width.saturating_sub(list_width) / 2;
-    let list_area = ratatui::layout::Rect {
-        x: area.x + x_offset,
-        y: chunks[2].y,
-        width: list_width.min(area.width),
-        height: chunks[2].height,
-    };
-
-    let hint = Paragraph::new(Line::from(Span::styled(
-        "↑↓ navigate  ·  Enter select  ·  Esc exit",
-        Style::default().fg(C_MUTED),
-    )))
-    .alignment(Alignment::Center);
-    f.render_widget(hint, ratatui::layout::Rect {
-        x: area.x,
-        y: chunks[2].y,
-        width: area.width,
-        height: 1,
-    });
-
-    let list_area_below = ratatui::layout::Rect {
-        x: list_area.x,
-        y: list_area.y + 2,
-        width: list_area.width,
-        height: list_area.height.saturating_sub(2),
-    };
-    f.render_stateful_widget(list, list_area_below, &mut app.main_state.clone());
+    f.render_stateful_widget(List::new(items), chunks[5], &mut app.main_state.clone());
 }
 
 fn draw_settings(f: &mut ratatui::Frame, app: &App) {
@@ -379,41 +376,48 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5),  // small logo + title
-            Constraint::Length(1),  // divider
-            Constraint::Length(1),  // hint
-            Constraint::Min(0),     // list
+            Constraint::Length(3), // small logo
+            Constraint::Length(1), // "Settings" title
+            Constraint::Length(1), // divider
+            Constraint::Length(1), // hint
+            Constraint::Min(0),    // list
         ])
+        .margin(1)
         .split(area);
 
-    // ── Header ──
-    let mut header_lines: Vec<Line> = LOGO_SMALL
+    // ── Small logo ──
+    let logo_lines: Vec<Line> = LOGO_SMALL
         .iter()
         .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD))))
         .collect();
-    header_lines.push(Line::default());
-    header_lines.push(Line::from(Span::styled(
-        "Settings",
-        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-    )));
-    let header = Paragraph::new(header_lines).alignment(Alignment::Center);
-    f.render_widget(header, chunks[0]);
+    f.render_widget(Paragraph::new(logo_lines), chunks[0]);
+
+    // ── Title ──
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "Settings",
+            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+        ))),
+        chunks[1],
+    );
 
     // ── Divider ──
-    let div = Paragraph::new(Line::from(Span::styled(
-        "─────────────────────────────────────────────────",
-        Style::default().fg(C_MUTED),
-    )))
-    .alignment(Alignment::Center);
-    f.render_widget(div, chunks[1]);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "─────────────────────────────────────────────────",
+            Style::default().fg(C_MUTED),
+        ))),
+        chunks[2],
+    );
 
     // ── Hint ──
-    let hint = Paragraph::new(Line::from(Span::styled(
-        "↑↓ navigate  ·  Enter/Space toggle  ·  Esc back",
-        Style::default().fg(C_MUTED),
-    )))
-    .alignment(Alignment::Center);
-    f.render_widget(hint, chunks[2]);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "↑↓/jk navigate  ·  Enter/Space toggle  ·  Esc back",
+            Style::default().fg(C_MUTED),
+        ))),
+        chunks[3],
+    );
 
     // ── Settings list ──
     let setting_items = app.settings_items();
@@ -434,38 +438,40 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
             let is_back = i == count - 1;
             let is_sel = selected == i;
 
-            let style = if is_sel {
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-            } else if is_back {
-                Style::default().fg(C_MUTED)
-            } else {
-                // color the ON/OFF badge
-                let on = label.starts_with("[ON");
-                let badge_color = if on { C_SUCCESS } else { C_MUTED };
-                // render badge separately
-                let (badge, rest) = label.split_at(5); // "[ON ]" or "[OFF]"
-                return ListItem::new(Line::from(vec![
-                    Span::styled(if is_sel { "  ▸ " } else { "    " },
-                        Style::default().fg(C_PRIMARY)),
-                    Span::styled(badge.to_string(), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                    Span::styled(rest.to_string(), Style::default().fg(C_TEXT)),
-                ]));
-            };
+            if is_sel {
+                let prefix = "▸ ";
+                if label.starts_with('[') {
+                    let (badge, rest) = label.split_at(5);
+                    return ListItem::new(Line::from(vec![
+                        Span::styled(prefix, Style::default().fg(C_PRIMARY)),
+                        Span::styled(badge.to_string(), Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+                        Span::styled(rest.to_string(), Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+                    ]));
+                }
+                return ListItem::new(Line::from(Span::styled(
+                    format!("{prefix}{label}"),
+                    Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                )));
+            }
 
-            let prefix = if is_sel { "  ▸ " } else { "    " };
-            ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+            if is_back {
+                return ListItem::new(Line::from(Span::styled(
+                    format!("  {label}"),
+                    Style::default().fg(C_MUTED),
+                )));
+            }
+
+            // Normal toggle row — color the badge
+            let on = label.starts_with("[ON");
+            let badge_color = if on { C_SUCCESS } else { C_MUTED };
+            let (badge, rest) = label.split_at(5);
+            ListItem::new(Line::from(vec![
+                Span::styled("  ", Style::default()),
+                Span::styled(badge.to_string(), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                Span::styled(rest.to_string(), Style::default().fg(C_TEXT)),
+            ]))
         })
         .collect();
 
-    let list = List::new(items);
-    let list_width = 60u16;
-    let x_offset = area.width.saturating_sub(list_width) / 2;
-    let list_area = ratatui::layout::Rect {
-        x: area.x + x_offset,
-        y: chunks[3].y,
-        width: list_width.min(area.width),
-        height: chunks[3].height,
-    };
-
-    f.render_stateful_widget(list, list_area, &mut app.settings_state.clone());
+    f.render_stateful_widget(List::new(items), chunks[4], &mut app.settings_state.clone());
 }
