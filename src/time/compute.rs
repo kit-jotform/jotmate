@@ -77,13 +77,13 @@ pub fn weeks_to_fetch(start_date: NaiveDate, skip_current_week: bool) -> Vec<Nai
         if current <= start_date {
             break;
         }
-        current = current - chrono::Duration::days(7);
+        current -= chrono::Duration::days(7);
     }
 
     weeks // already newest-first
 }
 
-pub fn compute_cumulative(rows: &mut Vec<WeekRow>, reset_from: Option<NaiveDate>) {
+pub fn compute_cumulative(rows: &mut [WeekRow], reset_from: Option<NaiveDate>) {
     // Compute oldest→newest, then assign back
     let mut ordered: Vec<usize> = (0..rows.len()).collect();
     ordered.sort_by_key(|&i| rows[i].monday);

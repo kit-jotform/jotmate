@@ -11,7 +11,7 @@ pub fn print_results(rows: &[WeekRow]) {
     let title = "WORK HOURS ANALYSIS";
     let pad = (110 - title.len()) / 2;
     println!("\n{separator}");
-    println!("{}{title}{}", " ".repeat(pad), "");
+    println!("{}{title}", " ".repeat(pad));
     println!("{separator}\n");
 
     // Header
@@ -46,7 +46,7 @@ pub fn print_results(rows: &[WeekRow]) {
             "{:<28}  {:<10}  {:<8}  {bal_color}{:<10}{RESET}  {bal_icon}  {cum_color}{:<12}{RESET}  {cum_icon}  {cache_marker}",
             row.week_label,
             format_hours(row.worked_secs as f64 / 3600.0),
-            format!("{}h", row.target_hours),
+            format_hours(row.target_hours),
             format_hours(row.balance_hours),
             format_hours(row.cumulative_hours),
         );

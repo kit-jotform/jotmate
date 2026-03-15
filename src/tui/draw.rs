@@ -9,26 +9,40 @@ use ratatui::{
 use super::app::{App, Screen};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
+// ── Layout constants ─────────────────────────────────────────────────────────
+
+/// Canonical UI width — matches the full header (icon 14 + gap 2 + logo 63).
+const UI_WIDTH: u16 = 79;
+
 // ── Palette ───────────────────────────────────────────────────────────────────
 
-const C_LOGO: Color = Color::Indexed(189);   // lavender — original logo colour
-const C_PRIMARY: Color = Color::LightMagenta;
-const C_ACCENT: Color = Color::LightCyan;
-const C_SELECT: Color = Color::Indexed(141); // medium purple — selection highlight
+const C_TEXT: Color = Color::Indexed(255);
+const C_PRIMARY: Color = Color::Indexed(199); // medium purple — consistent across terminals
+const C_ACCENT: Color = Color::Indexed(51);  // light cyan — consistent across terminals
+const C_SELECT: Color = C_PRIMARY;
 const C_SUCCESS: Color = Color::LightGreen;
 const C_MUTED: Color = Color::DarkGray;
-const C_TEXT: Color = Color::White;
+const C_LOGO: Color = C_TEXT;  // lavender — original logo colour
 
 // ── Main menu items: (name, description) ──────────────────────────────────────
 
 const MAIN_ITEMS: &[(&str, &str)] = &[
-    ("Sync",        "Sync repos to upstream"),
+    ("Sync",        "Sync RDS to upstream"),
     ("Time Doctor", "Track your work hours"),
     ("Settings",    "Configure jotmate"),
     ("Exit",        ""),
 ];
 
+pub(super) const MAIN_ITEM_COUNT: usize = MAIN_ITEMS.len();
+
 const NAME_COL_W: u16 = 16; // fixed width for the name column
+const DIVIDER_WIDTH: u16 = 53;
+
+/// Center `text_len` characters within `UI_WIDTH`, offset from `base_x`.
+fn centered(base_x: u16, row: Rect, text_len: u16) -> Rect {
+    let pad = UI_WIDTH.saturating_sub(text_len) / 2;
+    Rect { x: base_x + pad, width: UI_WIDTH.min(text_len), ..row }
+}
 
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
@@ -40,14 +54,14 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
 fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
 
-    // Layout: header | tagline | time-version | blank | divider | blank | select-header | menu | blank | hint
+    // Layout: header | blank | tagline | time-version | divider | blank | select-header | menu | blank | hint
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(7), // header (icon + logo)
+            Constraint::Length(1), // blank
             Constraint::Length(1), // tagline
             Constraint::Length(1), // time | version
-            Constraint::Length(1), // blank
             Constraint::Length(1), // divider
             Constraint::Length(1), // blank
             Constraint::Length(1), // "SELECT TOOL" header
@@ -79,34 +93,27 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .collect();
     f.render_widget(Paragraph::new(logo_lines), logo_area);
 
-    // Divider anchored at logo x, logo width
-    let logo_x = header_cols[2].x;
+    // Center everything within UI_WIDTH, anchored at the area left edge
+    let base_x = area.x;
 
-    const DIV_W: u16 = 49;
-
-    let centered = |row: Rect, text_len: u16| -> Rect {
-        let pad = DIV_W.saturating_sub(text_len) / 2;
-        Rect { x: logo_x + pad, width: DIV_W.min(text_len), ..row }
-    };
-
-    // ── Divider — fixed 49 chars ──
-    let divider = "─".repeat(DIV_W as usize);
+    // ── Divider ──
+    let divider = "─".repeat(DIVIDER_WIDTH as usize);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(divider.clone(), Style::default().fg(C_MUTED)))),
-        Rect { x: logo_x, width: DIV_W, ..rows[4] },
+        centered(base_x, rows[4], DIVIDER_WIDTH),
     );
 
-    // ── Tagline — centered within divider width ──
+    // ── Tagline ──
     let tagline = "The lazy engineer's Swiss Army knife";
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             tagline,
             Style::default().fg(C_MUTED).add_modifier(Modifier::ITALIC),
         ))),
-        centered(rows[1], tagline.chars().count() as u16),
+        centered(base_x, rows[2], tagline.chars().count() as u16),
     );
 
-    // ── Time | version — centered within divider width ──
+    // ── Time | version ──
     let now = Local::now().format("%H:%M").to_string();
     let version = env!("CARGO_PKG_VERSION");
     let time_str = format!("{}  |  v{}", now, version);
@@ -117,10 +124,10 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
             Span::styled(format!("v{version}"), Style::default().fg(C_MUTED)),
         ])),
-        centered(rows[2], time_len),
+        centered(base_x, rows[3], time_len),
     );
 
-    // rows[3] blank
+    // rows[1] blank
 
     // rows[5] blank
 
@@ -193,38 +200,39 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         .margin(1)
         .split(area);
 
+    // Center everything within UI_WIDTH, anchored at the area left edge
+    let base_x = area.x;
+
     // ── Small logo ──
+    let logo_w = LOGO_SMALL[0].chars().count() as u16;
     let logo_lines: Vec<Line> = LOGO_SMALL
         .iter()
         .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD))))
         .collect();
-    f.render_widget(Paragraph::new(logo_lines), chunks[0]);
+    f.render_widget(Paragraph::new(logo_lines), centered(base_x, chunks[0], logo_w));
 
     // ── Title ──
+    let title = "Settings";
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "Settings",
+            title,
             Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
         ))),
-        chunks[1],
+        centered(base_x, chunks[1], title.chars().count() as u16),
     );
 
     // ── Divider ──
+    let divider = "─".repeat(DIVIDER_WIDTH as usize);
     f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "─────────────────────────────────────────────────",
-            Style::default().fg(C_MUTED),
-        ))),
-        chunks[2],
+        Paragraph::new(Line::from(Span::styled(divider, Style::default().fg(C_MUTED)))),
+        centered(base_x, chunks[2], DIVIDER_WIDTH),
     );
 
     // ── Hint ──
+    let hint = "←↑↓→ navigate  ·  Enter/Space toggle  ·  Esc back";
     f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "←↑↓→ navigate  ·  Enter/Space toggle  ·  Esc/Backspace back",
-            Style::default().fg(C_MUTED),
-        ))),
-        chunks[3],
+        Paragraph::new(Line::from(Span::styled(hint, Style::default().fg(C_MUTED)))),
+        centered(base_x, chunks[3], hint.chars().count() as u16),
     );
 
     // ── Settings list ──
@@ -237,9 +245,11 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         .enumerate()
         .map(|(i, label)| {
             if label.starts_with("──") {
-                // separator row
+                // separator row — center within UI_WIDTH
+                let sep_len = label.chars().count() as u16;
+                let pad = " ".repeat(UI_WIDTH.saturating_sub(sep_len) as usize / 2);
                 return ListItem::new(Line::from(Span::styled(
-                    label.clone(),
+                    format!("{pad}{label}"),
                     Style::default().fg(C_MUTED),
                 )));
             }

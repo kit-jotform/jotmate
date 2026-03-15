@@ -1,6 +1,7 @@
 use crossterm::event::KeyCode;
 
-use super::app::{App, Screen, MAIN_ITEM_COUNT};
+use super::app::{App, Screen};
+use super::draw::MAIN_ITEM_COUNT;
 
 // Returns None to keep looping, Some(None) to quit, Some(Some("sync")) etc to run a tool
 pub fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {

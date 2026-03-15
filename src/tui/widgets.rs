@@ -25,6 +25,7 @@ pub const LOGO_SMALL: [&str; 3] = [
 // ── Pixel icon ───────────────────────────────────────────────────────────────
 // Each entry: (col, row, char, fg_256, bg_256)  — None = terminal default
 #[rustfmt::skip]
+#[allow(clippy::type_complexity)]
 const ICON_CELLS: &[(u16, u16, char, Option<u8>, Option<u8>)] = &[
     // row 0
     (0,0,'▗',Some(102),None),(1,0,'▅',Some(244),None),(2,0,'▅',Some(243),None),

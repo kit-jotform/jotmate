@@ -9,10 +9,6 @@ pub enum Screen {
     Settings,
 }
 
-// ── Main menu ─────────────────────────────────────────────────────────────────
-
-pub const MAIN_ITEM_COUNT: usize = 4; // Sync, Time Doctor, Settings, Exit
-
 // ── App ───────────────────────────────────────────────────────────────────────
 
 pub struct App {
@@ -61,7 +57,7 @@ impl App {
         let mut items = vec![
             format!("[{sa}]  Sync all by default  (--sync-all)"),
             format!("[{uc}]  Use repo path cache"),
-            "── Upstream Repositories ───────────────────────".to_string(),
+            "── Upstream Repositories ──────────────────────".to_string(),
         ];
         for r in &self.repos {
             let b = if r.enabled { "ON " } else { "OFF" };

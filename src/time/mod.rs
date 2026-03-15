@@ -66,7 +66,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
             ));
         }
 
-        let results = futures_batch(batch_futures).await;
+        let results = futures::future::join_all(batch_futures).await;
 
         for result in results {
             match result {
@@ -151,7 +151,3 @@ async fn fetch_week(
     })
 }
 
-/// Run futures concurrently using join_all.
-async fn futures_batch<T>(futures: Vec<impl std::future::Future<Output = T>>) -> Vec<T> {
-    futures::future::join_all(futures).await
-}
