@@ -64,6 +64,17 @@ TimeDoctor uses cookie-based auth stored in the system keychain (macOS Keychain 
 
 **New settings field**: Add to the struct in `src/config.rs` with `#[serde(default)]`, add a row in the settings render in `draw.rs`, and handle the toggle in `input.rs` and `app.rs`.
 
+## Coding style
+
+Prefer changes that stay small, coherent, and easy to reason about. When editing or adding code, aim for:
+
+- **Single responsibility** — Each module, type, and function should have one clear job. Split mixed concerns (e.g. parsing vs. I/O vs. UI) instead of growing god-objects or all-in-one handlers. If a function does two unrelated things, extract one of them.
+
+- **Single source of truth** — Define each piece of behavior or data in one place. Config and persistent state should flow from `config` (and related types), not from parallel ad hoc structs or duplicated defaults. Menu labels, keybindings, and domain rules should not diverge across files; centralize constants and enums where they are owned.
+
+- **DRY (don’t repeat yourself)** — Before copying a block, extract a shared helper, type, or constant. Repeated string literals, match arms, or validation logic are signals to consolidate. Duplication across `draw.rs` / `input.rs` / `app.rs` for the same feature usually means one definition should drive the rest.
+
+These principles reinforce each other: one responsibility per unit, one canonical definition per concept, and no unnecessary repetition.
 
 ## Key constraints
 

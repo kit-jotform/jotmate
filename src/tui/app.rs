@@ -9,6 +9,41 @@ pub enum Screen {
     Settings,
 }
 
+// ── Settings row types ────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy)]
+pub enum ToggleKind {
+    SyncAll,
+    UseCache,
+}
+
+#[derive(Clone)]
+pub enum SettingRow {
+    Toggle {
+        kind: ToggleKind,
+        label: &'static str,
+        hint: &'static str,
+        on: bool,
+    },
+    Separator,
+    Blank,
+    RepoToggle {
+        name: String,
+        url: String,
+        enabled: bool,
+    },
+    Back,
+}
+
+impl SettingRow {
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            SettingRow::Toggle { .. } | SettingRow::RepoToggle { .. } | SettingRow::Back
+        )
+    }
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 pub struct App {
@@ -55,47 +90,61 @@ impl App {
         })
     }
 
-    pub fn settings_items(&self) -> Vec<String> {
-        let sa = if self.sync_all { "ON " } else { "OFF" };
-        let uc = if self.use_cache { "ON " } else { "OFF" };
-        let mut items = vec![
-            format!("[{sa}]  Sync all by default  (--sync-all)"),
-            format!("[{uc}]  Use repo path cache"),
-            "── Upstream Repositories ──────────────────────".to_string(),
+    pub fn settings_items(&self) -> Vec<SettingRow> {
+        let mut rows = vec![
+            SettingRow::Toggle {
+                kind: ToggleKind::SyncAll,
+                label: "Sync all by default",
+                hint: "--sync-all",
+                on: self.sync_all,
+            },
+            SettingRow::Toggle {
+                kind: ToggleKind::UseCache,
+                label: "Use repo path cache",
+                hint: "",
+                on: self.use_cache,
+            },
+            SettingRow::Blank,
+            SettingRow::Separator,
+            SettingRow::Blank,
         ];
         for r in &self.repos {
-            let b = if r.enabled { "ON " } else { "OFF" };
-            items.push(format!("[{b}]  {}  <{}>", r.name, r.url));
+            rows.push(SettingRow::RepoToggle {
+                name: r.name.clone(),
+                url: r.url.clone(),
+                enabled: r.enabled,
+            });
         }
-        items.push("  ← Back".to_string());
-        items
-    }
-
-    pub fn settings_item_count(&self) -> usize {
-        // 2 toggles + 1 separator + repos + back
-        3 + self.repos.len() + 1
+        rows.push(SettingRow::Blank);
+        rows.push(SettingRow::Back);
+        rows
     }
 
     pub fn toggle_selected_setting(&mut self) {
         let idx = self.settings_state.selected().unwrap_or(0);
-        match idx {
-            0 => {
+        match self.settings_items().get(idx) {
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::SyncAll,
+                ..
+            }) => {
                 self.sync_all = !self.sync_all;
                 self.persist_settings();
             }
-            1 => {
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::UseCache,
+                ..
+            }) => {
                 self.use_cache = !self.use_cache;
                 self.persist_settings();
             }
-            2 => {} // separator — do nothing
-            n => {
-                let repo_idx = n - 3;
-                if repo_idx < self.repos.len() {
-                    self.repos[repo_idx].enabled = !self.repos[repo_idx].enabled;
+            Some(SettingRow::RepoToggle { name, .. }) => {
+                let name = name.clone();
+                if let Some(repo) = self.repos.iter_mut().find(|r| r.name == name) {
+                    repo.enabled = !repo.enabled;
                     self.persist_settings();
                 }
-                // "← Back" row (last item) is handled by the caller
             }
+            _ => {} // Blank, Separator, Back — do nothing
         }
     }
 

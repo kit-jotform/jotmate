@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, Screen};
+use super::app::{App, Screen, SettingRow};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
@@ -58,7 +58,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .margin(1)
         .split(area);
 
-    let mut engine = LayoutEngine::new(area.x);
+    let engine = LayoutEngine::new(area.x);
 
     // Header row: icon | gap | logo
     let header_cols = Layout::default()
@@ -136,10 +136,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
                 Style::default().fg(C_MUTED),
             ),
         ])),
-        engine.place(
-            &Widget::anon(UI_WIDTH, 1, HAlign::Center),
-            rows.get("sel_hdr"),
-        ),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Center), rows.get("sel_hdr")),
     );
 
     // ── Menu list ──
@@ -201,9 +198,10 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
     let rows = ScreenLayout::new()
         .row("logo", 3)
+        .row("blank1", 1)
         .row("title", 1)
         .row("divider", 1)
-        .row("hint", 1)
+        .row("blank3", 1)
         .row("list", 0)
         .margin(1)
         .split(area);
@@ -226,97 +224,139 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         engine.center(logo_w, rows.get("logo")),
     );
 
-    // ── Title ──
-    let title = "Settings";
+    // ── Title + Hint on same line: "Settings" left, hint right ──
+    let title_row = engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("title"));
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            title,
+            "Settings",
             Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
         ))),
-        engine.center(title.chars().count() as u16, rows.get("title")),
+        title_row,
+    );
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("↑↓", Style::default().fg(C_MUTED)),
+            Span::styled(" navigate  •  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Space/↵", Style::default().fg(C_MUTED)),
+            Span::styled(" toggle  •  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" back", Style::default().fg(Color::DarkGray)),
+        ]))
+        .right_aligned(),
+        title_row,
     );
 
-    // ── Divider ──
-    let divider = "─".repeat(DIVIDER_WIDTH as usize);
+    // ── Divider — full UI_WIDTH, left-aligned ──
+    let divider = "─".repeat(UI_WIDTH as usize);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             divider,
             Style::default().fg(C_MUTED),
         ))),
-        engine.center(DIVIDER_WIDTH, rows.get("divider")),
-    );
-
-    // ── Hint ──
-    let hint = "←↑↓→ navigate  ·  Enter/Space toggle  ·  Esc back  ·  q quit";
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(hint, Style::default().fg(C_MUTED)))),
-        engine.center(hint.chars().count() as u16, rows.get("hint")),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("divider")),
     );
 
     // ── Settings list ──
-    let setting_items = app.settings_items();
-    let count = setting_items.len();
+    let setting_rows = app.settings_items();
     let selected = app.settings_state.selected().unwrap_or(0);
 
-    let items: Vec<ListItem> = setting_items
+    let items: Vec<ListItem> = setting_rows
         .iter()
         .enumerate()
-        .map(|(i, label)| {
-            if label.starts_with("──") {
-                // separator row — center within UI_WIDTH
-                let sep_len = label.chars().count() as u16;
-                let pad = " ".repeat(UI_WIDTH.saturating_sub(sep_len) as usize / 2);
-                return ListItem::new(Line::from(Span::styled(
-                    format!("{pad}{label}"),
-                    Style::default().fg(C_MUTED),
-                )));
-            }
-            let is_back = i == count - 1;
+        .map(|(i, row)| {
             let is_sel = selected == i;
+            match row {
+                SettingRow::Blank => ListItem::new(Line::raw("")),
 
-            if is_sel {
-                let prefix = "▸ ";
-                if label.starts_with('[') {
-                    let (badge, rest) = label.split_at(5);
-                    return ListItem::new(Line::from(vec![
-                        Span::styled(prefix, Style::default().fg(C_PRIMARY)),
+                SettingRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "── Upstream Repositories ──────────────────────",
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
+
+                SettingRow::Back => {
+                    let style = if is_sel {
+                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(C_MUTED)
+                    };
+                    ListItem::new(Line::from(vec![
                         Span::styled(
-                            badge.to_string(),
-                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            if is_sel { "▸ " } else { "  " },
+                            Style::default().fg(C_PRIMARY),
                         ),
-                        Span::styled(
-                            rest.to_string(),
-                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
+                        Span::styled("← Back", style),
+                    ]))
                 }
-                return ListItem::new(Line::from(Span::styled(
-                    format!("{prefix}{label}"),
-                    Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                )));
-            }
 
-            if is_back {
-                return ListItem::new(Line::from(Span::styled(
-                    format!("  {label}"),
-                    Style::default().fg(C_MUTED),
-                )));
-            }
+                SettingRow::Toggle {
+                    label, hint, on, ..
+                } => {
+                    let badge = if *on { "[ON ] " } else { "[OFF] " };
+                    let badge_color = if *on { C_SUCCESS } else { C_MUTED };
+                    let label_text = if hint.is_empty() {
+                        format!("{label}")
+                    } else {
+                        format!("{label}  ({hint})")
+                    };
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                badge,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                label_text,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(
+                                badge,
+                                Style::default()
+                                    .fg(badge_color)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(label_text, Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
 
-            // Normal toggle row — color the badge
-            let on = label.starts_with("[ON");
-            let badge_color = if on { C_SUCCESS } else { C_MUTED };
-            let (badge, rest) = label.split_at(5);
-            ListItem::new(Line::from(vec![
-                Span::styled("  ", Style::default()),
-                Span::styled(
-                    badge.to_string(),
-                    Style::default()
-                        .fg(badge_color)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(rest.to_string(), Style::default().fg(C_TEXT)),
-            ]))
+                SettingRow::RepoToggle { name, url, enabled } => {
+                    let badge = if *enabled { "[ON ] " } else { "[OFF] " };
+                    let badge_color = if *enabled { C_SUCCESS } else { C_MUTED };
+                    let label_text = format!("{name}  <{url}>");
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                badge,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                label_text,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(
+                                badge,
+                                Style::default()
+                                    .fg(badge_color)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(label_text, Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
+            }
         })
         .collect();
 

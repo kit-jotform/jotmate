@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use super::app::{App, Screen};
+use super::app::{App, Screen, SettingRow};
 use super::draw::MAIN_ITEM_COUNT;
 
 pub enum Action {
@@ -47,24 +47,30 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
 }
 
 fn handle_settings(app: &mut App, code: KeyCode) -> Action {
-    let count = app.settings_item_count();
     match code {
         KeyCode::Up | KeyCode::Left => {
+            let rows = app.settings_items();
             let i = app.settings_state.selected().unwrap_or(0);
-            let next = if i == 0 { 0 } else { i - 1 };
-            let next = if next == 2 { 1 } else { next };
+            let mut next = i.saturating_sub(1);
+            while next > 0 && !rows[next].is_interactive() {
+                next -= 1;
+            }
             app.settings_state.select(Some(next));
         }
         KeyCode::Down | KeyCode::Right => {
+            let rows = app.settings_items();
             let i = app.settings_state.selected().unwrap_or(0);
-            let next = (i + 1).min(count - 1);
-            let next = if next == 2 { 3 } else { next };
+            let last = rows.len() - 1;
+            let mut next = (i + 1).min(last);
+            while next < last && !rows[next].is_interactive() {
+                next += 1;
+            }
             app.settings_state.select(Some(next));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
+            let rows = app.settings_items();
             let i = app.settings_state.selected().unwrap_or(0);
-            if i == count - 1 {
-                // "← Back" row
+            if matches!(rows.get(i), Some(SettingRow::Back)) {
                 app.screen = Screen::MainMenu;
             } else {
                 app.toggle_selected_setting();
