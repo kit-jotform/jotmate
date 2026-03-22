@@ -7,12 +7,8 @@ use ratatui::{
 };
 
 use super::app::{App, Screen};
+use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
-
-// ── Layout constants ─────────────────────────────────────────────────────────
-
-/// Canonical UI width — matches the full header (icon 14 + gap 2 + logo 63).
-const UI_WIDTH: u16 = 79;
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -38,16 +34,6 @@ pub(super) const MAIN_ITEM_COUNT: usize = MAIN_ITEMS.len();
 const NAME_COL_W: u16 = 16; // fixed width for the name column
 const DIVIDER_WIDTH: u16 = 53;
 
-/// Center `text_len` characters within `UI_WIDTH`, offset from `base_x`.
-fn centered(base_x: u16, row: Rect, text_len: u16) -> Rect {
-    let pad = UI_WIDTH.saturating_sub(text_len) / 2;
-    Rect {
-        x: base_x + pad,
-        width: UI_WIDTH.min(text_len),
-        ..row
-    }
-}
-
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
         Screen::MainMenu => draw_main_menu(f, app),
@@ -58,23 +44,21 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
 fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
 
-    // Layout: header | blank | tagline | time-version | divider | blank | select-header | menu | blank | hint
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(7), // header (icon + logo)
-            Constraint::Length(1), // blank
-            Constraint::Length(1), // tagline
-            Constraint::Length(1), // time | version
-            Constraint::Length(1), // divider
-            Constraint::Length(1), // blank
-            Constraint::Length(1), // "SELECT TOOL" header
-            Constraint::Length(4), // menu list (4 items)
-            Constraint::Length(1), // blank
-            Constraint::Length(1), // hint
-        ])
+    let rows = ScreenLayout::new()
+        .row("header", 7)
+        .row("blank1", 1)
+        .row("tagline", 1)
+        .row("time_ver", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("sel_hdr", 1)
+        .row("menu", 4)
+        .row("blank3", 1)
+        .row("hint", 1)
         .margin(1)
         .split(area);
+
+    let mut engine = LayoutEngine::new(area.x);
 
     // Header row: icon | gap | logo
     let header_cols = Layout::default()
@@ -84,7 +68,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             Constraint::Length(2),
             Constraint::Min(0),
         ])
-        .split(rows[0]);
+        .split(rows.get("header"));
 
     // ── Icon ──
     f.render_widget(IconWidget, header_cols[0]);
@@ -106,9 +90,6 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .collect();
     f.render_widget(Paragraph::new(logo_lines), logo_area);
 
-    // Center everything within UI_WIDTH, anchored at the area left edge
-    let base_x = area.x;
-
     // ── Divider ──
     let divider = "─".repeat(DIVIDER_WIDTH as usize);
     f.render_widget(
@@ -116,7 +97,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             divider.clone(),
             Style::default().fg(C_MUTED),
         ))),
-        centered(base_x, rows[4], DIVIDER_WIDTH),
+        engine.center(DIVIDER_WIDTH, rows.get("divider")),
     );
 
     // ── Tagline ──
@@ -126,7 +107,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             tagline,
             Style::default().fg(C_MUTED).add_modifier(Modifier::ITALIC),
         ))),
-        centered(base_x, rows[2], tagline.chars().count() as u16),
+        engine.center(tagline.chars().count() as u16, rows.get("tagline")),
     );
 
     // ── Time | version ──
@@ -140,12 +121,8 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
             Span::styled(format!("v{version}"), Style::default().fg(C_MUTED)),
         ])),
-        centered(base_x, rows[3], time_len),
+        engine.center(time_len, rows.get("time_ver")),
     );
-
-    // rows[1] blank
-
-    // rows[5] blank
 
     // ── "SELECT TOOL" header with keys ──
     f.render_widget(
@@ -159,7 +136,10 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
                 Style::default().fg(C_MUTED),
             ),
         ])),
-        rows[6],
+        engine.place(
+            &Widget::anon(UI_WIDTH, 1, HAlign::Center),
+            rows.get("sel_hdr"),
+        ),
     );
 
     // ── Menu list ──
@@ -200,9 +180,11 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         })
         .collect();
 
-    f.render_stateful_widget(List::new(items), rows[7], &mut app.main_state.clone());
-
-    // rows[8] blank
+    f.render_stateful_widget(
+        List::new(items),
+        rows.get("menu"),
+        &mut app.main_state.clone(),
+    );
 
     // ── Hint ──
     f.render_widget(
@@ -210,27 +192,23 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
             "q/Esc exit",
             Style::default().fg(C_MUTED),
         ))),
-        rows[9],
+        rows.get("hint"),
     );
 }
 
 fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // small logo
-            Constraint::Length(1), // "Settings" title
-            Constraint::Length(1), // divider
-            Constraint::Length(1), // hint
-            Constraint::Min(0),    // list
-        ])
+    let rows = ScreenLayout::new()
+        .row("logo", 3)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("hint", 1)
+        .row("list", 0)
         .margin(1)
         .split(area);
 
-    // Center everything within UI_WIDTH, anchored at the area left edge
-    let base_x = area.x;
+    let engine = LayoutEngine::new(area.x);
 
     // ── Small logo ──
     let logo_w = LOGO_SMALL[0].chars().count() as u16;
@@ -245,7 +223,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         .collect();
     f.render_widget(
         Paragraph::new(logo_lines),
-        centered(base_x, chunks[0], logo_w),
+        engine.center(logo_w, rows.get("logo")),
     );
 
     // ── Title ──
@@ -255,7 +233,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
             title,
             Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
         ))),
-        centered(base_x, chunks[1], title.chars().count() as u16),
+        engine.center(title.chars().count() as u16, rows.get("title")),
     );
 
     // ── Divider ──
@@ -265,14 +243,14 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
             divider,
             Style::default().fg(C_MUTED),
         ))),
-        centered(base_x, chunks[2], DIVIDER_WIDTH),
+        engine.center(DIVIDER_WIDTH, rows.get("divider")),
     );
 
     // ── Hint ──
     let hint = "←↑↓→ navigate  ·  Enter/Space toggle  ·  Esc back  ·  q quit";
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(hint, Style::default().fg(C_MUTED)))),
-        centered(base_x, chunks[3], hint.chars().count() as u16),
+        engine.center(hint.chars().count() as u16, rows.get("hint")),
     );
 
     // ── Settings list ──
@@ -342,5 +320,9 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         })
         .collect();
 
-    f.render_stateful_widget(List::new(items), chunks[4], &mut app.settings_state.clone());
+    f.render_stateful_widget(
+        List::new(items),
+        rows.get("list"),
+        &mut app.settings_state.clone(),
+    );
 }

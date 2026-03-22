@@ -1,6 +1,7 @@
 mod app;
 mod draw;
 mod input;
+mod layout;
 mod widgets;
 
 use anyhow::Result;
