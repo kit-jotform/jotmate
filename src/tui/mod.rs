@@ -14,7 +14,7 @@ use std::io::stdout;
 
 use app::{App, Screen};
 use draw::draw;
-use input::{handle_main_key, handle_settings_key};
+use input::{handle_key, Action};
 
 // ── Terminal setup / teardown ─────────────────────────────────────────────────
 
@@ -81,15 +81,10 @@ async fn event_loop(
             if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                 return Ok(None);
             }
-            match app.screen {
-                Screen::MainMenu => {
-                    if let Some(action) = handle_main_key(app, key.code) {
-                        return Ok(action);
-                    }
-                }
-                Screen::Settings => {
-                    handle_settings_key(app, key.code);
-                }
+            match handle_key(app, key.code) {
+                Action::Back => return Ok(None),
+                Action::Run(cmd) => return Ok(Some(cmd)),
+                Action::Continue => {}
             }
         }
     }

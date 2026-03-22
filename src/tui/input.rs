@@ -3,8 +3,20 @@ use crossterm::event::KeyCode;
 use super::app::{App, Screen};
 use super::draw::MAIN_ITEM_COUNT;
 
-// Returns None to keep looping, Some(None) to quit, Some(Some("sync")) etc to run a tool
-pub fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {
+pub enum Action {
+    Continue,
+    Back,
+    Run(String),
+}
+
+pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
+    match app.screen {
+        Screen::MainMenu => handle_main(app, code),
+        Screen::Settings => handle_settings(app, code),
+    }
+}
+
+fn handle_main(app: &mut App, code: KeyCode) -> Action {
     match code {
         KeyCode::Up | KeyCode::Left => {
             let i = app.main_state.selected().unwrap_or(0);
@@ -18,27 +30,27 @@ pub fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {
         KeyCode::Enter => {
             let i = app.main_state.selected().unwrap_or(0);
             match i {
-                0 => return Some(Some("sync".to_string())),
-                1 => return Some(Some("time".to_string())),
+                0 => return Action::Run("sync".to_string()),
+                1 => return Action::Run("time".to_string()),
                 2 => {
                     app.screen = Screen::Settings;
                     app.settings_state.select(Some(0));
                 }
-                _ => return Some(None), // Exit
+                _ => return Action::Back, // Exit row
             }
         }
-        KeyCode::Esc | KeyCode::Char('q') => return Some(None),
+        // Esc, Backspace, and q all exit from the main menu
+        KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
-    None
+    Action::Continue
 }
 
-pub fn handle_settings_key(app: &mut App, code: KeyCode) {
+fn handle_settings(app: &mut App, code: KeyCode) -> Action {
     let count = app.settings_item_count();
     match code {
         KeyCode::Up | KeyCode::Left => {
             let i = app.settings_state.selected().unwrap_or(0);
-            // skip separator (idx 2)
             let next = if i == 0 { 0 } else { i - 1 };
             let next = if next == 2 { 1 } else { next };
             app.settings_state.select(Some(next));
@@ -52,15 +64,18 @@ pub fn handle_settings_key(app: &mut App, code: KeyCode) {
         KeyCode::Enter | KeyCode::Char(' ') => {
             let i = app.settings_state.selected().unwrap_or(0);
             if i == count - 1 {
-                // "← Back"
+                // "← Back" row
                 app.screen = Screen::MainMenu;
             } else {
                 app.toggle_selected_setting();
             }
         }
+        // Esc/Backspace go back to main menu; q quits directly
         KeyCode::Esc | KeyCode::Backspace => {
             app.screen = Screen::MainMenu;
         }
+        KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
+    Action::Continue
 }

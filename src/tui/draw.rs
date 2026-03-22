@@ -207,7 +207,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     // ── Hint ──
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "Esc exit",
+            "q/Esc exit",
             Style::default().fg(C_MUTED),
         ))),
         rows[9],
@@ -269,7 +269,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     );
 
     // ── Hint ──
-    let hint = "←↑↓→ navigate  ·  Enter/Space toggle  ·  Esc back";
+    let hint = "←↑↓→ navigate  ·  Enter/Space toggle  ·  Esc back  ·  q quit";
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(hint, Style::default().fg(C_MUTED)))),
         centered(base_x, chunks[3], hint.chars().count() as u16),
