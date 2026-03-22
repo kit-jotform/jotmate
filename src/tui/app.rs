@@ -39,7 +39,11 @@ impl App {
             .sync
             .upstream_repos
             .iter()
-            .map(|r| RepoEntry { name: r.name.clone(), url: r.url.clone(), enabled: r.enabled })
+            .map(|r| RepoEntry {
+                name: r.name.clone(),
+                url: r.url.clone(),
+                enabled: r.enabled,
+            })
             .collect();
         Ok(Self {
             screen: Screen::MainMenu,

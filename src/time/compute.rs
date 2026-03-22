@@ -21,8 +21,7 @@ pub fn get_week_start_monday(date: NaiveDate) -> NaiveDate {
 pub fn format_week_range(monday: NaiveDate) -> String {
     let sunday = monday + chrono::Duration::days(6);
     let month_names = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     let m_start = month_names[(monday.month() - 1) as usize];
     let m_end = month_names[(sunday.month() - 1) as usize];

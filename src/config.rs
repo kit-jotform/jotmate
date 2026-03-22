@@ -22,7 +22,11 @@ pub struct UpstreamRepo {
 
 impl UpstreamRepo {
     pub fn new(url: impl Into<String>, name: impl Into<String>) -> Self {
-        Self { url: url.into(), name: name.into(), enabled: true }
+        Self {
+            url: url.into(),
+            name: name.into(),
+            enabled: true,
+        }
     }
 }
 
@@ -196,7 +200,10 @@ pub fn parse_contract_periods(s: &str) -> Result<Vec<ContractPeriod>> {
         let entry = entry.trim();
         let parts: Vec<&str> = entry.splitn(2, ':').collect();
         if parts.len() != 2 {
-            anyhow::bail!("Invalid contract period '{}': expected YYYY-MM-DD:HOURS", entry);
+            anyhow::bail!(
+                "Invalid contract period '{}': expected YYYY-MM-DD:HOURS",
+                entry
+            );
         }
         let from = NaiveDate::parse_from_str(parts[0].trim(), "%Y-%m-%d")
             .with_context(|| format!("Invalid date '{}'", parts[0]))?;

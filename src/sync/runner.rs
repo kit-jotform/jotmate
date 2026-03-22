@@ -12,13 +12,17 @@ const SYNC_SCRIPT: &str = include_str!("../../scripts/run-sync.sh");
 /// discovered base directory where all repos live.
 fn build_patched_script(github_base: &Path) -> String {
     let base_str = github_base.to_string_lossy();
-    SYNC_SCRIPT.lines().map(|line| {
-        if line.starts_with("GITHUB_BASE=") {
-            format!("GITHUB_BASE=\"{base_str}\"")
-        } else {
-            line.to_string()
-        }
-    }).collect::<Vec<_>>().join("\n")
+    SYNC_SCRIPT
+        .lines()
+        .map(|line| {
+            if line.starts_with("GITHUB_BASE=") {
+                format!("GITHUB_BASE=\"{base_str}\"")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn build_flag_args(args: &SyncArgs) -> Vec<String> {
@@ -37,8 +41,8 @@ fn build_flag_args(args: &SyncArgs) -> Vec<String> {
 pub fn run_cli(args: &SyncArgs, github_base: &Path) -> Result<()> {
     let patched = build_patched_script(github_base);
 
-    let mut tmp = NamedTempFile::with_suffix(".sh")
-        .context("Failed to create temporary script file")?;
+    let mut tmp =
+        NamedTempFile::with_suffix(".sh").context("Failed to create temporary script file")?;
     tmp.write_all(patched.as_bytes())
         .context("Failed to write patched script")?;
     tmp.flush()?;
@@ -70,4 +74,3 @@ pub fn run_cli(args: &SyncArgs, github_base: &Path) -> Result<()> {
 
     Ok(())
 }
-

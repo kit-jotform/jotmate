@@ -84,8 +84,12 @@ impl Widget for IconWidget {
             let cell = &mut buf[(x, y)];
             cell.set_char(ch);
             let mut style = Style::default();
-            if let Some(f) = fg { style = style.fg(Color::Indexed(f)); }
-            if let Some(b) = bg { style = style.bg(Color::Indexed(b)); }
+            if let Some(f) = fg {
+                style = style.fg(Color::Indexed(f));
+            }
+            if let Some(b) = bg {
+                style = style.bg(Color::Indexed(b));
+            }
             cell.set_style(style);
         }
     }

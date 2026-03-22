@@ -12,8 +12,7 @@ use crate::cli::TimeArgs;
 use crate::config;
 use crate::error::AppError;
 use compute::{
-    format_week_range, get_target_hours, get_week_end_sunday, is_past_week, weeks_to_fetch,
-    WeekRow,
+    format_week_range, get_target_hours, get_week_end_sunday, is_past_week, weeks_to_fetch, WeekRow,
 };
 
 const BATCH_SIZE: usize = 10;
@@ -43,7 +42,11 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         return Ok(());
     }
 
-    eprintln!("Fetching {} weeks in batches of {}...", mondays.len(), BATCH_SIZE);
+    eprintln!(
+        "Fetching {} weeks in batches of {}...",
+        mondays.len(),
+        BATCH_SIZE
+    );
 
     let mut rows: Vec<WeekRow> = Vec::new();
     let mut auth_cookie = cookie;
@@ -81,7 +84,9 @@ pub async fn run(args: TimeArgs) -> Result<()> {
                         auth::delete_token_from_keychain()?;
                         auth_cookie = auth::get_or_refresh_token(email).await?;
                         // Note: the failed weeks in this batch are skipped; user can re-run
-                        eprintln!("Re-authenticated. Some weeks may be missing — re-run to fetch them.");
+                        eprintln!(
+                            "Re-authenticated. Some weeks may be missing — re-run to fetch them."
+                        );
                     } else {
                         eprintln!("Warning: {e}");
                     }
@@ -150,4 +155,3 @@ async fn fetch_week(
         from_cache: false,
     })
 }
-

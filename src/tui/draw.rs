@@ -18,19 +18,19 @@ const UI_WIDTH: u16 = 79;
 
 const C_TEXT: Color = Color::Indexed(255);
 const C_PRIMARY: Color = Color::Indexed(199); // medium purple — consistent across terminals
-const C_ACCENT: Color = Color::Indexed(51);  // light cyan — consistent across terminals
+const C_ACCENT: Color = Color::Indexed(51); // light cyan — consistent across terminals
 const C_SELECT: Color = C_PRIMARY;
 const C_SUCCESS: Color = Color::LightGreen;
 const C_MUTED: Color = Color::DarkGray;
-const C_LOGO: Color = C_TEXT;  // lavender — original logo colour
+const C_LOGO: Color = C_TEXT; // lavender — original logo colour
 
 // ── Main menu items: (name, description) ──────────────────────────────────────
 
 const MAIN_ITEMS: &[(&str, &str)] = &[
-    ("Sync",        "Sync RDS to upstream"),
+    ("Sync", "Sync RDS to upstream"),
     ("Time Doctor", "Track your work hours"),
-    ("Settings",    "Configure jotmate"),
-    ("Exit",        ""),
+    ("Settings", "Configure jotmate"),
+    ("Exit", ""),
 ];
 
 pub(super) const MAIN_ITEM_COUNT: usize = MAIN_ITEMS.len();
@@ -41,7 +41,11 @@ const DIVIDER_WIDTH: u16 = 53;
 /// Center `text_len` characters within `UI_WIDTH`, offset from `base_x`.
 fn centered(base_x: u16, row: Rect, text_len: u16) -> Rect {
     let pad = UI_WIDTH.saturating_sub(text_len) / 2;
-    Rect { x: base_x + pad, width: UI_WIDTH.min(text_len), ..row }
+    Rect {
+        x: base_x + pad,
+        width: UI_WIDTH.min(text_len),
+        ..row
+    }
 }
 
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
@@ -86,10 +90,19 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     f.render_widget(IconWidget, header_cols[0]);
 
     // ── Logo (lavender, vertically centred in 7-row area) ──
-    let logo_area = Rect { y: header_cols[2].y + 1, height: 6, ..header_cols[2] };
+    let logo_area = Rect {
+        y: header_cols[2].y + 1,
+        height: 6,
+        ..header_cols[2]
+    };
     let logo_lines: Vec<Line> = LOGO
         .iter()
-        .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_LOGO).add_modifier(Modifier::BOLD))))
+        .map(|l| {
+            Line::from(Span::styled(
+                *l,
+                Style::default().fg(C_LOGO).add_modifier(Modifier::BOLD),
+            ))
+        })
         .collect();
     f.render_widget(Paragraph::new(logo_lines), logo_area);
 
@@ -99,7 +112,10 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     // ── Divider ──
     let divider = "─".repeat(DIVIDER_WIDTH as usize);
     f.render_widget(
-        Paragraph::new(Line::from(Span::styled(divider.clone(), Style::default().fg(C_MUTED)))),
+        Paragraph::new(Line::from(Span::styled(
+            divider.clone(),
+            Style::default().fg(C_MUTED),
+        ))),
         centered(base_x, rows[4], DIVIDER_WIDTH),
     );
 
@@ -134,8 +150,14 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     // ── "SELECT TOOL" header with keys ──
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("SELECT TOOL", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("  (←↓↑→ navigate  •  ↵ submit)", Style::default().fg(C_MUTED)),
+            Span::styled(
+                "SELECT TOOL",
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "  (←↓↑→ navigate  •  ↵ submit)",
+                Style::default().fg(C_MUTED),
+            ),
         ])),
         rows[6],
     );
@@ -150,11 +172,17 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
                 let name_padded = format!("{:<width$}", name, width = NAME_COL_W as usize);
                 let mut spans = vec![
                     Span::styled("▸ ", Style::default().fg(C_SELECT)),
-                    Span::styled(name_padded, Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        name_padded,
+                        Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD),
+                    ),
                 ];
                 if !desc.is_empty() {
                     spans.push(Span::styled("— ", Style::default().fg(C_SELECT)));
-                    spans.push(Span::styled(*desc, Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD)));
+                    spans.push(Span::styled(
+                        *desc,
+                        Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD),
+                    ));
                 }
                 ListItem::new(Line::from(spans))
             } else {
@@ -178,9 +206,10 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
 
     // ── Hint ──
     f.render_widget(
-        Paragraph::new(Line::from(
-            Span::styled("Esc exit", Style::default().fg(C_MUTED)),
-        )),
+        Paragraph::new(Line::from(Span::styled(
+            "Esc exit",
+            Style::default().fg(C_MUTED),
+        ))),
         rows[9],
     );
 }
@@ -207,9 +236,17 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let logo_w = LOGO_SMALL[0].chars().count() as u16;
     let logo_lines: Vec<Line> = LOGO_SMALL
         .iter()
-        .map(|l| Line::from(Span::styled(*l, Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD))))
+        .map(|l| {
+            Line::from(Span::styled(
+                *l,
+                Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD),
+            ))
+        })
         .collect();
-    f.render_widget(Paragraph::new(logo_lines), centered(base_x, chunks[0], logo_w));
+    f.render_widget(
+        Paragraph::new(logo_lines),
+        centered(base_x, chunks[0], logo_w),
+    );
 
     // ── Title ──
     let title = "Settings";
@@ -224,7 +261,10 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     // ── Divider ──
     let divider = "─".repeat(DIVIDER_WIDTH as usize);
     f.render_widget(
-        Paragraph::new(Line::from(Span::styled(divider, Style::default().fg(C_MUTED)))),
+        Paragraph::new(Line::from(Span::styled(
+            divider,
+            Style::default().fg(C_MUTED),
+        ))),
         centered(base_x, chunks[2], DIVIDER_WIDTH),
     );
 
@@ -262,8 +302,14 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                     let (badge, rest) = label.split_at(5);
                     return ListItem::new(Line::from(vec![
                         Span::styled(prefix, Style::default().fg(C_PRIMARY)),
-                        Span::styled(badge.to_string(), Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
-                        Span::styled(rest.to_string(), Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            badge.to_string(),
+                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            rest.to_string(),
+                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                        ),
                     ]));
                 }
                 return ListItem::new(Line::from(Span::styled(
@@ -285,7 +331,12 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
             let (badge, rest) = label.split_at(5);
             ListItem::new(Line::from(vec![
                 Span::styled("  ", Style::default()),
-                Span::styled(badge.to_string(), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    badge.to_string(),
+                    Style::default()
+                        .fg(badge_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(rest.to_string(), Style::default().fg(C_TEXT)),
             ]))
         })

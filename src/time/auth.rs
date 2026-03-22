@@ -32,8 +32,14 @@ pub async fn login(email: &str, password: &str) -> Result<String> {
 
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    headers.insert("Origin", HeaderValue::from_static("https://2.timedoctor.com"));
-    headers.insert("Referer", HeaderValue::from_static("https://2.timedoctor.com/"));
+    headers.insert(
+        "Origin",
+        HeaderValue::from_static("https://2.timedoctor.com"),
+    );
+    headers.insert(
+        "Referer",
+        HeaderValue::from_static("https://2.timedoctor.com/"),
+    );
 
     let body = serde_json::json!({
         "email": email,

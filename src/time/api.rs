@@ -35,16 +35,18 @@ pub async fn get_week_stats(
     let mut headers = HeaderMap::new();
     headers.insert(
         "Cookie",
-        HeaderValue::from_str(cookie_string).map_err(|_| {
-            AppError::AuthFailed("Invalid cookie string".to_string())
-        })?,
+        HeaderValue::from_str(cookie_string)
+            .map_err(|_| AppError::AuthFailed("Invalid cookie string".to_string()))?,
+    );
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+    headers.insert(
+        "Origin",
+        HeaderValue::from_static("https://2.timedoctor.com"),
     );
     headers.insert(
-        "Content-Type",
-        HeaderValue::from_static("application/json"),
+        "Referer",
+        HeaderValue::from_static("https://2.timedoctor.com/"),
     );
-    headers.insert("Origin", HeaderValue::from_static("https://2.timedoctor.com"));
-    headers.insert("Referer", HeaderValue::from_static("https://2.timedoctor.com/"));
 
     let resp = client
         .get("https://api2.timedoctor.com/api/1.1/stats/total")

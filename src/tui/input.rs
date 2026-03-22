@@ -12,7 +12,8 @@ pub fn handle_main_key(app: &mut App, code: KeyCode) -> Option<Option<String>> {
         }
         KeyCode::Down | KeyCode::Right => {
             let i = app.main_state.selected().unwrap_or(0);
-            app.main_state.select(Some((i + 1).min(MAIN_ITEM_COUNT - 1)));
+            app.main_state
+                .select(Some((i + 1).min(MAIN_ITEM_COUNT - 1)));
         }
         KeyCode::Enter => {
             let i = app.main_state.selected().unwrap_or(0);

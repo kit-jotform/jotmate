@@ -23,7 +23,10 @@ pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
         .context("Failed to run fd")?;
 
     if !output.status.success() {
-        anyhow::bail!("fd exited with error: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "fd exited with error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -68,7 +71,9 @@ pub fn build_upstream_map(repos: &[UpstreamRepo]) -> HashMap<String, String> {
         if let Some(rest) = repo.url.strip_prefix("https://") {
             if let Some(slash) = rest.find('/') {
                 let host = &rest[..slash];
-                let path = rest[slash + 1..].trim_end_matches('/').trim_end_matches(".git");
+                let path = rest[slash + 1..]
+                    .trim_end_matches('/')
+                    .trim_end_matches(".git");
                 let ssh = format!("git@{}:{}", host, path);
                 map.insert(format!("{}.git", ssh), repo.name.clone());
                 map.insert(ssh, repo.name.clone());
@@ -95,7 +100,9 @@ pub fn match_repos_to_projects(
         if let Some(url) = get_upstream_url(repo_path) {
             let url_trimmed = url.trim_end_matches('/');
             if let Some(name) = upstream_map.get(url_trimmed) {
-                found.entry(name.clone()).or_insert_with(|| repo_path.clone());
+                found
+                    .entry(name.clone())
+                    .or_insert_with(|| repo_path.clone());
             }
         }
         if found.len() == expected_names.len() {
@@ -123,7 +130,10 @@ pub fn match_repos_to_projects(
 pub fn discover_and_cache(upstream_repos: &[UpstreamRepo]) -> Result<RepoPathsCache> {
     println!("Discovering git repositories (this may take a moment)...");
     let repos = discover_all_git_repos()?;
-    println!("Found {} git repos, matching against known upstreams...", repos.len());
+    println!(
+        "Found {} git repos, matching against known upstreams...",
+        repos.len()
+    );
 
     let paths = match_repos_to_projects(&repos, upstream_repos)?;
 
