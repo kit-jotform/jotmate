@@ -6,7 +6,9 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, Screen, SettingRow};
+use ratatui::widgets::{Block, Borders, Clear};
+
+use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
@@ -14,11 +16,12 @@ use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
 const C_TEXT: Color = Color::Indexed(255);
 const C_PRIMARY: Color = Color::Indexed(199); // medium purple — consistent across terminals
-const C_ACCENT: Color = Color::Indexed(51); // light cyan — consistent across terminals
+const C_ACCENT: Color = Color::Indexed(51);   // light cyan — consistent across terminals
 const C_SELECT: Color = C_PRIMARY;
-const C_SUCCESS: Color = Color::LightGreen;
-const C_MUTED: Color = Color::DarkGray;
-const C_LOGO: Color = C_TEXT; // lavender — original logo colour
+const C_SUCCESS: Color = Color::Indexed(10);    // bright green — consistent across terminals
+const C_MUTED: Color = Color::Indexed(8);       // dark gray — consistent across terminals
+const C_LOGO: Color = C_TEXT;
+const C_DANGEROUS: Color = Color::Indexed(9);   // bright red — consistent across terminals
 
 // ── Main menu items: (name, description) ──────────────────────────────────────
 
@@ -38,6 +41,7 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
         Screen::MainMenu => draw_main_menu(f, app),
         Screen::Settings => draw_settings(f, app),
+        Screen::RepoManager => draw_repo_manager(f, app),
     }
 }
 
@@ -52,6 +56,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .row("divider", 1)
         .row("blank2", 1)
         .row("sel_hdr", 1)
+        .row("blank_sel", 1)
         .row("menu", 4)
         .row("blank3", 1)
         .row("hint", 1)
@@ -118,7 +123,7 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(now, Style::default().fg(C_MUTED)),
-            Span::styled("  |  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  |  ", Style::default().fg(C_MUTED)),
             Span::styled(format!("v{version}"), Style::default().fg(C_MUTED)),
         ])),
         engine.center(time_len, rows.get("time_ver")),
@@ -193,21 +198,15 @@ fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     );
 }
 
-fn draw_settings(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-
-    let rows = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank3", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
-    let engine = LayoutEngine::new(area.x);
-
+fn draw_screen_header(
+    f: &mut ratatui::Frame,
+    engine: &LayoutEngine,
+    logo_area: Rect,
+    title_area: Rect,
+    divider_area: Rect,
+    title: &str,
+    hint_spans: Vec<Span<'static>>,
+) {
     // ── Small logo ──
     let logo_w = LOGO_SMALL[0].chars().count() as u16;
     let logo_lines: Vec<Line> = LOGO_SMALL
@@ -221,39 +220,65 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         .collect();
     f.render_widget(
         Paragraph::new(logo_lines),
-        engine.center(logo_w, rows.get("logo")),
+        engine.center(logo_w, logo_area),
     );
 
-    // ── Title + Hint on same line: "Settings" left, hint right ──
-    let title_row = engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("title"));
+    // ── Title left, hint right ──
+    let title_row = engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), title_area);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "Settings",
+            title,
             Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
         ))),
         title_row,
     );
     f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("↑↓", Style::default().fg(C_MUTED)),
-            Span::styled(" navigate  •  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Space/↵", Style::default().fg(C_MUTED)),
-            Span::styled(" toggle  •  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" back", Style::default().fg(Color::DarkGray)),
-        ]))
-        .right_aligned(),
+        Paragraph::new(Line::from(hint_spans)).right_aligned(),
         title_row,
     );
 
-    // ── Divider — full UI_WIDTH, left-aligned ──
+    // ── Divider ──
     let divider = "─".repeat(UI_WIDTH as usize);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             divider,
             Style::default().fg(C_MUTED),
         ))),
-        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("divider")),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), divider_area),
+    );
+}
+
+fn draw_settings(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank3", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let hint_spans = vec![
+        Span::styled("↑↓", Style::default().fg(C_MUTED)),
+        Span::styled(" navigate  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("Space/↵", Style::default().fg(C_MUTED)),
+        Span::styled(" toggle  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+        Span::styled(" back", Style::default().fg(C_MUTED)),
+    ];
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        "Settings",
+        hint_spans,
     );
 
     // ── Settings list ──
@@ -291,13 +316,28 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                     ]))
                 }
 
+                SettingRow::ManageRepos => {
+                    let style = if is_sel {
+                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(C_MUTED)
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::styled(
+                            if is_sel { "▸ " } else { "  " },
+                            Style::default().fg(C_PRIMARY),
+                        ),
+                        Span::styled("→ Manage upstream repos", style),
+                    ]))
+                }
+
                 SettingRow::Toggle {
                     label, hint, on, ..
                 } => {
                     let badge = if *on { "[ON ] " } else { "[OFF] " };
                     let badge_color = if *on { C_SUCCESS } else { C_MUTED };
                     let label_text = if hint.is_empty() {
-                        format!("{label}")
+                        label.to_string()
                     } else {
                         format!("{label}  ({hint})")
                     };
@@ -362,7 +402,181 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
     f.render_stateful_widget(
         List::new(items),
-        rows.get("list"),
+        layout.get("list"),
         &mut app.settings_state.clone(),
+    );
+}
+
+fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let hint_spans: Vec<Span<'static>> = match &app.input_mode {
+        InputMode::AddingRepo(_) => vec![
+            Span::styled("↵", Style::default().fg(C_MUTED)),
+            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" cancel", Style::default().fg(C_MUTED)),
+        ],
+        InputMode::ConfirmDelete(_) => vec![
+            Span::styled("↵/y", Style::default().fg(C_MUTED)),
+            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("Esc/n", Style::default().fg(C_MUTED)),
+            Span::styled(" cancel", Style::default().fg(C_MUTED)),
+        ],
+        InputMode::Normal => vec![
+            Span::styled("↵", Style::default().fg(C_MUTED)),
+            Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" back", Style::default().fg(C_MUTED)),
+        ],
+    };
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        "Manage Repos",
+        hint_spans,
+    );
+
+    // ── Repo manager list ──
+    let rm_rows = app.repo_manager_items();
+    let selected = app.repo_manager_state.selected().unwrap_or(0);
+
+    let items: Vec<ListItem> = rm_rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let is_sel = selected == i;
+            match row {
+                RepoManagerRow::Blank => ListItem::new(Line::raw("")),
+
+                RepoManagerRow::Back => {
+                    let style = if is_sel {
+                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(C_MUTED)
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::styled(
+                            if is_sel { "▸ " } else { "  " },
+                            Style::default().fg(C_PRIMARY),
+                        ),
+                        Span::styled("← Back", style),
+                    ]))
+                }
+
+                RepoManagerRow::RepoDelete { name, url } => {
+                    let detail = format!("  {name}  <{url}>");
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
+                            Span::styled(
+                                "[del]",
+                                Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(detail, Style::default().fg(C_TEXT)),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled("[del]", Style::default().fg(C_MUTED)),
+                            Span::styled(detail, Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
+
+                RepoManagerRow::AddUrl => match &app.input_mode {
+                    InputMode::AddingRepo(buf) => {
+                        let display = format!("  URL: {buf}_");
+                        ListItem::new(Line::from(Span::styled(
+                            display,
+                            Style::default().fg(C_ACCENT),
+                        )))
+                    }
+                    _ => {
+                        let style = if is_sel {
+                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(C_MUTED)
+                        };
+                        ListItem::new(Line::from(vec![
+                            Span::styled(
+                                if is_sel { "▸ " } else { "  " },
+                                Style::default().fg(C_PRIMARY),
+                            ),
+                            Span::styled("+ Add upstream URL", style),
+                        ]))
+                    }
+                },
+            }
+        })
+        .collect();
+
+    f.render_stateful_widget(
+        List::new(items),
+        layout.get("list"),
+        &mut app.repo_manager_state.clone(),
+    );
+
+    // ── Confirmation dialog overlay ──
+    if let InputMode::ConfirmDelete(name) = &app.input_mode {
+        draw_confirm_delete(f, area, name);
+    }
+}
+
+fn draw_confirm_delete(f: &mut ratatui::Frame, area: Rect, name: &str) {
+    let msg = format!("Delete \"{}\"?", name);
+    let dialog_w = (msg.len() as u16 + 4).max(26);
+    let dialog_h = 5u16;
+
+    let x = area.x + area.width.saturating_sub(dialog_w) / 2;
+    let y = area.y + area.height.saturating_sub(dialog_h) / 2;
+    let dialog_area = Rect::new(x, y, dialog_w, dialog_h);
+
+    f.render_widget(Clear, dialog_area);
+    f.render_widget(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(C_DANGEROUS))
+            .title(Span::styled(" Confirm ", Style::default().fg(C_DANGEROUS))),
+        dialog_area,
+    );
+
+    let inner = Rect::new(
+        dialog_area.x + 1,
+        dialog_area.y + 1,
+        dialog_area.width - 2,
+        dialog_area.height - 2,
+    );
+
+    f.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                msg,
+                Style::default().fg(C_TEXT),
+            )),
+            Line::raw(""),
+            Line::from(vec![
+                Span::styled(" ↵/y ", Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD)),
+                Span::styled("delete  ", Style::default().fg(C_MUTED)),
+                Span::styled(" Esc/n ", Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD)),
+                Span::styled("cancel", Style::default().fg(C_MUTED)),
+            ]),
+        ]),
+        inner,
     );
 }

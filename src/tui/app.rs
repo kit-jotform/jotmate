@@ -7,6 +7,16 @@ use ratatui::widgets::ListState;
 pub enum Screen {
     MainMenu,
     Settings,
+    RepoManager,
+}
+
+// ── Input mode (used inside RepoManager) ─────────────────────────────────────
+
+#[derive(Clone, PartialEq)]
+pub enum InputMode {
+    Normal,
+    AddingRepo(String),       // buffer holds URL being typed
+    ConfirmDelete(String),    // holds the repo name pending deletion
 }
 
 // ── Settings row types ────────────────────────────────────────────────────────
@@ -32,6 +42,7 @@ pub enum SettingRow {
         url: String,
         enabled: bool,
     },
+    ManageRepos,
     Back,
 }
 
@@ -39,7 +50,32 @@ impl SettingRow {
     pub fn is_interactive(&self) -> bool {
         matches!(
             self,
-            SettingRow::Toggle { .. } | SettingRow::RepoToggle { .. } | SettingRow::Back
+            SettingRow::Toggle { .. }
+                | SettingRow::RepoToggle { .. }
+                | SettingRow::ManageRepos
+                | SettingRow::Back
+        )
+    }
+}
+
+// ── Repo manager row types ────────────────────────────────────────────────────
+
+#[derive(Clone)]
+pub enum RepoManagerRow {
+    Blank,
+    RepoDelete {
+        name: String,
+        url: String,
+    },
+    AddUrl,
+    Back,
+}
+
+impl RepoManagerRow {
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            RepoManagerRow::RepoDelete { .. } | RepoManagerRow::AddUrl | RepoManagerRow::Back
         )
     }
 }
@@ -50,6 +86,8 @@ pub struct App {
     pub screen: Screen,
     pub main_state: ListState,
     pub settings_state: ListState,
+    pub repo_manager_state: ListState,
+    pub input_mode: InputMode,
     // in-memory settings state
     pub sync_all: bool,
     pub use_cache: bool,
@@ -70,6 +108,8 @@ impl App {
         main_state.select(Some(0));
         let mut settings_state = ListState::default();
         settings_state.select(Some(0));
+        let mut repo_manager_state = ListState::default();
+        repo_manager_state.select(Some(0));
         let repos = config
             .sync
             .upstream_repos
@@ -84,6 +124,8 @@ impl App {
             screen: Screen::MainMenu,
             main_state,
             settings_state,
+            repo_manager_state,
+            input_mode: InputMode::Normal,
             sync_all: config.sync.sync_all_by_default,
             use_cache: config.sync.use_cache,
             repos,
@@ -116,7 +158,24 @@ impl App {
             });
         }
         rows.push(SettingRow::Blank);
+        rows.push(SettingRow::ManageRepos);
+        rows.push(SettingRow::Blank);
         rows.push(SettingRow::Back);
+        rows
+    }
+
+    pub fn repo_manager_items(&self) -> Vec<RepoManagerRow> {
+        let mut rows: Vec<RepoManagerRow> = vec![];
+        for r in &self.repos {
+            rows.push(RepoManagerRow::RepoDelete {
+                name: r.name.clone(),
+                url: r.url.clone(),
+            });
+        }
+        rows.push(RepoManagerRow::Blank);
+        rows.push(RepoManagerRow::AddUrl);
+        rows.push(RepoManagerRow::Blank);
+        rows.push(RepoManagerRow::Back);
         rows
     }
 
@@ -144,7 +203,56 @@ impl App {
                     self.persist_settings();
                 }
             }
-            _ => {} // Blank, Separator, Back — do nothing
+            _ => {}
+        }
+    }
+
+    pub fn confirm_delete_repo(&mut self, name: String) {
+        self.input_mode = InputMode::ConfirmDelete(name);
+    }
+
+    pub fn execute_delete_repo(&mut self, name: &str) {
+        self.repos.retain(|r| r.name != name);
+        self.persist_settings();
+        self.input_mode = InputMode::Normal;
+        // Clamp cursor to a valid interactive row
+        let rows = self.repo_manager_items();
+        let last_interactive = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.is_interactive())
+            .map(|(i, _)| i)
+            .next_back()
+            .unwrap_or(0);
+        let cur = self.repo_manager_state.selected().unwrap_or(0);
+        if cur > last_interactive {
+            self.repo_manager_state.select(Some(last_interactive));
+        }
+    }
+
+    /// Derive a short name from a URL (last path component, stripped of .git).
+    fn name_from_url(url: &str) -> String {
+        url.trim_end_matches('/')
+            .trim_end_matches(".git")
+            .rsplit('/')
+            .next()
+            .unwrap_or(url)
+            .to_string()
+    }
+
+    pub fn add_repo_from_input(&mut self, url: String) {
+        let url = url.trim().to_string();
+        if url.is_empty() {
+            return;
+        }
+        let name = Self::name_from_url(&url);
+        if !self.repos.iter().any(|r| r.url == url) {
+            self.repos.push(RepoEntry {
+                name,
+                url,
+                enabled: true,
+            });
+            self.persist_settings();
         }
     }
 
@@ -152,11 +260,15 @@ impl App {
         if let Ok(mut config) = crate::config::load() {
             config.sync.sync_all_by_default = self.sync_all;
             config.sync.use_cache = self.use_cache;
-            for repo in &mut config.sync.upstream_repos {
-                if let Some(r) = self.repos.iter().find(|r| r.name == repo.name) {
-                    repo.enabled = r.enabled;
-                }
-            }
+            config.sync.upstream_repos = self
+                .repos
+                .iter()
+                .map(|r| crate::config::UpstreamRepo {
+                    url: r.url.clone(),
+                    name: r.name.clone(),
+                    enabled: r.enabled,
+                })
+                .collect();
             let _ = crate::config::save(&config);
         }
     }

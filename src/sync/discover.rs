@@ -42,12 +42,11 @@ pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
     Ok(repos)
 }
 
-pub fn get_upstream_url(repo_path: &Path) -> Option<String> {
+fn get_remote_url(repo_path: &Path, remote: &str) -> Option<String> {
     let output = Command::new("git")
-        .args(["-C", repo_path.to_str()?, "remote", "get-url", "upstream"])
+        .args(["-C", repo_path.to_str()?, "remote", "get-url", remote])
         .output()
         .ok()?;
-
     if output.status.success() {
         let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !url.is_empty() {
@@ -55,6 +54,11 @@ pub fn get_upstream_url(repo_path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+/// Returns the upstream URL for a repo, falling back to origin if no upstream remote exists.
+pub fn get_upstream_url(repo_path: &Path) -> Option<String> {
+    get_remote_url(repo_path, "upstream").or_else(|| get_remote_url(repo_path, "origin"))
 }
 
 /// Build a lookup map from (normalized URL → project name) for enabled repos,
