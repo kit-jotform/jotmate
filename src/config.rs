@@ -66,10 +66,12 @@ impl Default for SyncConfig {
     }
 }
 
+/// TimeDoctor company ID — hardcoded, not user-configurable
+pub const TIMEDOCTOR_COMPANY_ID: &str = "Xms4iFqBgQAEjLy2";
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TimeConfig {
     pub email: Option<String>,
-    pub company_id: Option<String>,
     pub timezone: Option<String>,
     pub start_date: Option<NaiveDate>,
     #[serde(default = "default_true")]
@@ -125,12 +127,6 @@ pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
     if config.time.email.is_none() {
         let email = prompt("TimeDoctor email", None)?;
         config.time.email = Some(email);
-        changed = true;
-    }
-
-    if config.time.company_id.is_none() {
-        let id = prompt("TimeDoctor company ID", None)?;
-        config.time.company_id = Some(id);
         changed = true;
     }
 

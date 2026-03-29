@@ -5,6 +5,7 @@ use crate::error::AppError;
 
 const KEYRING_SERVICE: &str = "jotmate-timedoctor";
 const KEYRING_USERNAME: &str = "session-cookie";
+const KEYRING_PASSWORD_KEY: &str = "password";
 
 pub fn load_token_from_keychain() -> Option<String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USERNAME).ok()?;
@@ -92,6 +93,11 @@ fn extract_cookies(resp: &reqwest::Response) -> Result<String> {
     Ok(parts.join("; "))
 }
 
+pub fn load_password_from_keychain() -> Option<String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_PASSWORD_KEY).ok()?;
+    entry.get_password().ok()
+}
+
 pub async fn prompt_password(email: &str) -> Result<String> {
     print!("Enter TimeDoctor password for {email}: ");
     let password = rpassword::read_password().context("Failed to read password")?;
@@ -105,7 +111,13 @@ pub async fn get_or_refresh_token(email: &str) -> Result<String> {
         return Ok(token);
     }
 
-    let password = prompt_password(email).await?;
+    // Try stored password first
+    let password = if let Some(pw) = load_password_from_keychain() {
+        pw
+    } else {
+        prompt_password(email).await?
+    };
+
     eprintln!("Authenticating...");
     let cookie = login(email, &password).await?;
     save_token_to_keychain(&cookie)?;

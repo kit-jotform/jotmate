@@ -8,7 +8,7 @@ use ratatui::{
 
 use ratatui::widgets::{Block, Borders, Clear};
 
-use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, MAIN_ITEMS};
+use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, TimeSettingRow, MAIN_ITEMS};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
@@ -69,6 +69,7 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::MainMenu => draw_main_menu(f, app),
         Screen::Settings => draw_settings(f, app),
         Screen::RepoManager => draw_repo_manager(f, app),
+        Screen::TimeDoctorSettings => draw_td_settings(f, app),
     }
 }
 
@@ -320,13 +321,26 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
             match row {
                 SettingRow::Blank => ListItem::new(Line::raw("")),
 
-                SettingRow::Separator => ListItem::new(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "── Upstream Repositories ──────────────────────",
-                        Style::default().fg(C_MUTED),
-                    ),
-                ])),
+                SettingRow::Separator => {
+                    // Determine which separator this is by context (index)
+                    // First separator = Repos, second = Time Doctor
+                    let label = {
+                        let rows = app.settings_items();
+                        let sep_count = rows[..i]
+                            .iter()
+                            .filter(|r| matches!(r, SettingRow::Separator))
+                            .count();
+                        if sep_count == 0 {
+                            "── Upstream Repositories ──────────────────────"
+                        } else {
+                            "── Time Doctor ─────────────────────────────────"
+                        }
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled(label, Style::default().fg(C_MUTED)),
+                    ]))
+                }
 
                 SettingRow::Back => back_item(is_sel),
 
@@ -342,6 +356,21 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                             Style::default().fg(C_PRIMARY),
                         ),
                         Span::styled("→ Manage upstream repos", style),
+                    ]))
+                }
+
+                SettingRow::TimeDoctorSettings => {
+                    let style = if is_sel {
+                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(C_MUTED)
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::styled(
+                            if is_sel { "▸ " } else { "  " },
+                            Style::default().fg(C_PRIMARY),
+                        ),
+                        Span::styled("→ Configure Time Doctor", style),
                     ]))
                 }
 
@@ -398,7 +427,7 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
             Span::styled("Esc/n", Style::default().fg(C_MUTED)),
             Span::styled(" cancel", Style::default().fg(C_MUTED)),
         ],
-        InputMode::Normal => vec![
+        _ => vec![
             Span::styled("↵", Style::default().fg(C_MUTED)),
             Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
             Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
@@ -486,6 +515,163 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     if let InputMode::ConfirmDelete(name) = &app.input_mode {
         draw_confirm_delete(f, area, name);
     }
+}
+
+fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let editing = matches!(&app.input_mode, InputMode::EditingField { .. });
+    let hint_spans: Vec<Span<'static>> = if editing {
+        vec![
+            Span::styled("↵", Style::default().fg(C_MUTED)),
+            Span::styled(" save  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" cancel", Style::default().fg(C_MUTED)),
+        ]
+    } else {
+        vec![
+            Span::styled("↵", Style::default().fg(C_MUTED)),
+            Span::styled(" edit  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("Space", Style::default().fg(C_MUTED)),
+            Span::styled(" toggle  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" back", Style::default().fg(C_MUTED)),
+        ]
+    };
+
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        "Time Doctor",
+        hint_spans,
+    );
+
+    let td_rows = app.td_settings_items();
+    let selected = app.td_settings_state.selected().unwrap_or(0);
+
+    let items: Vec<ListItem> = td_rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let is_sel = selected == i;
+            match row {
+                TimeSettingRow::Blank => ListItem::new(Line::raw("")),
+
+                TimeSettingRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "── Credentials ─────────────────────────────────",
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
+
+                TimeSettingRow::Back => back_item(is_sel),
+
+                TimeSettingRow::Toggle { label, hint, on } => {
+                    let label_text = if hint.is_empty() {
+                        label.to_string()
+                    } else {
+                        format!("{label}  ({hint})")
+                    };
+                    toggle_item(is_sel, *on, label_text)
+                }
+
+                TimeSettingRow::Password { is_set } => {
+                    let badge = if *is_set { "[set]    " } else { "[not set]" };
+                    let badge_color = if *is_set { C_SUCCESS } else { C_MUTED };
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                badge,
+                                Style::default().fg(badge_color).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                " Password",
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(badge, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                            Span::styled(" Password", Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
+
+                TimeSettingRow::EditField { field, label, value, masked } => {
+                    // Check if this field is currently being edited
+                    let active_buf = match &app.input_mode {
+                        InputMode::EditingField { field: f, buf } if f == field => Some(buf.as_str()),
+                        _ => None,
+                    };
+
+                    let display_value = if let Some(buf) = active_buf {
+                        if *masked {
+                            format!("{}_ ", "*".repeat(buf.len()))
+                        } else {
+                            format!("{buf}_ ")
+                        }
+                    } else if value.is_empty() {
+                        "—".to_string()
+                    } else if *masked {
+                        "*".repeat(value.len())
+                    } else {
+                        value.clone()
+                    };
+
+                    let label_w = 18usize;
+                    let label_padded = format!("{:<width$}", label, width = label_w);
+
+                    if is_sel || active_buf.is_some() {
+                        let value_style = if active_buf.is_some() {
+                            Style::default().fg(C_ACCENT)
+                        } else {
+                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                        };
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(label_padded, Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+                            Span::styled(display_value, value_style),
+                        ]))
+                    } else {
+                        let value_style = if value.is_empty() {
+                            Style::default().fg(C_MUTED)
+                        } else {
+                            Style::default().fg(C_TEXT)
+                        };
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(label_padded, Style::default().fg(C_TEXT)),
+                            Span::styled(display_value, value_style),
+                        ]))
+                    }
+                }
+            }
+        })
+        .collect();
+
+    f.render_stateful_widget(
+        List::new(items),
+        layout.get("list"),
+        &mut app.td_settings_state.clone(),
+    );
 }
 
 fn draw_confirm_delete(f: &mut ratatui::Frame, area: Rect, name: &str) {

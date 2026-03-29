@@ -24,7 +24,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
 
     let time_cfg = &cfg.time;
     let email = time_cfg.email.as_deref().unwrap();
-    let company_id = time_cfg.company_id.as_deref().unwrap();
+    let company_id = crate::config::TIMEDOCTOR_COMPANY_ID;
     let timezone = time_cfg.timezone.as_deref().unwrap();
     let start_date = time_cfg.start_date.unwrap();
     let skip_current = args.skip_current_week || time_cfg.skip_current_week;

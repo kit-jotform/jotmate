@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, MAIN_ITEMS};
+use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS};
 
 fn navigate<T>(rows: &[T], current: usize, delta: i32, is_interactive: impl Fn(&T) -> bool) -> usize {
     let last = rows.len() - 1;
@@ -33,6 +33,11 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
             InputMode::AddingRepo(_) => handle_repo_input(app, code),
             InputMode::ConfirmDelete(_) => handle_confirm_delete(app, code),
             InputMode::Normal => handle_repo_manager(app, code),
+            InputMode::EditingField { .. } => handle_repo_manager(app, code), // shouldn't happen
+        },
+        Screen::TimeDoctorSettings => match &app.input_mode {
+            InputMode::EditingField { .. } => handle_td_field_input(app, code),
+            _ => handle_td_settings(app, code),
         },
     }
 }
@@ -90,6 +95,12 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
                     let rm_rows = app.repo_manager_items();
                     let first = rm_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
                     app.repo_manager_state.select(Some(first));
+                }
+                Some(SettingRow::TimeDoctorSettings) => {
+                    app.screen = Screen::TimeDoctorSettings;
+                    let td_rows = app.td_settings_items();
+                    let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.td_settings_state.select(Some(first));
                 }
                 _ => {
                     app.toggle_selected_setting();
@@ -153,6 +164,90 @@ fn handle_confirm_delete(app: &mut App, code: KeyCode) -> Action {
             app.execute_delete_repo(&name);
         }
         KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+            app.input_mode = InputMode::Normal;
+        }
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Up | KeyCode::Left => {
+            let rows = app.td_settings_items();
+            let i = app.td_settings_state.selected().unwrap_or(0);
+            app.td_settings_state
+                .select(Some(navigate(&rows, i, -1, TimeSettingRow::is_interactive)));
+        }
+        KeyCode::Down | KeyCode::Right => {
+            let rows = app.td_settings_items();
+            let i = app.td_settings_state.selected().unwrap_or(0);
+            app.td_settings_state
+                .select(Some(navigate(&rows, i, 1, TimeSettingRow::is_interactive)));
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let rows = app.td_settings_items();
+            let i = app.td_settings_state.selected().unwrap_or(0);
+            match rows.get(i).cloned() {
+                Some(TimeSettingRow::Back) => {
+                    app.screen = Screen::Settings;
+                }
+                Some(TimeSettingRow::Toggle { on, .. }) => {
+                    app.td_skip_current_week = !on;
+                    app.persist_td_settings();
+                }
+                Some(TimeSettingRow::EditField { field, value, .. }) => {
+                    app.input_mode = InputMode::EditingField { field, buf: value };
+                }
+                Some(TimeSettingRow::Password { .. }) => {
+                    app.input_mode = InputMode::EditingField {
+                        field: TimeDoctorField::Password,
+                        buf: String::new(),
+                    };
+                }
+                _ => {}
+            }
+        }
+        KeyCode::Esc | KeyCode::Backspace => {
+            app.screen = Screen::Settings;
+        }
+        KeyCode::Char('q') => return Action::Back,
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Char(c) => {
+            if let InputMode::EditingField { buf, .. } = &mut app.input_mode {
+                buf.push(c);
+            }
+        }
+        KeyCode::Backspace => {
+            if let InputMode::EditingField { buf, .. } = &mut app.input_mode {
+                buf.pop();
+            }
+        }
+        KeyCode::Enter => {
+            let (field, buf) = match app.input_mode.clone() {
+                InputMode::EditingField { field, buf } => (field, buf),
+                _ => return Action::Continue,
+            };
+            app.input_mode = InputMode::Normal;
+            match field {
+                TimeDoctorField::Email => app.td_email = buf,
+                TimeDoctorField::Timezone => app.td_timezone = buf,
+                TimeDoctorField::StartDate => app.td_start_date = buf,
+                TimeDoctorField::ContractPeriods => app.td_contract_periods = buf,
+                TimeDoctorField::Password => {
+                    app.set_td_password(&buf);
+                    return Action::Continue;
+                }
+            }
+            app.persist_td_settings();
+        }
+        KeyCode::Esc => {
             app.input_mode = InputMode::Normal;
         }
         _ => {}
