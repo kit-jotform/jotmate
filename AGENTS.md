@@ -58,6 +58,50 @@ TimeDoctor uses cookie-based auth stored in the system keychain (macOS Keychain 
 
 `~/.config/jotmate/config.toml` — sync repos (with `enabled` flags), time credentials, contract periods. Settings toggled in the TUI are saved immediately via `config::save()`.
 
+## Project folder structure
+
+```
+jotmate/
+├── .github/
+│   └── workflows/
+│       └── release.yml          # CI: builds macOS/Linux binaries on v* tag push
+├── assets/
+│   ├── icon.txt                 # Source art for the pixel icon in the TUI header
+│   └── logos.txt                # Source art for LOGO / LOGO_SMALL constants
+├── scripts/
+│   ├── run-sync.sh              # Sync script — embedded in the binary via include_str!()
+│   └── time-checker-node.js     # Original Node.js time checker (reference only, not used)
+├── src/
+│   ├── main.rs                  # Entry point — parses CLI args, dispatches to tui/sync/time
+│   ├── cli.rs                   # Clap structs: Cli, Commands, SyncArgs, TimeArgs
+│   ├── config.rs                # Config structs, load/save, ensure_time_credentials prompt
+│   ├── error.rs                 # AppError enum (thiserror) — IO, HTTP, auth, keyring, fd
+│   ├── sync/
+│   │   ├── mod.rs               # run() entry: resolves repo paths, calls runner
+│   │   ├── cache.rs             # RepoPathsCache — load/save/invalidate ~/.cache/jotmate/repo_paths.json
+│   │   ├── discover.rs          # fd-based git repo discovery; matches repos to upstream URLs
+│   │   └── runner.rs            # Patches GITHUB_BASE in embedded script, writes tempfile, execs bash
+│   ├── time/
+│   │   ├── mod.rs               # run() entry: auth, batch-fetches weeks, computes, displays
+│   │   ├── auth.rs              # Keychain read/write for TimeDoctor session cookie; browser login flow
+│   │   ├── api.rs               # HTTP client: fetches weekly stats from TimeDoctor API
+│   │   ├── cache.rs             # Per-week JSON cache at ~/.cache/jotmate/time/<company_id>/YYYY-MM-DD.json
+│   │   ├── compute.rs           # WeekRow, weeks_to_fetch, cumulative balance, target hours logic
+│   │   └── display.rs           # ANSI terminal table renderer for WeekRow results
+│   └── tui/
+│       ├── mod.rs               # Terminal setup/teardown, async event loop, run_interactive/run_settings
+│       ├── app.rs               # App state, Screen/InputMode/SettingRow/RepoManagerRow enums, MAIN_ITEMS
+│       ├── draw.rs              # Ratatui frame rendering for all three screens + confirm dialog overlay
+│       ├── input.rs             # Keyboard event handlers → Action enum (Continue/Back/Run)
+│       ├── layout.rs            # ScreenLayout (named rows), LayoutEngine (x placement), UI_WIDTH
+│       └── widgets.rs           # IconWidget (pixel art), LOGO, LOGO_SMALL constants
+├── Cargo.toml                   # Package manifest and dependencies
+├── Cargo.lock                   # Locked dependency versions
+├── install.sh                   # Curl-based installer for end users
+├── AGENTS.md                    # This file — guidance for AI-assisted development
+└── README.md                    # User-facing documentation
+```
+
 ## Adding a new tool or settings field
 
 **New tool**: Add a variant to the `Screen` enum and/or menu in `app.rs`, handle it in `input.rs` and `draw.rs`, and add a Rust subcommand in `src/cli.rs` + `src/main.rs` if data access is needed.
