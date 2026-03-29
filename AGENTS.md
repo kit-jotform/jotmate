@@ -31,20 +31,60 @@ jotmate settings    → Ratatui settings screen
 
 ### TUI (src/tui/)
 
-Two screens managed by an `App` state struct:
+Three screens managed by an `App` state struct:
 
 | Screen | Purpose |
 |--------|---------|
 | **MainMenu** | Navigable list: Sync, Time Doctor, Settings, Exit |
-| **Settings** | Toggle booleans and repo enabled flags |
+| **Settings** | Toggle booleans and repo enabled flags; navigate to RepoManager |
+| **RepoManager** | Add/remove upstream repo URLs |
 
 - `mod.rs` — terminal setup/teardown, async event loop, `run_interactive()` / `run_settings()` entry points
-- `app.rs` — `App` struct, `Screen` enum, in-memory state, config persistence on toggle
-- `draw.rs` — frame rendering for both screens
-- `input.rs` — keyboard event handlers (↑↓ navigate, Enter/Space toggle, Esc back, Q/Ctrl+C quit)
-- `widgets.rs` — custom pixel-art `IconWidget`, logo constants
+- `app.rs` — `App` struct, `Screen` / `InputMode` / `SettingRow` / `RepoManagerRow` enums, in-memory state, config persistence
+- `draw.rs` — frame rendering for all screens + `draw_confirm_delete` overlay
+- `input.rs` — keyboard event handlers (↑↓ navigate, Enter/Space toggle, Esc/Backspace back, Q/Ctrl+C quit)
+- `layout.rs` — `ScreenLayout` (named vertical rows), `LayoutEngine` (horizontal placement), `UI_WIDTH` constant
+- `widgets.rs` — custom pixel-art `IconWidget`, `LOGO` / `LOGO_SMALL` constants
 
 Selecting Sync or Time from the main menu closes the TUI, restores the terminal, then runs the subcommand so its output is visible in the foreground.
+
+### TUI design system
+
+**Color palette** (all defined as named constants at the top of `draw.rs`):
+
+| Constant | Color index | Role |
+|----------|-------------|------|
+| `C_TEXT` | 255 (white) | Default foreground text |
+| `C_PRIMARY` | 199 (magenta) | Selection arrow `▸`, logo on sub-screens |
+| `C_ACCENT` | 51 (cyan) | Section headers, selected item text, input cursor |
+| `C_SELECT` | = `C_PRIMARY` | Selected menu item in MainMenu |
+| `C_SUCCESS` | 10 (green) | `[ON ]` badge |
+| `C_MUTED` | 8 (dark gray) | Dividers, hints, unselected text, `[OFF]` badge |
+| `C_LOGO` | = `C_TEXT` | Full logo on MainMenu |
+| `C_DANGEROUS` | 9 (red) | `[del]` actions, confirmation dialog border |
+
+All colors use `Color::Indexed(n)` for terminal-safe 256-color values. Never use named `Color::*` variants (e.g. `Color::Red`) — they vary by terminal theme.
+
+**Layout system** (`layout.rs`):
+
+- `UI_WIDTH = 79` — canonical content width; matches icon (14) + gap (2) + logo (63).
+- `ScreenLayout` — builder that assigns a fixed height (or `Min(0)` for fill) to each named row; call `.split(area)` to get a `RowMap`.
+- `RowMap::get(name)` — returns the `Rect` for a named row; panics with a clear message on unknown names.
+- `LayoutEngine::place(widget, row)` / `center(width, row)` — computes `x` offset for left-aligned or horizontally-centred content within `UI_WIDTH`.
+
+**Selection pattern**:
+
+- Non-interactive rows (`Blank`, `Separator`) are skipped during navigation; `is_interactive()` on `SettingRow` / `RepoManagerRow` drives this.
+- Selected rows render with: `▸ ` prefix (in `C_PRIMARY`) + text in `C_ACCENT + BOLD`.
+- Unselected rows render with: `  ` indent + text in `C_TEXT` (or `C_MUTED` for nav items like Back).
+
+**Screen header pattern** (Settings and RepoManager screens share `draw_screen_header`):
+
+- 3-row `LOGO_SMALL` centered at the top, colored `C_PRIMARY`.
+- Title row: screen name left-aligned in `C_ACCENT + BOLD`; hint spans right-aligned on the same row.
+- Full-width `─` divider in `C_MUTED` below the title.
+
+**Confirmation dialog** (`draw_confirm_delete`): centered overlay with `Clear` + `Block` border in `C_DANGEROUS`; rendered on top of the RepoManager list.
 
 ### Sync (src/sync/)
 

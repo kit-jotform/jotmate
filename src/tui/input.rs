@@ -1,7 +1,23 @@
 use crossterm::event::KeyCode;
 
-use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow};
-use super::draw::MAIN_ITEM_COUNT;
+use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, MAIN_ITEMS};
+
+fn navigate<T>(rows: &[T], current: usize, delta: i32, is_interactive: impl Fn(&T) -> bool) -> usize {
+    let last = rows.len() - 1;
+    if delta < 0 {
+        let mut next = current.saturating_sub(1);
+        while next > 0 && !is_interactive(&rows[next]) {
+            next -= 1;
+        }
+        next
+    } else {
+        let mut next = (current + 1).min(last);
+        while next < last && !is_interactive(&rows[next]) {
+            next += 1;
+        }
+        next
+    }
+}
 
 pub enum Action {
     Continue,
@@ -30,7 +46,7 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Down | KeyCode::Right => {
             let i = app.main_state.selected().unwrap_or(0);
             app.main_state
-                .select(Some((i + 1).min(MAIN_ITEM_COUNT - 1)));
+                .select(Some((i + 1).min(MAIN_ITEMS.len() - 1)));
         }
         KeyCode::Enter => {
             let i = app.main_state.selected().unwrap_or(0);
@@ -55,21 +71,12 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.settings_items();
             let i = app.settings_state.selected().unwrap_or(0);
-            let mut next = i.saturating_sub(1);
-            while next > 0 && !rows[next].is_interactive() {
-                next -= 1;
-            }
-            app.settings_state.select(Some(next));
+            app.settings_state.select(Some(navigate(&rows, i, -1, SettingRow::is_interactive)));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.settings_items();
             let i = app.settings_state.selected().unwrap_or(0);
-            let last = rows.len() - 1;
-            let mut next = (i + 1).min(last);
-            while next < last && !rows[next].is_interactive() {
-                next += 1;
-            }
-            app.settings_state.select(Some(next));
+            app.settings_state.select(Some(navigate(&rows, i, 1, SettingRow::is_interactive)));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             let rows = app.settings_items();
@@ -103,21 +110,12 @@ fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.repo_manager_items();
             let i = app.repo_manager_state.selected().unwrap_or(0);
-            let mut next = i.saturating_sub(1);
-            while next > 0 && !rows[next].is_interactive() {
-                next -= 1;
-            }
-            app.repo_manager_state.select(Some(next));
+            app.repo_manager_state.select(Some(navigate(&rows, i, -1, RepoManagerRow::is_interactive)));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.repo_manager_items();
             let i = app.repo_manager_state.selected().unwrap_or(0);
-            let last = rows.len() - 1;
-            let mut next = (i + 1).min(last);
-            while next < last && !rows[next].is_interactive() {
-                next += 1;
-            }
-            app.repo_manager_state.select(Some(next));
+            app.repo_manager_state.select(Some(navigate(&rows, i, 1, RepoManagerRow::is_interactive)));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             let rows = app.repo_manager_items();

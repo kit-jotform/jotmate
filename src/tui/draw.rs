@@ -8,7 +8,7 @@ use ratatui::{
 
 use ratatui::widgets::{Block, Borders, Clear};
 
-use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow};
+use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, MAIN_ITEMS};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
@@ -23,19 +23,46 @@ const C_MUTED: Color = Color::Indexed(8);       // dark gray — consistent acro
 const C_LOGO: Color = C_TEXT;
 const C_DANGEROUS: Color = Color::Indexed(9);   // bright red — consistent across terminals
 
-// ── Main menu items: (name, description) ──────────────────────────────────────
-
-const MAIN_ITEMS: &[(&str, &str)] = &[
-    ("Sync", "Sync RDS to upstream"),
-    ("Time Doctor", "Track your work hours"),
-    ("Settings", "Configure jotmate"),
-    ("Exit", ""),
-];
-
-pub(super) const MAIN_ITEM_COUNT: usize = MAIN_ITEMS.len();
-
 const NAME_COL_W: u16 = 16; // fixed width for the name column
 const DIVIDER_WIDTH: u16 = 53;
+
+// ── Shared list item helpers ───────────────────────────────────────────────────
+
+fn back_item(is_sel: bool) -> ListItem<'static> {
+    let style = if is_sel {
+        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(C_MUTED)
+    };
+    ListItem::new(Line::from(vec![
+        Span::styled(
+            if is_sel { "▸ " } else { "  " },
+            Style::default().fg(C_PRIMARY),
+        ),
+        Span::styled("← Back", style),
+    ]))
+}
+
+fn toggle_item(is_sel: bool, on: bool, label: String) -> ListItem<'static> {
+    let badge = if on { "[ON ] " } else { "[OFF] " };
+    let badge_color = if on { C_SUCCESS } else { C_MUTED };
+    if is_sel {
+        ListItem::new(Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled(
+                badge,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(label, Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+        ]))
+    } else {
+        ListItem::new(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(badge, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+            Span::styled(label, Style::default().fg(C_TEXT)),
+        ]))
+    }
+}
 
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
@@ -301,20 +328,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                     ),
                 ])),
 
-                SettingRow::Back => {
-                    let style = if is_sel {
-                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(C_MUTED)
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            if is_sel { "▸ " } else { "  " },
-                            Style::default().fg(C_PRIMARY),
-                        ),
-                        Span::styled("← Back", style),
-                    ]))
-                }
+                SettingRow::Back => back_item(is_sel),
 
                 SettingRow::ManageRepos => {
                     let style = if is_sel {
@@ -334,67 +348,16 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::Toggle {
                     label, hint, on, ..
                 } => {
-                    let badge = if *on { "[ON ] " } else { "[OFF] " };
-                    let badge_color = if *on { C_SUCCESS } else { C_MUTED };
                     let label_text = if hint.is_empty() {
                         label.to_string()
                     } else {
                         format!("{label}  ({hint})")
                     };
-                    if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                badge,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                label_text,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                        ]))
-                    } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(
-                                badge,
-                                Style::default()
-                                    .fg(badge_color)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(label_text, Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                    toggle_item(is_sel, *on, label_text)
                 }
 
                 SettingRow::RepoToggle { name, url, enabled } => {
-                    let badge = if *enabled { "[ON ] " } else { "[OFF] " };
-                    let badge_color = if *enabled { C_SUCCESS } else { C_MUTED };
-                    let label_text = format!("{name}  <{url}>");
-                    if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                badge,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                label_text,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                        ]))
-                    } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(
-                                badge,
-                                Style::default()
-                                    .fg(badge_color)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(label_text, Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                    toggle_item(is_sel, *enabled, format!("{name}  <{url}>"))
                 }
             }
         })
@@ -464,20 +427,7 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
             match row {
                 RepoManagerRow::Blank => ListItem::new(Line::raw("")),
 
-                RepoManagerRow::Back => {
-                    let style = if is_sel {
-                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(C_MUTED)
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            if is_sel { "▸ " } else { "  " },
-                            Style::default().fg(C_PRIMARY),
-                        ),
-                        Span::styled("← Back", style),
-                    ]))
-                }
+                RepoManagerRow::Back => back_item(is_sel),
 
                 RepoManagerRow::RepoDelete { name, url } => {
                     let detail = format!("  {name}  <{url}>");
