@@ -472,14 +472,8 @@ fn timezone_index(tz: &str) -> usize {
     TIMEZONES.iter().position(|&t| t == tz).unwrap_or(7) // default: Europe/Istanbul
 }
 
-fn next_monday_from_today() -> NaiveDate {
-    let today = Local::now().date_naive();
-    let monday = get_week_start_monday(today);
-    if monday == today {
-        monday
-    } else {
-        monday + chrono::Duration::days(7)
-    }
+fn this_monday() -> NaiveDate {
+    get_week_start_monday(Local::now().date_naive())
 }
 
 impl App {
@@ -521,6 +515,7 @@ impl App {
             })
             .collect();
         contract_periods.sort_by_key(|p| p.from);
+        let add_cp_monday = contract_periods.last().map(|p| p.from).unwrap_or_else(this_monday);
         let td_password_is_set = crate::time::auth::load_token_from_keychain().is_some();
         Ok(Self {
             screen: Screen::MainMenu,
@@ -548,7 +543,7 @@ impl App {
             td_show_cumulative,
             td_password_is_set,
             contract_periods,
-            add_cp_monday: next_monday_from_today(),
+            add_cp_monday,
             add_cp_hours_idx: 1, // default 20h
             sync_state: None,
         })
@@ -834,10 +829,13 @@ impl App {
         } else {
             self.contract_periods.push(entry);
             self.contract_periods.sort_by_key(|p| p.from);
+            // New period added — bump selection to stay on the same row
+            let i = self.cp_list_state.selected().unwrap_or(0);
+            self.cp_list_state.select(Some(i + 1));
         }
         self.persist_td_settings();
         // Reset add fields for next entry
-        self.add_cp_monday = next_monday_from_today();
+        self.add_cp_monday = self.contract_periods.last().map(|p| p.from).unwrap_or_else(this_monday);
         self.add_cp_hours_idx = 1;
     }
 
