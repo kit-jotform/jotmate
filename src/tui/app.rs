@@ -44,7 +44,9 @@ pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
 pub enum Screen {
     MainMenu,
     Settings,
+    SyncGeneralSettings,
     RepoManager,
+    TdGeneralSettings,
     TimeDoctorSettings,
     ContractPeriods,
     AddContractPeriod,
@@ -58,7 +60,7 @@ pub enum InputMode {
     AddingRepo(String),       // buffer holds URL being typed
     ConfirmDelete(String),    // holds the repo name pending deletion
     ConfirmDeletePeriod(usize), // holds the period index pending deletion
-    SelectingTimezone,        // ↑↓ cycles timezone, Enter/Esc confirms
+    SelectingTimezone,        // ↑↓ cycles timezone, Enter/Esc confirms (in GeneralToggle screen)
     EditingField {            // editing a text field in TimeDoctorSettings
         field: TimeDoctorField,
         buf: String,
@@ -90,18 +92,11 @@ pub enum ToggleKind {
 
 #[derive(Clone)]
 pub enum SettingRow {
-    Toggle {
-        kind: ToggleKind,
-        label: &'static str,
-        hint: &'static str,
-        on: bool,
-    },
-    TimezoneSelector {
-        value: String,
-    },
     Separator,
     Blank,
+    SyncGeneralLink,
     ManageRepos,
+    TdGeneralLink,
     TimeDoctorSettings,
     ContractPeriodsLink,
     Back,
@@ -111,9 +106,9 @@ impl SettingRow {
     pub fn is_interactive(&self) -> bool {
         matches!(
             self,
-            SettingRow::Toggle { .. }
-                | SettingRow::TimezoneSelector { .. }
+            SettingRow::SyncGeneralLink
                 | SettingRow::ManageRepos
+                | SettingRow::TdGeneralLink
                 | SettingRow::TimeDoctorSettings
                 | SettingRow::ContractPeriodsLink
                 | SettingRow::Back
@@ -121,7 +116,35 @@ impl SettingRow {
     }
 }
 
-// ── Time Doctor settings row types ─────────��─────────────────────────────────
+// ── General toggle row (shared by Sync General & TD General sub-screens) ────
+
+#[derive(Clone)]
+pub enum GeneralToggleRow {
+    Toggle {
+        kind: ToggleKind,
+        label: &'static str,
+        hint: &'static str,
+        on: bool,
+    },
+    TimezoneSelector {
+        value: String,
+    },
+    Blank,
+    Back,
+}
+
+impl GeneralToggleRow {
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            GeneralToggleRow::Toggle { .. }
+                | GeneralToggleRow::TimezoneSelector { .. }
+                | GeneralToggleRow::Back
+        )
+    }
+}
+
+// ── Time Doctor settings row types ─────────────────────────────────────────
 
 #[derive(Clone)]
 pub enum TimeSettingRow {
@@ -226,7 +249,9 @@ pub struct App {
     pub screen: Screen,
     pub main_state: ListState,
     pub settings_state: ListState,
+    pub sync_general_state: ListState,
     pub repo_manager_state: ListState,
+    pub td_general_state: ListState,
     pub td_settings_state: ListState,
     pub cp_list_state: ListState,
     pub input_mode: InputMode,
@@ -277,8 +302,12 @@ impl App {
         main_state.select(Some(0));
         let mut settings_state = ListState::default();
         settings_state.select(Some(0));
+        let mut sync_general_state = ListState::default();
+        sync_general_state.select(Some(0));
         let mut repo_manager_state = ListState::default();
         repo_manager_state.select(Some(0));
+        let mut td_general_state = ListState::default();
+        td_general_state.select(Some(0));
         let mut td_settings_state = ListState::default();
         td_settings_state.select(Some(0));
         let mut cp_list_state = ListState::default();
@@ -319,7 +348,9 @@ impl App {
             screen: Screen::MainMenu,
             main_state,
             settings_state,
+            sync_general_state,
             repo_manager_state,
+            td_general_state,
             td_settings_state,
             cp_list_state,
             input_mode: InputMode::Normal,
@@ -348,80 +379,94 @@ impl App {
         vec![
             SettingRow::Separator, // "RDS Sync"
             SettingRow::Blank,
-            SettingRow::Toggle {
+            SettingRow::SyncGeneralLink,
+            SettingRow::ManageRepos,
+            SettingRow::Blank,
+            SettingRow::Separator, // "Time Doctor"
+            SettingRow::Blank,
+            SettingRow::TdGeneralLink,
+            SettingRow::TimeDoctorSettings,
+            SettingRow::ContractPeriodsLink,
+            SettingRow::Blank,
+            SettingRow::Back,
+        ]
+    }
+
+    pub fn sync_general_items(&self) -> Vec<GeneralToggleRow> {
+        vec![
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SyncAll,
                 label: "Sync all by default",
                 hint: "--sync-all",
                 on: self.sync_all,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::UseCache,
                 label: "Use repo path cache",
                 hint: "",
                 on: self.use_cache,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipForkSync,
                 label: "Skip fork sync",
                 hint: "skip fetch+merge+push upstream",
                 on: self.skip_fork_sync,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipRebase,
                 label: "Skip rebase",
                 hint: "skip branch rebase after merge",
                 on: self.skip_rebase,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipRdsSync,
                 label: "Skip RDS sync",
                 hint: "skip ./sync in each repo",
                 on: self.skip_rds_sync,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipGitFetch,
                 label: "Skip git fetch",
                 hint: "skip git fetch upstream",
                 on: self.skip_git_fetch,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipDirtySync,
                 label: "Skip dirty repo sync",
                 hint: "skip ./sync on uncommitted changes",
                 on: self.skip_dirty_sync,
             },
-            SettingRow::Blank,
-            SettingRow::ManageRepos,
-            SettingRow::Blank,
-            SettingRow::Separator, // "Time Doctor"
-            SettingRow::Blank,
-            SettingRow::Toggle {
+            GeneralToggleRow::Blank,
+            GeneralToggleRow::Back,
+        ]
+    }
+
+    pub fn td_general_items(&self) -> Vec<GeneralToggleRow> {
+        vec![
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipCurrentWeek,
                 label: "Skip current week",
                 hint: "exclude incomplete week",
                 on: self.td_skip_current_week,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::UseTimeCache,
                 label: "Use time cache",
                 hint: "",
                 on: self.td_use_time_cache,
             },
-            SettingRow::Toggle {
+            GeneralToggleRow::Toggle {
                 kind: ToggleKind::ShowCumulative,
                 label: "Show cumulative balance",
                 hint: "running hour balance",
                 on: self.td_show_cumulative,
             },
-            SettingRow::Blank,
-            SettingRow::TimezoneSelector {
+            GeneralToggleRow::Blank,
+            GeneralToggleRow::TimezoneSelector {
                 value: TIMEZONES[self.td_timezone_idx].to_string(),
             },
-            SettingRow::Blank,
-            SettingRow::TimeDoctorSettings,
-            SettingRow::ContractPeriodsLink,
-            SettingRow::Blank,
-            SettingRow::Back,
+            GeneralToggleRow::Blank,
+            GeneralToggleRow::Back,
         ]
     }
 
@@ -482,80 +527,48 @@ impl App {
         rows
     }
 
-    pub fn toggle_selected_setting(&mut self) {
-        let idx = self.settings_state.selected().unwrap_or(0);
-        match self.settings_items().get(idx) {
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SyncAll,
-                ..
-            }) => {
+    pub fn toggle_by_kind(&mut self, kind: ToggleKind) {
+        match kind {
+            ToggleKind::SyncAll => {
                 self.sync_all = !self.sync_all;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::UseCache,
-                ..
-            }) => {
+            ToggleKind::UseCache => {
                 self.use_cache = !self.use_cache;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SkipForkSync,
-                ..
-            }) => {
+            ToggleKind::SkipForkSync => {
                 self.skip_fork_sync = !self.skip_fork_sync;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SkipRebase,
-                ..
-            }) => {
+            ToggleKind::SkipRebase => {
                 self.skip_rebase = !self.skip_rebase;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SkipRdsSync,
-                ..
-            }) => {
+            ToggleKind::SkipRdsSync => {
                 self.skip_rds_sync = !self.skip_rds_sync;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SkipGitFetch,
-                ..
-            }) => {
+            ToggleKind::SkipGitFetch => {
                 self.skip_git_fetch = !self.skip_git_fetch;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SkipDirtySync,
-                ..
-            }) => {
+            ToggleKind::SkipDirtySync => {
                 self.skip_dirty_sync = !self.skip_dirty_sync;
                 self.persist_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::SkipCurrentWeek,
-                ..
-            }) => {
+            ToggleKind::SkipCurrentWeek => {
                 self.td_skip_current_week = !self.td_skip_current_week;
                 self.persist_td_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::UseTimeCache,
-                ..
-            }) => {
+            ToggleKind::UseTimeCache => {
                 self.td_use_time_cache = !self.td_use_time_cache;
                 self.persist_td_settings();
             }
-            Some(SettingRow::Toggle {
-                kind: ToggleKind::ShowCumulative,
-                ..
-            }) => {
+            ToggleKind::ShowCumulative => {
                 self.td_show_cumulative = !self.td_show_cumulative;
                 self.persist_td_settings();
             }
-            _ => {}
         }
     }
 

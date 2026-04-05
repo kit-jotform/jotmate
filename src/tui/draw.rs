@@ -9,8 +9,8 @@ use ratatui::{
 use ratatui::widgets::{Block, Borders, Clear};
 
 use super::app::{
-    AddCpFocus, App, CpListRow, InputMode, RepoManagerRow, Screen, SettingRow, TimeSettingRow,
-    MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
+    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RepoManagerRow, Screen, SettingRow,
+    TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
 };
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
@@ -71,7 +71,7 @@ fn link_item(is_sel: bool, label: &str) -> ListItem<'static> {
     let style = if is_sel {
         Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(C_MUTED)
+        Style::default().fg(C_TEXT)
     };
     ListItem::new(Line::from(vec![
         Span::styled(
@@ -86,7 +86,9 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
         Screen::MainMenu => draw_main_menu(f, app),
         Screen::Settings => draw_settings(f, app),
+        Screen::SyncGeneralSettings => draw_general_toggles(f, app, "RDS Sync", true),
         Screen::RepoManager => draw_repo_manager(f, app),
+        Screen::TdGeneralSettings => draw_general_toggles(f, app, "Time Doctor", false),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
         Screen::AddContractPeriod => draw_add_contract_period(f, app),
@@ -362,13 +364,90 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
                 SettingRow::Back => back_item(is_sel),
 
+                SettingRow::SyncGeneralLink => link_item(is_sel, "→ General settings"),
+
                 SettingRow::ManageRepos => link_item(is_sel, "→ Manage upstream repos"),
+
+                SettingRow::TdGeneralLink => link_item(is_sel, "→ General settings"),
 
                 SettingRow::TimeDoctorSettings => link_item(is_sel, "→ Manage credentials"),
 
                 SettingRow::ContractPeriodsLink => link_item(is_sel, "→ Manage contract periods"),
+            }
+        })
+        .collect();
 
-                SettingRow::TimezoneSelector { value } => {
+    f.render_stateful_widget(
+        List::new(items),
+        layout.get("list"),
+        &mut app.settings_state.clone(),
+    );
+}
+
+fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync: bool) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let hint_spans = vec![
+        Span::styled("↑↓", Style::default().fg(C_MUTED)),
+        Span::styled(" navigate  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("Space/↵", Style::default().fg(C_MUTED)),
+        Span::styled(" toggle  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+        Span::styled(" back", Style::default().fg(C_MUTED)),
+    ];
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        title,
+        hint_spans,
+    );
+
+    let rows = if is_sync {
+        app.sync_general_items()
+    } else {
+        app.td_general_items()
+    };
+    let state = if is_sync {
+        &app.sync_general_state
+    } else {
+        &app.td_general_state
+    };
+    let selected = state.selected().unwrap_or(0);
+
+    let items: Vec<ListItem> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let is_sel = selected == i;
+            match row {
+                GeneralToggleRow::Blank => ListItem::new(Line::raw("")),
+                GeneralToggleRow::Back => back_item(is_sel),
+                GeneralToggleRow::Toggle {
+                    label, hint, on, ..
+                } => {
+                    let label_text = if hint.is_empty() {
+                        label.to_string()
+                    } else {
+                        format!("{label}  ({hint})")
+                    };
+                    toggle_item(is_sel, *on, label_text)
+                }
+                GeneralToggleRow::TimezoneSelector { value } => {
                     let label_w = 18usize;
                     let label_padded = format!("{:<width$}", "Timezone", width = label_w);
                     let selecting = matches!(app.input_mode, InputMode::SelectingTimezone);
@@ -405,17 +484,6 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                         ]))
                     }
                 }
-
-                SettingRow::Toggle {
-                    label, hint, on, ..
-                } => {
-                    let label_text = if hint.is_empty() {
-                        label.to_string()
-                    } else {
-                        format!("{label}  ({hint})")
-                    };
-                    toggle_item(is_sel, *on, label_text)
-                }
             }
         })
         .collect();
@@ -423,7 +491,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         layout.get("list"),
-        &mut app.settings_state.clone(),
+        &mut state.clone(),
     );
 }
 

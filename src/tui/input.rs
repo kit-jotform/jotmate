@@ -1,8 +1,8 @@
 use crossterm::event::KeyCode;
 
 use super::app::{
-    AddCpFocus, App, CpListRow, InputMode, RepoManagerRow, Screen, SettingRow, TimeDoctorField,
-    TimeSettingRow, MAIN_ITEMS,
+    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RepoManagerRow, Screen, SettingRow,
+    TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
 };
 
 fn navigate<T>(rows: &[T], current: usize, delta: i32, is_interactive: impl Fn(&T) -> bool) -> usize {
@@ -31,10 +31,9 @@ pub enum Action {
 pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
     match app.screen {
         Screen::MainMenu => handle_main(app, code),
-        Screen::Settings => match &app.input_mode {
-            InputMode::SelectingTimezone => handle_timezone_select(app, code),
-            _ => handle_settings(app, code),
-        },
+        Screen::Settings => handle_settings(app, code),
+        Screen::SyncGeneralSettings => handle_general_toggles(app, code, true),
+        Screen::TdGeneralSettings => handle_general_toggles(app, code, false),
         Screen::RepoManager => match &app.input_mode {
             InputMode::AddingRepo(_) => handle_repo_input(app, code),
             InputMode::ConfirmDelete(_) => handle_confirm_delete(app, code),
@@ -71,7 +70,9 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
                 1 => return Action::Run("time".to_string()),
                 2 => {
                     app.screen = Screen::Settings;
-                    app.settings_state.select(Some(0));
+                    let rows = app.settings_items();
+                    let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.settings_state.select(Some(first));
                 }
                 _ => return Action::Back,
             }
@@ -101,11 +102,23 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
                 Some(SettingRow::Back) => {
                     app.screen = Screen::MainMenu;
                 }
+                Some(SettingRow::SyncGeneralLink) => {
+                    app.screen = Screen::SyncGeneralSettings;
+                    let rows = app.sync_general_items();
+                    let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.sync_general_state.select(Some(first));
+                }
                 Some(SettingRow::ManageRepos) => {
                     app.screen = Screen::RepoManager;
                     let rm_rows = app.repo_manager_items();
                     let first = rm_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
                     app.repo_manager_state.select(Some(first));
+                }
+                Some(SettingRow::TdGeneralLink) => {
+                    app.screen = Screen::TdGeneralSettings;
+                    let rows = app.td_general_items();
+                    let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.td_general_state.select(Some(first));
                 }
                 Some(SettingRow::TimeDoctorSettings) => {
                     app.screen = Screen::TimeDoctorSettings;
@@ -119,16 +132,69 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
                     let first = cp_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
                     app.cp_list_state.select(Some(first));
                 }
-                Some(SettingRow::TimezoneSelector { .. }) => {
-                    app.input_mode = InputMode::SelectingTimezone;
-                }
-                _ => {
-                    app.toggle_selected_setting();
-                }
+                _ => {}
             }
         }
         KeyCode::Esc | KeyCode::Backspace => {
             app.screen = Screen::MainMenu;
+        }
+        KeyCode::Char('q') => return Action::Back,
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_general_toggles(app: &mut App, code: KeyCode, is_sync: bool) -> Action {
+    // Timezone selecting mode intercepts all keys
+    if matches!(app.input_mode, InputMode::SelectingTimezone) {
+        return handle_timezone_select(app, code);
+    }
+
+    let rows = if is_sync {
+        app.sync_general_items()
+    } else {
+        app.td_general_items()
+    };
+    let state = if is_sync {
+        &app.sync_general_state
+    } else {
+        &app.td_general_state
+    };
+    let i = state.selected().unwrap_or(0);
+
+    match code {
+        KeyCode::Up | KeyCode::Left => {
+            let next = navigate(&rows, i, -1, GeneralToggleRow::is_interactive);
+            if is_sync {
+                app.sync_general_state.select(Some(next));
+            } else {
+                app.td_general_state.select(Some(next));
+            }
+        }
+        KeyCode::Down | KeyCode::Right => {
+            let next = navigate(&rows, i, 1, GeneralToggleRow::is_interactive);
+            if is_sync {
+                app.sync_general_state.select(Some(next));
+            } else {
+                app.td_general_state.select(Some(next));
+            }
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            match rows.get(i) {
+                Some(GeneralToggleRow::Back) => {
+                    app.screen = Screen::Settings;
+                }
+                Some(GeneralToggleRow::Toggle { kind, .. }) => {
+                    app.toggle_by_kind(*kind);
+                }
+                Some(GeneralToggleRow::TimezoneSelector { .. }) => {
+                    app.input_mode = InputMode::SelectingTimezone;
+                }
+                _ => {}
+            }
+        }
+        KeyCode::Esc | KeyCode::Backspace => {
+            app.screen = Screen::Settings;
         }
         KeyCode::Char('q') => return Action::Back,
         _ => {}

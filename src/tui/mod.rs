@@ -48,7 +48,9 @@ async fn run_tui(initial_screen: Screen) -> Result<()> {
     let mut app = App::new()?;
     app.screen = initial_screen;
     if initial_screen == Screen::Settings {
-        app.settings_state.select(Some(0));
+        let rows = app.settings_items();
+        let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+        app.settings_state.select(Some(first));
     }
 
     let result = event_loop(&mut terminal, &mut app).await;
