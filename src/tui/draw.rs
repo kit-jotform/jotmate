@@ -371,7 +371,21 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::TimezoneSelector { value } => {
                     let label_w = 18usize;
                     let label_padded = format!("{:<width$}", "Timezone", width = label_w);
-                    if is_sel {
+                    let selecting = matches!(app.input_mode, InputMode::SelectingTimezone);
+                    if selecting {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                label_padded,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                format!("< {} >", value),
+                                Style::default().fg(C_ACCENT),
+                            ),
+                            Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
+                        ]))
+                    } else if is_sel {
                         ListItem::new(Line::from(vec![
                             Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
                             Span::styled(
@@ -382,7 +396,6 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                                 value.clone(),
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
-                            Span::styled("  (↑↓)", Style::default().fg(C_MUTED)),
                         ]))
                     } else {
                         ListItem::new(Line::from(vec![

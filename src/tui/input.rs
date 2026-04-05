@@ -31,7 +31,10 @@ pub enum Action {
 pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
     match app.screen {
         Screen::MainMenu => handle_main(app, code),
-        Screen::Settings => handle_settings(app, code),
+        Screen::Settings => match &app.input_mode {
+            InputMode::SelectingTimezone => handle_timezone_select(app, code),
+            _ => handle_settings(app, code),
+        },
         Screen::RepoManager => match &app.input_mode {
             InputMode::AddingRepo(_) => handle_repo_input(app, code),
             InputMode::ConfirmDelete(_) => handle_confirm_delete(app, code),
@@ -84,21 +87,6 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
     let i = app.settings_state.selected().unwrap_or(0);
     let current_row = rows.get(i);
 
-    // ↑↓ on TimezoneSelector cycles timezone instead of navigating
-    if matches!(current_row, Some(SettingRow::TimezoneSelector { .. })) {
-        match code {
-            KeyCode::Up | KeyCode::Left => {
-                app.cycle_timezone(-1);
-                return Action::Continue;
-            }
-            KeyCode::Down | KeyCode::Right => {
-                app.cycle_timezone(1);
-                return Action::Continue;
-            }
-            _ => {}
-        }
-    }
-
     match code {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.settings_items();
@@ -132,7 +120,7 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
                     app.cp_list_state.select(Some(first));
                 }
                 Some(SettingRow::TimezoneSelector { .. }) => {
-                    // Enter/Space on timezone does nothing (use ↑↓ to cycle)
+                    app.input_mode = InputMode::SelectingTimezone;
                 }
                 _ => {
                     app.toggle_selected_setting();
@@ -143,6 +131,22 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
             app.screen = Screen::MainMenu;
         }
         KeyCode::Char('q') => return Action::Back,
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_timezone_select(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Up | KeyCode::Left => {
+            app.cycle_timezone(-1);
+        }
+        KeyCode::Down | KeyCode::Right => {
+            app.cycle_timezone(1);
+        }
+        KeyCode::Enter | KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+        }
         _ => {}
     }
     Action::Continue

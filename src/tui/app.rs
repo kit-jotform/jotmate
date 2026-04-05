@@ -58,6 +58,7 @@ pub enum InputMode {
     AddingRepo(String),       // buffer holds URL being typed
     ConfirmDelete(String),    // holds the repo name pending deletion
     ConfirmDeletePeriod(usize), // holds the period index pending deletion
+    SelectingTimezone,        // ↑↓ cycles timezone, Enter/Esc confirms
     EditingField {            // editing a text field in TimeDoctorSettings
         field: TimeDoctorField,
         buf: String,
@@ -357,6 +358,7 @@ impl App {
                 hint: "",
                 on: self.td_use_time_cache,
             },
+            SettingRow::Blank,
             SettingRow::TimezoneSelector {
                 value: TIMEZONES[self.td_timezone_idx].to_string(),
             },
