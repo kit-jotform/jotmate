@@ -1,7 +1,8 @@
-mod app;
+pub(crate) mod app;
 mod draw;
 mod input;
 mod layout;
+mod sync_screen;
 mod widgets;
 
 use anyhow::Result;
@@ -12,6 +13,8 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::stdout;
+use std::time::Duration;
+use tokio::sync::mpsc;
 
 use app::{App, Screen};
 use draw::draw;
@@ -56,18 +59,83 @@ async fn run_tui(initial_screen: Screen) -> Result<()> {
     let result = event_loop(&mut terminal, &mut app).await;
     teardown_terminal(&mut terminal);
 
-    // If the user selected Sync or Time from the main menu, run them now
-    // (after restoring the terminal so their output is visible)
+    // If the user selected Time from the main menu, run it now
+    // (after restoring the terminal so its output is visible)
     if let Ok(Some(action)) = result {
-        match action.as_str() {
-            "sync" => crate::sync::run(Default::default()).await?,
-            "time" => crate::time::run(Default::default()).await?,
-            _ => {}
+        if action == "time" {
+            crate::time::run(Default::default()).await?;
         }
     }
 
     Ok(())
 }
+
+// ── Sync launcher ────────────────────────────────────────────────────────────
+
+fn launch_sync(app: &mut App) {
+    let config = match crate::config::load() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let upstream_repos = &config.sync.upstream_repos;
+    let enabled: Vec<_> = upstream_repos.iter().filter(|r| r.enabled).collect();
+    if enabled.is_empty() {
+        return;
+    }
+
+    // Resolve repo paths (blocking, but fast if cached)
+    let paths = {
+        let enabled_names: Vec<&str> = enabled.iter().map(|r| r.name.as_str()).collect();
+        if config.sync.use_cache {
+            if let Some(cached) = crate::sync::cache::load() {
+                if crate::sync::cache::is_valid(&cached, &enabled_names) {
+                    cached.paths
+                } else {
+                    // Can't discover inside TUI (fd is slow + prints) — use cache or bail
+                    return;
+                }
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+    };
+
+    let (tx, rx) = mpsc::unbounded_channel();
+    app.start_sync(paths.clone(), rx);
+
+    // Build repo list with indices matching sync_state.repos order
+    let repo_list: Vec<(usize, std::path::PathBuf)> = app
+        .sync_state
+        .as_ref()
+        .unwrap()
+        .repos
+        .iter()
+        .enumerate()
+        .map(|(idx, r)| (idx, r.path.clone()))
+        .collect();
+
+    let opts = crate::sync::native::SyncOpts {
+        skip_fork_sync: app.skip_fork_sync,
+        skip_git_fetch: app.skip_git_fetch,
+        skip_rebase: app.skip_rebase,
+        skip_rds_sync: app.skip_rds_sync,
+        skip_dirty_sync: app.skip_dirty_sync,
+        force_sync_all: app.sync_all,
+    };
+
+    let handle = tokio::spawn(async move {
+        crate::sync::native::run_tui(repo_list, tx, opts).await;
+    });
+
+    if let Some(state) = &mut app.sync_state {
+        state.sync_handle = Some(handle);
+    }
+}
+
+// ── Event loop ───────────────────────────────────────────────────────────────
 
 async fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
@@ -76,18 +144,68 @@ async fn event_loop(
     loop {
         terminal.draw(|f| draw(f, app))?;
 
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Press {
-                continue;
+        // When on sync screen, use poll-based loop for animation + channel drain
+        if app.screen == Screen::SyncProgress {
+            // Drain pending sync updates
+            {
+                let mut updates = Vec::new();
+                if let Some(state) = &mut app.sync_state {
+                    while let Ok(update) = state.update_rx.try_recv() {
+                        updates.push(update);
+                    }
+                }
+                for update in updates {
+                    app.apply_sync_update(update);
+                }
             }
-            // Ctrl+C always quits
-            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                return Ok(None);
+
+            // Poll for keyboard events with timeout (drives spinner animation)
+            if event::poll(Duration::from_millis(80))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind != KeyEventKind::Press {
+                        continue;
+                    }
+                    if key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                    {
+                        // Clean up sync state
+                        if let Some(state) = app.sync_state.take() {
+                            if let Some(handle) = state.sync_handle {
+                                handle.abort();
+                            }
+                        }
+                        return Ok(None);
+                    }
+                    match handle_key(app, key.code) {
+                        Action::Back => return Ok(None),
+                        Action::Run(cmd) => return Ok(Some(cmd)),
+                        Action::StartSync => {}
+                        Action::Continue => {}
+                    }
+                }
+            } else {
+                // No event — tick spinner
+                if let Some(state) = &mut app.sync_state {
+                    state.tick = state.tick.wrapping_add(1);
+                }
             }
-            match handle_key(app, key.code) {
-                Action::Back => return Ok(None),
-                Action::Run(cmd) => return Ok(Some(cmd)),
-                Action::Continue => {}
+        } else {
+            // Normal blocking event read for other screens
+            if let Event::Key(key) = event::read()? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    return Ok(None);
+                }
+                match handle_key(app, key.code) {
+                    Action::Back => return Ok(None),
+                    Action::Run(cmd) => return Ok(Some(cmd)),
+                    Action::StartSync => {
+                        launch_sync(app);
+                    }
+                    Action::Continue => {}
+                }
             }
         }
     }

@@ -9,8 +9,8 @@ use ratatui::{
 use ratatui::widgets::{Block, Borders, Clear};
 
 use super::app::{
-    App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
-    SettingRow, TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
+    App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen, SettingRow,
+    TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
 };
 use super::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
@@ -163,6 +163,7 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::TdGeneralSettings => draw_general_toggles(f, app, "Time Doctor", false),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
+        Screen::SyncProgress => super::sync_screen::draw_sync_progress(f, app),
     }
 }
 
@@ -858,14 +859,8 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                                 label,
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
-                            Span::styled(
-                                format!("< {value} >"),
-                                Style::default().fg(C_ACCENT),
-                            ),
-                            Span::styled(
-                                "  ↑↓ change  •  ↵ confirm",
-                                Style::default().fg(C_MUTED),
-                            ),
+                            Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
+                            Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
                         ]))
                     } else if is_sel {
                         ListItem::new(Line::from(vec![
@@ -903,14 +898,8 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                                 label,
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
-                            Span::styled(
-                                format!("< {value} >"),
-                                Style::default().fg(C_ACCENT),
-                            ),
-                            Span::styled(
-                                "  ↑↓ change  •  ↵ confirm",
-                                Style::default().fg(C_MUTED),
-                            ),
+                            Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
+                            Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
                         ]))
                     } else if is_sel {
                         ListItem::new(Line::from(vec![

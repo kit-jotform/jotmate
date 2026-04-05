@@ -1,6 +1,11 @@
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use ratatui::widgets::ListState;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::Instant;
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 use crate::config::ContractPeriod;
 use crate::time::compute::get_week_start_monday;
@@ -50,6 +55,144 @@ pub enum Screen {
     TdGeneralSettings,
     TimeDoctorSettings,
     ContractPeriods,
+    SyncProgress,
+}
+
+// ── Sync progress types ─────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+pub enum ForkStatus {
+    Pending,
+    FetchingUpstream,
+    CheckingDiff,
+    UpToDate,
+    Stashing,
+    CheckingOut,
+    Merging,
+    PushingDefault,
+    Rebasing,
+    PushingBranch,
+    Unstashing,
+    Done,
+    Skipped(String),
+    Error(String),
+}
+
+impl ForkStatus {
+    pub fn label(&self) -> &str {
+        match self {
+            ForkStatus::Pending => "waiting…",
+            ForkStatus::FetchingUpstream => "fetching upstream…",
+            ForkStatus::CheckingDiff => "checking diff…",
+            ForkStatus::UpToDate => "up to date",
+            ForkStatus::Stashing => "stashing…",
+            ForkStatus::CheckingOut => "checking out…",
+            ForkStatus::Merging => "merging…",
+            ForkStatus::PushingDefault => "pushing default…",
+            ForkStatus::Rebasing => "rebasing…",
+            ForkStatus::PushingBranch => "pushing branch…",
+            ForkStatus::Unstashing => "unstashing…",
+            ForkStatus::Done => "done",
+            ForkStatus::Skipped(_) => "skipped",
+            ForkStatus::Error(_) => "error",
+        }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            ForkStatus::Done | ForkStatus::UpToDate | ForkStatus::Skipped(_) | ForkStatus::Error(_)
+        )
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self, ForkStatus::Error(_))
+    }
+}
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+pub enum RdsStatus {
+    Pending,
+    Preparing,
+    Pulling,
+    Running,
+    Done,
+    Skipped(String),
+    Error(String),
+}
+
+impl RdsStatus {
+    pub fn label(&self) -> &str {
+        match self {
+            RdsStatus::Pending => "waiting…",
+            RdsStatus::Preparing => "preparing…",
+            RdsStatus::Pulling => "pulling…",
+            RdsStatus::Running => "running ./sync…",
+            RdsStatus::Done => "done",
+            RdsStatus::Skipped(_) => "skipped",
+            RdsStatus::Error(_) => "error",
+        }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            RdsStatus::Done | RdsStatus::Skipped(_) | RdsStatus::Error(_)
+        )
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self, RdsStatus::Error(_))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RepoSyncState {
+    pub name: String,
+    pub path: PathBuf,
+    pub fork_status: ForkStatus,
+    pub rds_status: RdsStatus,
+    pub started_at: Option<Instant>,
+    pub elapsed_secs: f64,
+}
+
+impl RepoSyncState {
+    pub fn is_complete(&self) -> bool {
+        self.fork_status.is_terminal() && self.rds_status.is_terminal()
+    }
+
+    pub fn is_active(&self) -> bool {
+        !self.fork_status.is_terminal() || !self.rds_status.is_terminal()
+    }
+
+    pub fn has_error(&self) -> bool {
+        self.fork_status.is_error() || self.rds_status.is_error()
+    }
+
+    pub fn is_skipped(&self) -> bool {
+        matches!(
+            (&self.fork_status, &self.rds_status),
+            (
+                ForkStatus::Skipped(_) | ForkStatus::UpToDate,
+                RdsStatus::Skipped(_)
+            )
+        )
+    }
+}
+
+pub enum SyncUpdate {
+    Fork(usize, ForkStatus),
+    Rds(usize, RdsStatus),
+    Elapsed(usize, f64),
+}
+
+pub struct SyncScreenState {
+    pub repos: Vec<RepoSyncState>,
+    pub tick: u8,
+    pub sync_handle: Option<JoinHandle<()>>,
+    pub update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
 }
 
 // ── Input mode (used inside RepoManager and TimeDoctorSettings) ──────────────
@@ -314,6 +457,8 @@ pub struct App {
     // Add contract period state (inline in ContractPeriods screen)
     pub add_cp_monday: NaiveDate,
     pub add_cp_hours_idx: usize,
+    // Sync progress state
+    pub sync_state: Option<SyncScreenState>,
 }
 
 #[derive(Clone)]
@@ -404,6 +549,7 @@ impl App {
             contract_periods,
             add_cp_monday: next_monday_from_today(),
             add_cp_hours_idx: 1, // default 20h
+            sync_state: None,
         })
     }
 
@@ -702,6 +848,70 @@ impl App {
         } else {
             self.add_cp_hours_idx = (self.add_cp_hours_idx + len - 1) % len;
         }
+    }
+
+    /// Initialize sync screen state from enabled repos and resolved paths.
+    pub fn start_sync(
+        &mut self,
+        repo_paths: HashMap<String, PathBuf>,
+        update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
+    ) {
+        let repos: Vec<RepoSyncState> = self
+            .repos
+            .iter()
+            .filter(|r| r.enabled)
+            .filter_map(|r| {
+                repo_paths.get(&r.name).map(|path| RepoSyncState {
+                    name: r.name.clone(),
+                    path: path.clone(),
+                    fork_status: ForkStatus::Pending,
+                    rds_status: RdsStatus::Pending,
+                    started_at: None,
+                    elapsed_secs: 0.0,
+                })
+            })
+            .collect();
+        self.sync_state = Some(SyncScreenState {
+            repos,
+            tick: 0,
+            sync_handle: None,
+            update_rx,
+        });
+        self.screen = Screen::SyncProgress;
+    }
+
+    /// Apply a sync update message to the sync state.
+    pub fn apply_sync_update(&mut self, update: SyncUpdate) {
+        if let Some(state) = &mut self.sync_state {
+            match update {
+                SyncUpdate::Fork(idx, status) => {
+                    if let Some(repo) = state.repos.get_mut(idx) {
+                        if repo.started_at.is_none() {
+                            repo.started_at = Some(Instant::now());
+                        }
+                        repo.fork_status = status;
+                    }
+                }
+                SyncUpdate::Rds(idx, status) => {
+                    if let Some(repo) = state.repos.get_mut(idx) {
+                        repo.rds_status = status;
+                    }
+                }
+                SyncUpdate::Elapsed(idx, secs) => {
+                    if let Some(repo) = state.repos.get_mut(idx) {
+                        repo.elapsed_secs = secs;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check if all sync repos are in a terminal state.
+    pub fn sync_is_complete(&self) -> bool {
+        self.sync_state
+            .as_ref()
+            .map(|s| s.repos.iter().all(|r| r.is_complete()))
+            .unwrap_or(true)
     }
 
     /// Derive a short name from a URL (last path component, stripped of .git).

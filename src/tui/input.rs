@@ -1,8 +1,8 @@
 use crossterm::event::KeyCode;
 
 use super::app::{
-    App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
-    SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
+    App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen, SettingRow,
+    TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
 };
 
 fn navigate<T>(
@@ -30,6 +30,7 @@ pub enum Action {
     Continue,
     Back,
     Run(String),
+    StartSync,
 }
 
 pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
@@ -57,6 +58,7 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
             InputMode::EditingCpHours => handle_cp_hours_edit(app, code),
             _ => handle_contract_periods(app, code),
         },
+        Screen::SyncProgress => handle_sync_progress(app, code),
     }
 }
 
@@ -65,17 +67,19 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let i = app.main_state.selected().unwrap_or(0);
             let last = MAIN_ITEMS.len() - 1;
-            app.main_state.select(Some(if i == 0 { last } else { i - 1 }));
+            app.main_state
+                .select(Some(if i == 0 { last } else { i - 1 }));
         }
         KeyCode::Down | KeyCode::Right => {
             let i = app.main_state.selected().unwrap_or(0);
             let last = MAIN_ITEMS.len() - 1;
-            app.main_state.select(Some(if i == last { 0 } else { i + 1 }));
+            app.main_state
+                .select(Some(if i == last { 0 } else { i + 1 }));
         }
         KeyCode::Enter => {
             let i = app.main_state.selected().unwrap_or(0);
             match i {
-                0 => return Action::Run("sync".to_string()),
+                0 => return Action::StartSync,
                 1 => return Action::Run("time".to_string()),
                 2 => {
                     app.screen = Screen::Settings;
@@ -192,9 +196,7 @@ fn handle_general_toggles(app: &mut App, code: KeyCode, is_sync: bool) -> Action
             Some(GeneralToggleRow::Back) => {
                 app.screen = Screen::Settings;
             }
-            Some(GeneralToggleRow::Toggle {
-                kind, disabled, ..
-            }) => {
+            Some(GeneralToggleRow::Toggle { kind, disabled, .. }) => {
                 if !disabled {
                     app.toggle_by_kind(*kind);
                 }
@@ -510,6 +512,33 @@ fn handle_cp_hours_edit(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Down | KeyCode::Right => app.cycle_add_cp_hours(-1),
         KeyCode::Enter | KeyCode::Esc => {
             app.input_mode = InputMode::Normal;
+        }
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
+    let is_complete = app.sync_is_complete();
+    match code {
+        KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => {
+            if is_complete {
+                // Clean up and go back to main menu
+                if let Some(state) = app.sync_state.take() {
+                    if let Some(handle) = state.sync_handle {
+                        handle.abort();
+                    }
+                }
+                app.screen = Screen::MainMenu;
+            } else {
+                // Cancel: abort running tasks and go back
+                if let Some(state) = app.sync_state.take() {
+                    if let Some(handle) = state.sync_handle {
+                        handle.abort();
+                    }
+                }
+                app.screen = Screen::MainMenu;
+            }
         }
         _ => {}
     }
