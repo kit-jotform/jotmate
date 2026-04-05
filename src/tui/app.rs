@@ -58,11 +58,12 @@ pub enum Screen {
 #[derive(Clone, PartialEq)]
 pub enum InputMode {
     Normal,
-    AddingRepo(String),       // buffer holds URL being typed
-    ConfirmDelete(String),    // holds the repo name pending deletion
+    AddingRepo(String),         // buffer holds URL being typed
+    ConfirmDelete(String),      // holds the repo name pending deletion
     ConfirmDeletePeriod(usize), // holds the period index pending deletion
-    SelectingTimezone,        // ↑↓ cycles timezone, Enter/Esc confirms (in GeneralToggle screen)
-    EditingField {            // editing a text field in TimeDoctorSettings
+    SelectingTimezone,          // ↑↓ cycles timezone, Enter/Esc confirms (in GeneralToggle screen)
+    EditingField {
+        // editing a text field in TimeDoctorSettings
         field: TimeDoctorField,
         buf: String,
     },
@@ -89,6 +90,21 @@ pub enum ToggleKind {
     SkipCurrentWeek,
     UseTimeCache,
     ShowCumulative,
+}
+
+impl ToggleKind {
+    pub fn is_sync(self) -> bool {
+        matches!(
+            self,
+            ToggleKind::SyncAll
+                | ToggleKind::UseCache
+                | ToggleKind::SkipForkSync
+                | ToggleKind::SkipRebase
+                | ToggleKind::SkipRdsSync
+                | ToggleKind::SkipGitFetch
+                | ToggleKind::SkipDirtySync
+        )
+    }
 }
 
 #[derive(Clone)]
@@ -238,19 +254,13 @@ impl RepoManagerRow {
 #[derive(Clone)]
 pub enum RemoveRepoRow {
     Blank,
-    RepoDelete {
-        name: String,
-        url: String,
-    },
+    RepoDelete { name: String, url: String },
     Back,
 }
 
 impl RemoveRepoRow {
     pub fn is_interactive(&self) -> bool {
-        matches!(
-            self,
-            RemoveRepoRow::RepoDelete { .. } | RemoveRepoRow::Back
-        )
+        matches!(self, RemoveRepoRow::RepoDelete { .. } | RemoveRepoRow::Back)
     }
 }
 
@@ -262,7 +272,15 @@ pub struct ContractPeriodEntry {
     pub weekly_hours: f64,
 }
 
-// ── App ─────────���──────────────────────────��──────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+fn list_state_at(index: usize) -> ListState {
+    let mut s = ListState::default();
+    s.select(Some(index));
+    s
+}
+
+// ── App ─────────────────────────────────────────────────────────────────────
 
 pub struct App {
     pub screen: Screen,
@@ -312,28 +330,24 @@ fn timezone_index(tz: &str) -> usize {
 fn next_monday_from_today() -> NaiveDate {
     let today = Local::now().date_naive();
     let monday = get_week_start_monday(today);
-    if monday == today { monday } else { monday + chrono::Duration::days(7) }
+    if monday == today {
+        monday
+    } else {
+        monday + chrono::Duration::days(7)
+    }
 }
 
 impl App {
     pub fn new() -> Result<Self> {
         let config = crate::config::load()?;
-        let mut main_state = ListState::default();
-        main_state.select(Some(0));
-        let mut settings_state = ListState::default();
-        settings_state.select(Some(0));
-        let mut sync_general_state = ListState::default();
-        sync_general_state.select(Some(0));
-        let mut repo_manager_state = ListState::default();
-        repo_manager_state.select(Some(0));
-        let mut remove_repo_state = ListState::default();
-        remove_repo_state.select(Some(0));
-        let mut td_general_state = ListState::default();
-        td_general_state.select(Some(0));
-        let mut td_settings_state = ListState::default();
-        td_settings_state.select(Some(0));
-        let mut cp_list_state = ListState::default();
-        cp_list_state.select(Some(0));
+        let main_state = list_state_at(0);
+        let settings_state = list_state_at(0);
+        let sync_general_state = list_state_at(0);
+        let repo_manager_state = list_state_at(0);
+        let remove_repo_state = list_state_at(0);
+        let td_general_state = list_state_at(0);
+        let td_settings_state = list_state_at(0);
+        let cp_list_state = list_state_at(0);
         let repos = config
             .sync
             .upstream_repos
@@ -345,11 +359,7 @@ impl App {
             })
             .collect();
         let td_email = config.time.email.clone().unwrap_or_default();
-        let td_tz = config
-            .time
-            .timezone
-            .as_deref()
-            .unwrap_or("Europe/Istanbul");
+        let td_tz = config.time.timezone.as_deref().unwrap_or("Europe/Istanbul");
         let td_timezone_idx = timezone_index(td_tz);
         let td_skip_current_week = config.time.skip_current_week;
         let td_use_time_cache = config.time.use_time_cache;
@@ -559,47 +569,23 @@ impl App {
     }
 
     pub fn toggle_by_kind(&mut self, kind: ToggleKind) {
-        match kind {
-            ToggleKind::SyncAll => {
-                self.sync_all = !self.sync_all;
-                self.persist_settings();
-            }
-            ToggleKind::UseCache => {
-                self.use_cache = !self.use_cache;
-                self.persist_settings();
-            }
-            ToggleKind::SkipForkSync => {
-                self.skip_fork_sync = !self.skip_fork_sync;
-                self.persist_settings();
-            }
-            ToggleKind::SkipRebase => {
-                self.skip_rebase = !self.skip_rebase;
-                self.persist_settings();
-            }
-            ToggleKind::SkipRdsSync => {
-                self.skip_rds_sync = !self.skip_rds_sync;
-                self.persist_settings();
-            }
-            ToggleKind::SkipGitFetch => {
-                self.skip_git_fetch = !self.skip_git_fetch;
-                self.persist_settings();
-            }
-            ToggleKind::SkipDirtySync => {
-                self.skip_dirty_sync = !self.skip_dirty_sync;
-                self.persist_settings();
-            }
-            ToggleKind::SkipCurrentWeek => {
-                self.td_skip_current_week = !self.td_skip_current_week;
-                self.persist_td_settings();
-            }
-            ToggleKind::UseTimeCache => {
-                self.td_use_time_cache = !self.td_use_time_cache;
-                self.persist_td_settings();
-            }
-            ToggleKind::ShowCumulative => {
-                self.td_show_cumulative = !self.td_show_cumulative;
-                self.persist_td_settings();
-            }
+        let flag = match kind {
+            ToggleKind::SyncAll => &mut self.sync_all,
+            ToggleKind::UseCache => &mut self.use_cache,
+            ToggleKind::SkipForkSync => &mut self.skip_fork_sync,
+            ToggleKind::SkipRebase => &mut self.skip_rebase,
+            ToggleKind::SkipRdsSync => &mut self.skip_rds_sync,
+            ToggleKind::SkipGitFetch => &mut self.skip_git_fetch,
+            ToggleKind::SkipDirtySync => &mut self.skip_dirty_sync,
+            ToggleKind::SkipCurrentWeek => &mut self.td_skip_current_week,
+            ToggleKind::UseTimeCache => &mut self.td_use_time_cache,
+            ToggleKind::ShowCumulative => &mut self.td_show_cumulative,
+        };
+        *flag = !*flag;
+        if kind.is_sync() {
+            self.persist_settings();
+        } else {
+            self.persist_td_settings();
         }
     }
 

@@ -1,11 +1,16 @@
 use crossterm::event::KeyCode;
 
 use super::app::{
-    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow,
-    Screen, SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
+    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
+    SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
 };
 
-fn navigate<T>(rows: &[T], current: usize, delta: i32, is_interactive: impl Fn(&T) -> bool) -> usize {
+fn navigate<T>(
+    rows: &[T],
+    current: usize,
+    delta: i32,
+    is_interactive: impl Fn(&T) -> bool,
+) -> usize {
     let last = rows.len() - 1;
     if delta < 0 {
         let mut next = current.saturating_sub(1);
@@ -94,50 +99,50 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
     match code {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.settings_items();
-            app.settings_state.select(Some(navigate(&rows, i, -1, SettingRow::is_interactive)));
+            app.settings_state
+                .select(Some(navigate(&rows, i, -1, SettingRow::is_interactive)));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.settings_items();
-            app.settings_state.select(Some(navigate(&rows, i, 1, SettingRow::is_interactive)));
+            app.settings_state
+                .select(Some(navigate(&rows, i, 1, SettingRow::is_interactive)));
         }
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            match current_row {
-                Some(SettingRow::Back) => {
-                    app.screen = Screen::MainMenu;
-                }
-                Some(SettingRow::SyncGeneralLink) => {
-                    app.screen = Screen::SyncGeneralSettings;
-                    let rows = app.sync_general_items();
-                    let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                    app.sync_general_state.select(Some(first));
-                }
-                Some(SettingRow::ManageRepos) => {
-                    app.screen = Screen::RepoManager;
-                    let rm_rows = app.repo_manager_items();
-                    let first = rm_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                    app.repo_manager_state.select(Some(first));
-                }
-                Some(SettingRow::TdGeneralLink) => {
-                    app.screen = Screen::TdGeneralSettings;
-                    let rows = app.td_general_items();
-                    let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                    app.td_general_state.select(Some(first));
-                }
-                Some(SettingRow::TimeDoctorSettings) => {
-                    app.screen = Screen::TimeDoctorSettings;
-                    let td_rows = app.td_settings_items();
-                    let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                    app.td_settings_state.select(Some(first));
-                }
-                Some(SettingRow::ContractPeriodsLink) => {
-                    app.screen = Screen::ContractPeriods;
-                    let cp_rows = app.cp_list_items();
-                    let first = cp_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                    app.cp_list_state.select(Some(first));
-                }
-                _ => {}
+        KeyCode::Enter | KeyCode::Char(' ') => match current_row {
+            Some(SettingRow::Back) => {
+                app.screen = Screen::MainMenu;
             }
-        }
+            Some(SettingRow::SyncGeneralLink) => {
+                app.screen = Screen::SyncGeneralSettings;
+                let rows = app.sync_general_items();
+                let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                app.sync_general_state.select(Some(first));
+            }
+            Some(SettingRow::ManageRepos) => {
+                app.screen = Screen::RepoManager;
+                let rm_rows = app.repo_manager_items();
+                let first = rm_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                app.repo_manager_state.select(Some(first));
+            }
+            Some(SettingRow::TdGeneralLink) => {
+                app.screen = Screen::TdGeneralSettings;
+                let rows = app.td_general_items();
+                let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                app.td_general_state.select(Some(first));
+            }
+            Some(SettingRow::TimeDoctorSettings) => {
+                app.screen = Screen::TimeDoctorSettings;
+                let td_rows = app.td_settings_items();
+                let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                app.td_settings_state.select(Some(first));
+            }
+            Some(SettingRow::ContractPeriodsLink) => {
+                app.screen = Screen::ContractPeriods;
+                let cp_rows = app.cp_list_items();
+                let first = cp_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                app.cp_list_state.select(Some(first));
+            }
+            _ => {}
+        },
         KeyCode::Esc | KeyCode::Backspace => {
             app.screen = Screen::MainMenu;
         }
@@ -182,20 +187,18 @@ fn handle_general_toggles(app: &mut App, code: KeyCode, is_sync: bool) -> Action
                 app.td_general_state.select(Some(next));
             }
         }
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            match rows.get(i) {
-                Some(GeneralToggleRow::Back) => {
-                    app.screen = Screen::Settings;
-                }
-                Some(GeneralToggleRow::Toggle { kind, .. }) => {
-                    app.toggle_by_kind(*kind);
-                }
-                Some(GeneralToggleRow::TimezoneSelector { .. }) => {
-                    app.input_mode = InputMode::SelectingTimezone;
-                }
-                _ => {}
+        KeyCode::Enter | KeyCode::Char(' ') => match rows.get(i) {
+            Some(GeneralToggleRow::Back) => {
+                app.screen = Screen::Settings;
             }
-        }
+            Some(GeneralToggleRow::Toggle { kind, .. }) => {
+                app.toggle_by_kind(*kind);
+            }
+            Some(GeneralToggleRow::TimezoneSelector { .. }) => {
+                app.input_mode = InputMode::SelectingTimezone;
+            }
+            _ => {}
+        },
         KeyCode::Esc | KeyCode::Backspace => {
             app.screen = Screen::Settings;
         }
@@ -226,12 +229,22 @@ fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.repo_manager_items();
             let i = app.repo_manager_state.selected().unwrap_or(0);
-            app.repo_manager_state.select(Some(navigate(&rows, i, -1, RepoManagerRow::is_interactive)));
+            app.repo_manager_state.select(Some(navigate(
+                &rows,
+                i,
+                -1,
+                RepoManagerRow::is_interactive,
+            )));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.repo_manager_items();
             let i = app.repo_manager_state.selected().unwrap_or(0);
-            app.repo_manager_state.select(Some(navigate(&rows, i, 1, RepoManagerRow::is_interactive)));
+            app.repo_manager_state.select(Some(navigate(
+                &rows,
+                i,
+                1,
+                RepoManagerRow::is_interactive,
+            )));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             let rows = app.repo_manager_items();
@@ -270,12 +283,22 @@ fn handle_remove_repos(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.remove_repo_items();
             let i = app.remove_repo_state.selected().unwrap_or(0);
-            app.remove_repo_state.select(Some(navigate(&rows, i, -1, RemoveRepoRow::is_interactive)));
+            app.remove_repo_state.select(Some(navigate(
+                &rows,
+                i,
+                -1,
+                RemoveRepoRow::is_interactive,
+            )));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.remove_repo_items();
             let i = app.remove_repo_state.selected().unwrap_or(0);
-            app.remove_repo_state.select(Some(navigate(&rows, i, 1, RemoveRepoRow::is_interactive)));
+            app.remove_repo_state.select(Some(navigate(
+                &rows,
+                i,
+                1,
+                RemoveRepoRow::is_interactive,
+            )));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             let rows = app.remove_repo_items();
@@ -322,14 +345,22 @@ fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.td_settings_items();
             let i = app.td_settings_state.selected().unwrap_or(0);
-            app.td_settings_state
-                .select(Some(navigate(&rows, i, -1, TimeSettingRow::is_interactive)));
+            app.td_settings_state.select(Some(navigate(
+                &rows,
+                i,
+                -1,
+                TimeSettingRow::is_interactive,
+            )));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.td_settings_items();
             let i = app.td_settings_state.selected().unwrap_or(0);
-            app.td_settings_state
-                .select(Some(navigate(&rows, i, 1, TimeSettingRow::is_interactive)));
+            app.td_settings_state.select(Some(navigate(
+                &rows,
+                i,
+                1,
+                TimeSettingRow::is_interactive,
+            )));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             let rows = app.td_settings_items();
@@ -399,12 +430,14 @@ fn handle_contract_periods(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.cp_list_items();
             let i = app.cp_list_state.selected().unwrap_or(0);
-            app.cp_list_state.select(Some(navigate(&rows, i, -1, CpListRow::is_interactive)));
+            app.cp_list_state
+                .select(Some(navigate(&rows, i, -1, CpListRow::is_interactive)));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.cp_list_items();
             let i = app.cp_list_state.selected().unwrap_or(0);
-            app.cp_list_state.select(Some(navigate(&rows, i, 1, CpListRow::is_interactive)));
+            app.cp_list_state
+                .select(Some(navigate(&rows, i, 1, CpListRow::is_interactive)));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             let rows = app.cp_list_items();
@@ -450,18 +483,14 @@ fn handle_confirm_delete_period(app: &mut App, code: KeyCode) -> Action {
 
 fn handle_add_contract_period(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Up => {
-            match app.add_cp_focus {
-                AddCpFocus::Monday => app.cycle_add_cp_monday(1),
-                AddCpFocus::Hours => app.cycle_add_cp_hours(1),
-            }
-        }
-        KeyCode::Down => {
-            match app.add_cp_focus {
-                AddCpFocus::Monday => app.cycle_add_cp_monday(-1),
-                AddCpFocus::Hours => app.cycle_add_cp_hours(-1),
-            }
-        }
+        KeyCode::Up => match app.add_cp_focus {
+            AddCpFocus::Monday => app.cycle_add_cp_monday(1),
+            AddCpFocus::Hours => app.cycle_add_cp_hours(1),
+        },
+        KeyCode::Down => match app.add_cp_focus {
+            AddCpFocus::Monday => app.cycle_add_cp_monday(-1),
+            AddCpFocus::Hours => app.cycle_add_cp_hours(-1),
+        },
         KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
             app.add_cp_focus = match app.add_cp_focus {
                 AddCpFocus::Monday => AddCpFocus::Hours,

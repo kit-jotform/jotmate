@@ -9,25 +9,70 @@ use ratatui::{
 use ratatui::widgets::{Block, Borders, Clear};
 
 use super::app::{
-    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow,
-    Screen, SettingRow, TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
+    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
+    SettingRow, TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
 };
-use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
+use super::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 const C_TEXT: Color = Color::Indexed(255);
 const C_PRIMARY: Color = Color::Indexed(199); // medium purple — consistent across terminals
-const C_ACCENT: Color = Color::Indexed(51);   // light cyan — consistent across terminals
+const C_ACCENT: Color = Color::Indexed(51); // light cyan — consistent across terminals
 const C_SELECT: Color = C_PRIMARY;
-const C_SUCCESS: Color = Color::Indexed(10);    // bright green — consistent across terminals
-const C_MUTED: Color = Color::Indexed(8);       // dark gray — consistent across terminals
+const C_SUCCESS: Color = Color::Indexed(10); // bright green — consistent across terminals
+const C_MUTED: Color = Color::Indexed(8); // dark gray — consistent across terminals
 const C_LOGO: Color = C_TEXT;
-const C_DANGEROUS: Color = Color::Indexed(9);   // bright red — consistent across terminals
+const C_DANGEROUS: Color = Color::Indexed(9); // bright red — consistent across terminals
 
 const NAME_COL_W: u16 = 16; // fixed width for the name column
 const DIVIDER_WIDTH: u16 = 53;
+
+// ── Shared hint builders ──────────────────────────────────────────────────────
+
+fn hint_muted(parts: &[&str]) -> Vec<Span<'static>> {
+    parts
+        .iter()
+        .map(|s| Span::styled(s.to_string(), Style::default().fg(C_MUTED)))
+        .collect()
+}
+
+/// Standard sub-screen layout: small logo, title bar, divider, then a fill area for lists.
+fn sub_screen_layout(area: Rect) -> RowMap {
+    ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area)
+}
+
+fn hint_navigate_toggle() -> Vec<Span<'static>> {
+    hint_muted(&[
+        "↑↓",
+        " navigate  •  ",
+        "Space/↵",
+        " toggle  •  ",
+        "⌫/Esc",
+        " back",
+    ])
+}
+
+fn hint_select_back() -> Vec<Span<'static>> {
+    hint_muted(&["↵", " select  •  ", "⌫/Esc", " back"])
+}
+
+fn hint_confirm_cancel() -> Vec<Span<'static>> {
+    hint_muted(&["↵/y", " confirm  •  ", "Esc/n", " cancel"])
+}
+
+fn hint_input_confirm() -> Vec<Span<'static>> {
+    hint_muted(&["↵", " confirm  •  ", "Esc", " cancel"])
+}
 
 // ── Shared list item helpers ───────────────────────────────────────────────────
 
@@ -56,12 +101,20 @@ fn toggle_item(is_sel: bool, on: bool, label: String) -> ListItem<'static> {
                 badge,
                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(label, Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                label,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
         ]))
     } else {
         ListItem::new(Line::from(vec![
             Span::raw("  "),
-            Span::styled(badge, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                badge,
+                Style::default()
+                    .fg(badge_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(label, Style::default().fg(C_TEXT)),
         ]))
     }
@@ -269,10 +322,7 @@ fn draw_screen_header(
             ))
         })
         .collect();
-    f.render_widget(
-        Paragraph::new(logo_lines),
-        engine.center(logo_w, logo_area),
-    );
+    f.render_widget(Paragraph::new(logo_lines), engine.center(logo_w, logo_area));
 
     // ── Title left, hint right ──
     let title_row = engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), title_area);
@@ -301,27 +351,9 @@ fn draw_screen_header(
 
 fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank3", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
+    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area.x);
 
-    let hint_spans = vec![
-        Span::styled("↑↓", Style::default().fg(C_MUTED)),
-        Span::styled(" navigate  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("Space/↵", Style::default().fg(C_MUTED)),
-        Span::styled(" toggle  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-        Span::styled(" back", Style::default().fg(C_MUTED)),
-    ];
     draw_screen_header(
         f,
         &engine,
@@ -329,7 +361,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         layout.get("title"),
         layout.get("divider"),
         "Settings",
-        hint_spans,
+        hint_navigate_toggle(),
     );
 
     // ── Settings list ──
@@ -387,27 +419,9 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
 fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync: bool) {
     let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
+    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area.x);
 
-    let hint_spans = vec![
-        Span::styled("↑↓", Style::default().fg(C_MUTED)),
-        Span::styled(" navigate  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("Space/↵", Style::default().fg(C_MUTED)),
-        Span::styled(" toggle  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-        Span::styled(" back", Style::default().fg(C_MUTED)),
-    ];
     draw_screen_header(
         f,
         &engine,
@@ -415,7 +429,7 @@ fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync:
         layout.get("title"),
         layout.get("divider"),
         title,
-        hint_spans,
+        hint_navigate_toggle(),
     );
 
     let rows = if is_sync {
@@ -459,10 +473,7 @@ fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync:
                                 label_padded,
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
-                            Span::styled(
-                                format!("< {} >", value),
-                                Style::default().fg(C_ACCENT),
-                            ),
+                            Span::styled(format!("< {} >", value), Style::default().fg(C_ACCENT)),
                             Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
                         ]))
                     } else if is_sel {
@@ -489,41 +500,17 @@ fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync:
         })
         .collect();
 
-    f.render_stateful_widget(
-        List::new(items),
-        layout.get("list"),
-        &mut state.clone(),
-    );
+    f.render_stateful_widget(List::new(items), layout.get("list"), &mut state.clone());
 }
 
 fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
+    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area.x);
 
-    let hint_spans: Vec<Span<'static>> = match &app.input_mode {
-        InputMode::AddingRepo(_) => vec![
-            Span::styled("↵", Style::default().fg(C_MUTED)),
-            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" cancel", Style::default().fg(C_MUTED)),
-        ],
-        _ => vec![
-            Span::styled("↵", Style::default().fg(C_MUTED)),
-            Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" back", Style::default().fg(C_MUTED)),
-        ],
+    let hint_spans = match &app.input_mode {
+        InputMode::AddingRepo(_) => hint_input_confirm(),
+        _ => hint_select_back(),
     };
     draw_screen_header(
         f,
@@ -604,32 +591,12 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
 
 fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
+    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area.x);
 
-    let hint_spans: Vec<Span<'static>> = match &app.input_mode {
-        InputMode::ConfirmDelete(_) => vec![
-            Span::styled("↵/y", Style::default().fg(C_MUTED)),
-            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("Esc/n", Style::default().fg(C_MUTED)),
-            Span::styled(" cancel", Style::default().fg(C_MUTED)),
-        ],
-        _ => vec![
-            Span::styled("↵", Style::default().fg(C_MUTED)),
-            Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" back", Style::default().fg(C_MUTED)),
-        ],
+    let hint_spans = match &app.input_mode {
+        InputMode::ConfirmDelete(_) => hint_confirm_cancel(),
+        _ => hint_select_back(),
     };
     draw_screen_header(
         f,
@@ -659,7 +626,9 @@ fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
                             Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
                             Span::styled(
                                 "[del]",
-                                Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD),
+                                Style::default()
+                                    .fg(C_DANGEROUS)
+                                    .add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(detail, Style::default().fg(C_TEXT)),
                         ]))
@@ -689,34 +658,13 @@ fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
 
 fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
+    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area.x);
 
-    let editing = matches!(&app.input_mode, InputMode::EditingField { .. });
-    let hint_spans: Vec<Span<'static>> = if editing {
-        vec![
-            Span::styled("↵", Style::default().fg(C_MUTED)),
-            Span::styled(" save  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" cancel", Style::default().fg(C_MUTED)),
-        ]
+    let hint_spans = if matches!(&app.input_mode, InputMode::EditingField { .. }) {
+        hint_muted(&["↵", " save  •  ", "Esc", " cancel"])
     } else {
-        vec![
-            Span::styled("↵", Style::default().fg(C_MUTED)),
-            Span::styled(" edit  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" back", Style::default().fg(C_MUTED)),
-        ]
+        hint_muted(&["↵", " edit  •  ", "⌫/Esc", " back"])
     };
 
     draw_screen_header(
@@ -750,7 +698,9 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                             Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
                             Span::styled(
                                 badge,
-                                Style::default().fg(badge_color).add_modifier(Modifier::BOLD),
+                                Style::default()
+                                    .fg(badge_color)
+                                    .add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(
                                 " Password",
@@ -760,15 +710,27 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         ListItem::new(Line::from(vec![
                             Span::raw("  "),
-                            Span::styled(badge, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                            Span::styled(
+                                badge,
+                                Style::default()
+                                    .fg(badge_color)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
                             Span::styled(" Password", Style::default().fg(C_TEXT)),
                         ]))
                     }
                 }
 
-                TimeSettingRow::EditField { field, label, value, masked } => {
+                TimeSettingRow::EditField {
+                    field,
+                    label,
+                    value,
+                    masked,
+                } => {
                     let active_buf = match &app.input_mode {
-                        InputMode::EditingField { field: f, buf } if f == field => Some(buf.as_str()),
+                        InputMode::EditingField { field: f, buf } if f == field => {
+                            Some(buf.as_str())
+                        }
                         _ => None,
                     };
 
@@ -797,7 +759,10 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                         };
                         ListItem::new(Line::from(vec![
                             Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(label_padded, Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+                            Span::styled(
+                                label_padded,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
                             Span::styled(display_value, value_style),
                         ]))
                     } else {
@@ -826,32 +791,12 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
 
 fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
-        .row("list", 0)
-        .margin(1)
-        .split(area);
-
+    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area.x);
 
-    let hint_spans: Vec<Span<'static>> = match &app.input_mode {
-        InputMode::ConfirmDeletePeriod(_) => vec![
-            Span::styled("↵/y", Style::default().fg(C_MUTED)),
-            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("Esc/n", Style::default().fg(C_MUTED)),
-            Span::styled(" cancel", Style::default().fg(C_MUTED)),
-        ],
-        _ => vec![
-            Span::styled("↵", Style::default().fg(C_MUTED)),
-            Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" back", Style::default().fg(C_MUTED)),
-        ],
+    let hint_spans = match &app.input_mode {
+        InputMode::ConfirmDeletePeriod(_) => hint_confirm_cancel(),
+        _ => hint_select_back(),
     };
 
     draw_screen_header(
@@ -876,7 +821,9 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 CpListRow::Blank => ListItem::new(Line::raw("")),
                 CpListRow::Back => back_item(is_sel),
                 CpListRow::AddPeriod => link_item(is_sel, "+ Add period"),
-                CpListRow::Period { from, weekly_hours, .. } => {
+                CpListRow::Period {
+                    from, weekly_hours, ..
+                } => {
                     let hours_display = if weekly_hours.fract() == 0.0 {
                         format!("{}h/week", *weekly_hours as u32)
                     } else {
@@ -888,7 +835,9 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                             Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
                             Span::styled(
                                 "[del]",
-                                Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD),
+                                Style::default()
+                                    .fg(C_DANGEROUS)
+                                    .add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(format!("  {detail}"), Style::default().fg(C_TEXT)),
                         ]))
@@ -937,16 +886,16 @@ fn draw_add_contract_period(f: &mut ratatui::Frame, app: &App) {
 
     let engine = LayoutEngine::new(area.x);
 
-    let hint_spans = vec![
-        Span::styled("↑↓", Style::default().fg(C_MUTED)),
-        Span::styled(" change  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("Tab", Style::default().fg(C_MUTED)),
-        Span::styled(" switch  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("↵", Style::default().fg(C_MUTED)),
-        Span::styled(" save  •  ", Style::default().fg(C_MUTED)),
-        Span::styled("Esc", Style::default().fg(C_MUTED)),
-        Span::styled(" cancel", Style::default().fg(C_MUTED)),
-    ];
+    let hint_spans = hint_muted(&[
+        "↑↓",
+        " change  •  ",
+        "Tab",
+        " switch  •  ",
+        "↵",
+        " save  •  ",
+        "Esc",
+        " cancel",
+    ]);
 
     draw_screen_header(
         f,
@@ -985,10 +934,7 @@ fn draw_add_contract_period(f: &mut ratatui::Frame, app: &App) {
             Span::styled(monday_value, Style::default().fg(C_TEXT)),
         ])
     };
-    f.render_widget(
-        Paragraph::new(monday_line),
-        layout.get("monday"),
-    );
+    f.render_widget(Paragraph::new(monday_line), layout.get("monday"));
 
     // ── Hours row ──
     let hours_label = format!("{:<width$}", "Weekly hours", width = label_w);
@@ -1018,10 +964,7 @@ fn draw_add_contract_period(f: &mut ratatui::Frame, app: &App) {
             Span::styled(hours_display, Style::default().fg(C_TEXT)),
         ])
     };
-    f.render_widget(
-        Paragraph::new(hours_line),
-        layout.get("hours"),
-    );
+    f.render_widget(Paragraph::new(hours_line), layout.get("hours"));
 }
 
 fn draw_confirm_dialog(f: &mut ratatui::Frame, area: Rect, msg: &str) {
@@ -1050,15 +993,20 @@ fn draw_confirm_dialog(f: &mut ratatui::Frame, area: Rect, msg: &str) {
 
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled(
-                msg.to_string(),
-                Style::default().fg(C_TEXT),
-            )),
+            Line::from(Span::styled(msg.to_string(), Style::default().fg(C_TEXT))),
             Line::raw(""),
             Line::from(vec![
-                Span::styled(" ↵/y ", Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " ↵/y ",
+                    Style::default()
+                        .fg(C_DANGEROUS)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("delete  ", Style::default().fg(C_MUTED)),
-                Span::styled(" Esc/n ", Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " Esc/n ",
+                    Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("cancel", Style::default().fg(C_MUTED)),
             ]),
         ]),
