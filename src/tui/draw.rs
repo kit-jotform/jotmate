@@ -370,7 +370,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                             if is_sel { "▸ " } else { "  " },
                             Style::default().fg(C_PRIMARY),
                         ),
-                        Span::styled("→ Configure Time Doctor", style),
+                        Span::styled("→ Manage credentials", style),
                     ]))
                 }
 
@@ -383,10 +383,6 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                         format!("{label}  ({hint})")
                     };
                     toggle_item(is_sel, *on, label_text)
-                }
-
-                SettingRow::RepoToggle { name, url, enabled } => {
-                    toggle_item(is_sel, *enabled, format!("{name}  <{url}>"))
                 }
             }
         })
@@ -457,6 +453,10 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
                 RepoManagerRow::Blank => ListItem::new(Line::raw("")),
 
                 RepoManagerRow::Back => back_item(is_sel),
+
+                RepoManagerRow::RepoToggle { name, url, enabled } => {
+                    toggle_item(is_sel, *enabled, format!("{name}  <{url}>"))
+                }
 
                 RepoManagerRow::RepoDelete { name, url } => {
                     let detail = format!("  {name}  <{url}>");

@@ -50,6 +50,7 @@ pub enum TimeDoctorField {
 pub enum ToggleKind {
     SyncAll,
     UseCache,
+    SkipCurrentWeek,
 }
 
 #[derive(Clone)]
@@ -62,11 +63,6 @@ pub enum SettingRow {
     },
     Separator,
     Blank,
-    RepoToggle {
-        name: String,
-        url: String,
-        enabled: bool,
-    },
     ManageRepos,
     TimeDoctorSettings,
     Back,
@@ -77,7 +73,6 @@ impl SettingRow {
         matches!(
             self,
             SettingRow::Toggle { .. }
-                | SettingRow::RepoToggle { .. }
                 | SettingRow::ManageRepos
                 | SettingRow::TimeDoctorSettings
                 | SettingRow::Back
@@ -127,6 +122,11 @@ impl TimeSettingRow {
 #[derive(Clone)]
 pub enum RepoManagerRow {
     Blank,
+    RepoToggle {
+        name: String,
+        url: String,
+        enabled: bool,
+    },
     RepoDelete {
         name: String,
         url: String,
@@ -139,7 +139,10 @@ impl RepoManagerRow {
     pub fn is_interactive(&self) -> bool {
         matches!(
             self,
-            RepoManagerRow::RepoDelete { .. } | RepoManagerRow::AddUrl | RepoManagerRow::Back
+            RepoManagerRow::RepoToggle { .. }
+                | RepoManagerRow::RepoDelete { .. }
+                | RepoManagerRow::AddUrl
+                | RepoManagerRow::Back
         )
     }
 }
@@ -238,7 +241,9 @@ impl App {
     }
 
     pub fn settings_items(&self) -> Vec<SettingRow> {
-        let mut rows = vec![
+        vec![
+            SettingRow::Separator, // "RDS Sync"
+            SettingRow::Blank,
             SettingRow::Toggle {
                 kind: ToggleKind::SyncAll,
                 label: "Sync all by default",
@@ -252,25 +257,21 @@ impl App {
                 on: self.use_cache,
             },
             SettingRow::Blank,
-            SettingRow::Separator,
+            SettingRow::ManageRepos,
             SettingRow::Blank,
-        ];
-        for r in &self.repos {
-            rows.push(SettingRow::RepoToggle {
-                name: r.name.clone(),
-                url: r.url.clone(),
-                enabled: r.enabled,
-            });
-        }
-        rows.push(SettingRow::Blank);
-        rows.push(SettingRow::ManageRepos);
-        rows.push(SettingRow::Blank);
-        rows.push(SettingRow::Separator);
-        rows.push(SettingRow::Blank);
-        rows.push(SettingRow::TimeDoctorSettings);
-        rows.push(SettingRow::Blank);
-        rows.push(SettingRow::Back);
-        rows
+            SettingRow::Separator, // "Time Doctor"
+            SettingRow::Blank,
+            SettingRow::Toggle {
+                kind: ToggleKind::SkipCurrentWeek,
+                label: "Skip current week",
+                hint: "exclude incomplete week",
+                on: self.td_skip_current_week,
+            },
+            SettingRow::Blank,
+            SettingRow::TimeDoctorSettings,
+            SettingRow::Blank,
+            SettingRow::Back,
+        ]
     }
 
     pub fn td_settings_items(&self) -> Vec<TimeSettingRow> {
@@ -318,13 +319,21 @@ impl App {
     pub fn repo_manager_items(&self) -> Vec<RepoManagerRow> {
         let mut rows: Vec<RepoManagerRow> = vec![];
         for r in &self.repos {
+            rows.push(RepoManagerRow::RepoToggle {
+                name: r.name.clone(),
+                url: r.url.clone(),
+                enabled: r.enabled,
+            });
+        }
+        rows.push(RepoManagerRow::Blank);
+        rows.push(RepoManagerRow::AddUrl);
+        rows.push(RepoManagerRow::Blank);
+        for r in &self.repos {
             rows.push(RepoManagerRow::RepoDelete {
                 name: r.name.clone(),
                 url: r.url.clone(),
             });
         }
-        rows.push(RepoManagerRow::Blank);
-        rows.push(RepoManagerRow::AddUrl);
         rows.push(RepoManagerRow::Blank);
         rows.push(RepoManagerRow::Back);
         rows
@@ -347,14 +356,21 @@ impl App {
                 self.use_cache = !self.use_cache;
                 self.persist_settings();
             }
-            Some(SettingRow::RepoToggle { name, .. }) => {
-                let name = name.clone();
-                if let Some(repo) = self.repos.iter_mut().find(|r| r.name == name) {
-                    repo.enabled = !repo.enabled;
-                    self.persist_settings();
-                }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::SkipCurrentWeek,
+                ..
+            }) => {
+                self.td_skip_current_week = !self.td_skip_current_week;
+                self.persist_td_settings();
             }
             _ => {}
+        }
+    }
+
+    pub fn toggle_repo(&mut self, name: &str) {
+        if let Some(repo) = self.repos.iter_mut().find(|r| r.name == name) {
+            repo.enabled = !repo.enabled;
+            self.persist_settings();
         }
     }
 

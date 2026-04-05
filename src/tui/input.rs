@@ -135,6 +135,10 @@ fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
                 Some(RepoManagerRow::Back) => {
                     app.screen = Screen::Settings;
                 }
+                Some(RepoManagerRow::RepoToggle { name, .. }) => {
+                    let name = name.clone();
+                    app.toggle_repo(&name);
+                }
                 Some(RepoManagerRow::AddUrl) => {
                     app.input_mode = InputMode::AddingRepo(String::new());
                 }
