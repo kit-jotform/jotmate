@@ -9,8 +9,8 @@ use ratatui::{
 use ratatui::widgets::{Block, Borders, Clear};
 
 use super::app::{
-    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RepoManagerRow, Screen, SettingRow,
-    TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
+    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow,
+    Screen, SettingRow, TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
 };
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
@@ -88,6 +88,7 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::Settings => draw_settings(f, app),
         Screen::SyncGeneralSettings => draw_general_toggles(f, app, "RDS Sync", true),
         Screen::RepoManager => draw_repo_manager(f, app),
+        Screen::RemoveRepos => draw_remove_repos(f, app),
         Screen::TdGeneralSettings => draw_general_toggles(f, app, "Time Doctor", false),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
@@ -517,12 +518,6 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
             Span::styled("Esc", Style::default().fg(C_MUTED)),
             Span::styled(" cancel", Style::default().fg(C_MUTED)),
         ],
-        InputMode::ConfirmDelete(_) => vec![
-            Span::styled("↵/y", Style::default().fg(C_MUTED)),
-            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("Esc/n", Style::default().fg(C_MUTED)),
-            Span::styled(" cancel", Style::default().fg(C_MUTED)),
-        ],
         _ => vec![
             Span::styled("↵", Style::default().fg(C_MUTED)),
             Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
@@ -558,24 +553,19 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
                     toggle_item(is_sel, *enabled, format!("{name}  <{url}>"))
                 }
 
-                RepoManagerRow::RepoDelete { name, url } => {
-                    let detail = format!("  {name}  <{url}>");
-                    if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
-                            Span::styled(
-                                "[del]",
-                                Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(detail, Style::default().fg(C_TEXT)),
-                        ]))
+                RepoManagerRow::RemoveReposLink => {
+                    let style = if is_sel {
+                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
                     } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled("[del]", Style::default().fg(C_MUTED)),
-                            Span::styled(detail, Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                        Style::default().fg(C_MUTED)
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::styled(
+                            if is_sel { "▸ " } else { "  " },
+                            Style::default().fg(if is_sel { C_PRIMARY } else { C_MUTED }),
+                        ),
+                        Span::styled("→ Remove Repos", style),
+                    ]))
                 }
 
                 RepoManagerRow::AddUrl => match &app.input_mode {
@@ -609,6 +599,86 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
         List::new(items),
         layout.get("list"),
         &mut app.repo_manager_state.clone(),
+    );
+}
+
+fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let hint_spans: Vec<Span<'static>> = match &app.input_mode {
+        InputMode::ConfirmDelete(_) => vec![
+            Span::styled("↵/y", Style::default().fg(C_MUTED)),
+            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("Esc/n", Style::default().fg(C_MUTED)),
+            Span::styled(" cancel", Style::default().fg(C_MUTED)),
+        ],
+        _ => vec![
+            Span::styled("↵", Style::default().fg(C_MUTED)),
+            Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" back", Style::default().fg(C_MUTED)),
+        ],
+    };
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        "Remove Repos",
+        hint_spans,
+    );
+
+    let rows = app.remove_repo_items();
+    let selected = app.remove_repo_state.selected().unwrap_or(0);
+
+    let items: Vec<ListItem> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let is_sel = selected == i;
+            match row {
+                RemoveRepoRow::Blank => ListItem::new(Line::raw("")),
+                RemoveRepoRow::Back => back_item(is_sel),
+                RemoveRepoRow::RepoDelete { name, url } => {
+                    let detail = format!("  {name}  <{url}>");
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
+                            Span::styled(
+                                "[del]",
+                                Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(detail, Style::default().fg(C_TEXT)),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled("[del]", Style::default().fg(C_MUTED)),
+                            Span::styled(detail, Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
+            }
+        })
+        .collect();
+
+    f.render_stateful_widget(
+        List::new(items),
+        layout.get("list"),
+        &mut app.remove_repo_state.clone(),
     );
 
     // ── Confirmation dialog overlay ──

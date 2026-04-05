@@ -1,8 +1,8 @@
 use crossterm::event::KeyCode;
 
 use super::app::{
-    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RepoManagerRow, Screen, SettingRow,
-    TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
+    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow,
+    Screen, SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
 };
 
 fn navigate<T>(rows: &[T], current: usize, delta: i32, is_interactive: impl Fn(&T) -> bool) -> usize {
@@ -36,9 +36,12 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
         Screen::TdGeneralSettings => handle_general_toggles(app, code, false),
         Screen::RepoManager => match &app.input_mode {
             InputMode::AddingRepo(_) => handle_repo_input(app, code),
-            InputMode::ConfirmDelete(_) => handle_confirm_delete(app, code),
             InputMode::Normal => handle_repo_manager(app, code),
             _ => handle_repo_manager(app, code),
+        },
+        Screen::RemoveRepos => match &app.input_mode {
+            InputMode::ConfirmDelete(_) => handle_confirm_delete(app, code),
+            _ => handle_remove_repos(app, code),
         },
         Screen::TimeDoctorSettings => match &app.input_mode {
             InputMode::EditingField { .. } => handle_td_field_input(app, code),
@@ -244,7 +247,44 @@ fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
                 Some(RepoManagerRow::AddUrl) => {
                     app.input_mode = InputMode::AddingRepo(String::new());
                 }
-                Some(RepoManagerRow::RepoDelete { name, .. }) => {
+                Some(RepoManagerRow::RemoveReposLink) => {
+                    app.screen = Screen::RemoveRepos;
+                    let rows = app.remove_repo_items();
+                    let first = rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.remove_repo_state.select(Some(first));
+                }
+                _ => {}
+            }
+        }
+        KeyCode::Esc | KeyCode::Backspace => {
+            app.screen = Screen::Settings;
+        }
+        KeyCode::Char('q') => return Action::Back,
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_remove_repos(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Up | KeyCode::Left => {
+            let rows = app.remove_repo_items();
+            let i = app.remove_repo_state.selected().unwrap_or(0);
+            app.remove_repo_state.select(Some(navigate(&rows, i, -1, RemoveRepoRow::is_interactive)));
+        }
+        KeyCode::Down | KeyCode::Right => {
+            let rows = app.remove_repo_items();
+            let i = app.remove_repo_state.selected().unwrap_or(0);
+            app.remove_repo_state.select(Some(navigate(&rows, i, 1, RemoveRepoRow::is_interactive)));
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let rows = app.remove_repo_items();
+            let i = app.remove_repo_state.selected().unwrap_or(0);
+            match rows.get(i) {
+                Some(RemoveRepoRow::Back) => {
+                    app.screen = Screen::RepoManager;
+                }
+                Some(RemoveRepoRow::RepoDelete { name, .. }) => {
                     let name = name.clone();
                     app.confirm_delete_repo(name);
                 }
@@ -252,7 +292,7 @@ fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
             }
         }
         KeyCode::Esc | KeyCode::Backspace => {
-            app.screen = Screen::Settings;
+            app.screen = Screen::RepoManager;
         }
         KeyCode::Char('q') => return Action::Back,
         _ => {}

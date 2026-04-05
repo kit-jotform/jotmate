@@ -46,6 +46,7 @@ pub enum Screen {
     Settings,
     SyncGeneralSettings,
     RepoManager,
+    RemoveRepos,
     TdGeneralSettings,
     TimeDoctorSettings,
     ContractPeriods,
@@ -215,11 +216,8 @@ pub enum RepoManagerRow {
         url: String,
         enabled: bool,
     },
-    RepoDelete {
-        name: String,
-        url: String,
-    },
     AddUrl,
+    RemoveReposLink,
     Back,
 }
 
@@ -228,9 +226,30 @@ impl RepoManagerRow {
         matches!(
             self,
             RepoManagerRow::RepoToggle { .. }
-                | RepoManagerRow::RepoDelete { .. }
                 | RepoManagerRow::AddUrl
+                | RepoManagerRow::RemoveReposLink
                 | RepoManagerRow::Back
+        )
+    }
+}
+
+// ── Remove repos row types ──────────────────────────────────────────────────
+
+#[derive(Clone)]
+pub enum RemoveRepoRow {
+    Blank,
+    RepoDelete {
+        name: String,
+        url: String,
+    },
+    Back,
+}
+
+impl RemoveRepoRow {
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            RemoveRepoRow::RepoDelete { .. } | RemoveRepoRow::Back
         )
     }
 }
@@ -251,6 +270,7 @@ pub struct App {
     pub settings_state: ListState,
     pub sync_general_state: ListState,
     pub repo_manager_state: ListState,
+    pub remove_repo_state: ListState,
     pub td_general_state: ListState,
     pub td_settings_state: ListState,
     pub cp_list_state: ListState,
@@ -306,6 +326,8 @@ impl App {
         sync_general_state.select(Some(0));
         let mut repo_manager_state = ListState::default();
         repo_manager_state.select(Some(0));
+        let mut remove_repo_state = ListState::default();
+        remove_repo_state.select(Some(0));
         let mut td_general_state = ListState::default();
         td_general_state.select(Some(0));
         let mut td_settings_state = ListState::default();
@@ -350,6 +372,7 @@ impl App {
             settings_state,
             sync_general_state,
             repo_manager_state,
+            remove_repo_state,
             td_general_state,
             td_settings_state,
             cp_list_state,
@@ -516,14 +539,22 @@ impl App {
         rows.push(RepoManagerRow::Blank);
         rows.push(RepoManagerRow::AddUrl);
         rows.push(RepoManagerRow::Blank);
+        rows.push(RepoManagerRow::RemoveReposLink);
+        rows.push(RepoManagerRow::Blank);
+        rows.push(RepoManagerRow::Back);
+        rows
+    }
+
+    pub fn remove_repo_items(&self) -> Vec<RemoveRepoRow> {
+        let mut rows: Vec<RemoveRepoRow> = vec![];
         for r in &self.repos {
-            rows.push(RepoManagerRow::RepoDelete {
+            rows.push(RemoveRepoRow::RepoDelete {
                 name: r.name.clone(),
                 url: r.url.clone(),
             });
         }
-        rows.push(RepoManagerRow::Blank);
-        rows.push(RepoManagerRow::Back);
+        rows.push(RemoveRepoRow::Blank);
+        rows.push(RemoveRepoRow::Back);
         rows
     }
 
@@ -598,7 +629,7 @@ impl App {
         self.persist_settings();
         self.input_mode = InputMode::Normal;
         // Clamp cursor to a valid interactive row
-        let rows = self.repo_manager_items();
+        let rows = self.remove_repo_items();
         let last_interactive = rows
             .iter()
             .enumerate()
@@ -606,9 +637,9 @@ impl App {
             .map(|(i, _)| i)
             .next_back()
             .unwrap_or(0);
-        let cur = self.repo_manager_state.selected().unwrap_or(0);
+        let cur = self.remove_repo_state.selected().unwrap_or(0);
         if cur > last_interactive {
-            self.repo_manager_state.select(Some(last_interactive));
+            self.remove_repo_state.select(Some(last_interactive));
         }
     }
 
