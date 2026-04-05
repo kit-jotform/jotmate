@@ -1,6 +1,9 @@
 use crossterm::event::KeyCode;
 
-use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS};
+use super::app::{
+    AddCpFocus, App, CpListRow, InputMode, RepoManagerRow, Screen, SettingRow, TimeDoctorField,
+    TimeSettingRow, MAIN_ITEMS,
+};
 
 fn navigate<T>(rows: &[T], current: usize, delta: i32, is_interactive: impl Fn(&T) -> bool) -> usize {
     let last = rows.len() - 1;
@@ -33,12 +36,17 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
             InputMode::AddingRepo(_) => handle_repo_input(app, code),
             InputMode::ConfirmDelete(_) => handle_confirm_delete(app, code),
             InputMode::Normal => handle_repo_manager(app, code),
-            InputMode::EditingField { .. } => handle_repo_manager(app, code), // shouldn't happen
+            _ => handle_repo_manager(app, code),
         },
         Screen::TimeDoctorSettings => match &app.input_mode {
             InputMode::EditingField { .. } => handle_td_field_input(app, code),
             _ => handle_td_settings(app, code),
         },
+        Screen::ContractPeriods => match &app.input_mode {
+            InputMode::ConfirmDeletePeriod(_) => handle_confirm_delete_period(app, code),
+            _ => handle_contract_periods(app, code),
+        },
+        Screen::AddContractPeriod => handle_add_contract_period(app, code),
     }
 }
 
@@ -72,21 +80,36 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
 }
 
 fn handle_settings(app: &mut App, code: KeyCode) -> Action {
+    let rows = app.settings_items();
+    let i = app.settings_state.selected().unwrap_or(0);
+    let current_row = rows.get(i);
+
+    // ↑↓ on TimezoneSelector cycles timezone instead of navigating
+    if matches!(current_row, Some(SettingRow::TimezoneSelector { .. })) {
+        match code {
+            KeyCode::Up | KeyCode::Left => {
+                app.cycle_timezone(-1);
+                return Action::Continue;
+            }
+            KeyCode::Down | KeyCode::Right => {
+                app.cycle_timezone(1);
+                return Action::Continue;
+            }
+            _ => {}
+        }
+    }
+
     match code {
         KeyCode::Up | KeyCode::Left => {
             let rows = app.settings_items();
-            let i = app.settings_state.selected().unwrap_or(0);
             app.settings_state.select(Some(navigate(&rows, i, -1, SettingRow::is_interactive)));
         }
         KeyCode::Down | KeyCode::Right => {
             let rows = app.settings_items();
-            let i = app.settings_state.selected().unwrap_or(0);
             app.settings_state.select(Some(navigate(&rows, i, 1, SettingRow::is_interactive)));
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
-            let rows = app.settings_items();
-            let i = app.settings_state.selected().unwrap_or(0);
-            match rows.get(i) {
+            match current_row {
                 Some(SettingRow::Back) => {
                     app.screen = Screen::MainMenu;
                 }
@@ -101,6 +124,15 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
                     let td_rows = app.td_settings_items();
                     let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
                     app.td_settings_state.select(Some(first));
+                }
+                Some(SettingRow::ContractPeriodsLink) => {
+                    app.screen = Screen::ContractPeriods;
+                    let cp_rows = app.cp_list_items();
+                    let first = cp_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.cp_list_state.select(Some(first));
+                }
+                Some(SettingRow::TimezoneSelector { .. }) => {
+                    // Enter/Space on timezone does nothing (use ↑↓ to cycle)
                 }
                 _ => {
                     app.toggle_selected_setting();
@@ -196,10 +228,6 @@ fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
                 Some(TimeSettingRow::Back) => {
                     app.screen = Screen::Settings;
                 }
-                Some(TimeSettingRow::Toggle { on, .. }) => {
-                    app.td_skip_current_week = !on;
-                    app.persist_td_settings();
-                }
                 Some(TimeSettingRow::EditField { field, value, .. }) => {
                     app.input_mode = InputMode::EditingField { field, buf: value };
                 }
@@ -241,9 +269,6 @@ fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
             app.input_mode = InputMode::Normal;
             match field {
                 TimeDoctorField::Email => app.td_email = buf,
-                TimeDoctorField::Timezone => app.td_timezone = buf,
-                TimeDoctorField::StartDate => app.td_start_date = buf,
-                TimeDoctorField::ContractPeriods => app.td_contract_periods = buf,
                 TimeDoctorField::Password => {
                     app.set_td_password(&buf);
                     return Action::Continue;
@@ -254,6 +279,92 @@ fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Esc => {
             app.input_mode = InputMode::Normal;
         }
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_contract_periods(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Up | KeyCode::Left => {
+            let rows = app.cp_list_items();
+            let i = app.cp_list_state.selected().unwrap_or(0);
+            app.cp_list_state.select(Some(navigate(&rows, i, -1, CpListRow::is_interactive)));
+        }
+        KeyCode::Down | KeyCode::Right => {
+            let rows = app.cp_list_items();
+            let i = app.cp_list_state.selected().unwrap_or(0);
+            app.cp_list_state.select(Some(navigate(&rows, i, 1, CpListRow::is_interactive)));
+        }
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let rows = app.cp_list_items();
+            let i = app.cp_list_state.selected().unwrap_or(0);
+            match rows.get(i) {
+                Some(CpListRow::Back) => {
+                    app.screen = Screen::Settings;
+                }
+                Some(CpListRow::AddPeriod) => {
+                    app.init_add_contract_period();
+                }
+                Some(CpListRow::Period { index, .. }) => {
+                    app.confirm_delete_period(*index);
+                }
+                _ => {}
+            }
+        }
+        KeyCode::Esc | KeyCode::Backspace => {
+            app.screen = Screen::Settings;
+        }
+        KeyCode::Char('q') => return Action::Back,
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_confirm_delete_period(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+            let idx = match &app.input_mode {
+                InputMode::ConfirmDeletePeriod(i) => *i,
+                _ => return Action::Continue,
+            };
+            app.execute_delete_period(idx);
+        }
+        KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+            app.input_mode = InputMode::Normal;
+        }
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_add_contract_period(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Up => {
+            match app.add_cp_focus {
+                AddCpFocus::Monday => app.cycle_add_cp_monday(1),
+                AddCpFocus::Hours => app.cycle_add_cp_hours(1),
+            }
+        }
+        KeyCode::Down => {
+            match app.add_cp_focus {
+                AddCpFocus::Monday => app.cycle_add_cp_monday(-1),
+                AddCpFocus::Hours => app.cycle_add_cp_hours(-1),
+            }
+        }
+        KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
+            app.add_cp_focus = match app.add_cp_focus {
+                AddCpFocus::Monday => AddCpFocus::Hours,
+                AddCpFocus::Hours => AddCpFocus::Monday,
+            };
+        }
+        KeyCode::Enter => {
+            app.save_new_contract_period();
+        }
+        KeyCode::Esc | KeyCode::Backspace => {
+            app.screen = Screen::ContractPeriods;
+        }
+        KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
     Action::Continue

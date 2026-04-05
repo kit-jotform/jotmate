@@ -8,7 +8,10 @@ use ratatui::{
 
 use ratatui::widgets::{Block, Borders, Clear};
 
-use super::app::{App, InputMode, RepoManagerRow, Screen, SettingRow, TimeSettingRow, MAIN_ITEMS};
+use super::app::{
+    AddCpFocus, App, CpListRow, InputMode, RepoManagerRow, Screen, SettingRow, TimeSettingRow,
+    MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
+};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
@@ -64,12 +67,29 @@ fn toggle_item(is_sel: bool, on: bool, label: String) -> ListItem<'static> {
     }
 }
 
+fn link_item(is_sel: bool, label: &str) -> ListItem<'static> {
+    let style = if is_sel {
+        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(C_MUTED)
+    };
+    ListItem::new(Line::from(vec![
+        Span::styled(
+            if is_sel { "▸ " } else { "  " },
+            Style::default().fg(C_PRIMARY),
+        ),
+        Span::styled(label.to_string(), style),
+    ]))
+}
+
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
         Screen::MainMenu => draw_main_menu(f, app),
         Screen::Settings => draw_settings(f, app),
         Screen::RepoManager => draw_repo_manager(f, app),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
+        Screen::ContractPeriods => draw_contract_periods(f, app),
+        Screen::AddContractPeriod => draw_add_contract_period(f, app),
     }
 }
 
@@ -322,8 +342,6 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::Blank => ListItem::new(Line::raw("")),
 
                 SettingRow::Separator => {
-                    // Determine which separator this is by context (index)
-                    // First separator = Repos, second = Time Doctor
                     let label = {
                         let rows = app.settings_items();
                         let sep_count = rows[..i]
@@ -331,7 +349,7 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                             .filter(|r| matches!(r, SettingRow::Separator))
                             .count();
                         if sep_count == 0 {
-                            "── Upstream Repositories ──────────────────────"
+                            "── RDS Sync ──────────────────────────────────"
                         } else {
                             "── Time Doctor ─────────────────────────────────"
                         }
@@ -344,34 +362,35 @@ fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
                 SettingRow::Back => back_item(is_sel),
 
-                SettingRow::ManageRepos => {
-                    let style = if is_sel {
-                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(C_MUTED)
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            if is_sel { "▸ " } else { "  " },
-                            Style::default().fg(C_PRIMARY),
-                        ),
-                        Span::styled("→ Manage upstream repos", style),
-                    ]))
-                }
+                SettingRow::ManageRepos => link_item(is_sel, "→ Manage upstream repos"),
 
-                SettingRow::TimeDoctorSettings => {
-                    let style = if is_sel {
-                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                SettingRow::TimeDoctorSettings => link_item(is_sel, "→ Manage credentials"),
+
+                SettingRow::ContractPeriodsLink => link_item(is_sel, "→ Manage contract periods"),
+
+                SettingRow::TimezoneSelector { value } => {
+                    let label_w = 18usize;
+                    let label_padded = format!("{:<width$}", "Timezone", width = label_w);
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                label_padded,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                value.clone(),
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled("  (↑↓)", Style::default().fg(C_MUTED)),
+                        ]))
                     } else {
-                        Style::default().fg(C_MUTED)
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            if is_sel { "▸ " } else { "  " },
-                            Style::default().fg(C_PRIMARY),
-                        ),
-                        Span::styled("→ Manage credentials", style),
-                    ]))
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(label_padded, Style::default().fg(C_TEXT)),
+                            Span::styled(value.clone(), Style::default().fg(C_TEXT)),
+                        ]))
+                    }
                 }
 
                 SettingRow::Toggle {
@@ -513,7 +532,7 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
 
     // ── Confirmation dialog overlay ──
     if let InputMode::ConfirmDelete(name) = &app.input_mode {
-        draw_confirm_delete(f, area, name);
+        draw_confirm_dialog(f, area, &format!("Delete \"{}\"?", name));
     }
 }
 
@@ -544,8 +563,6 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
         vec![
             Span::styled("↵", Style::default().fg(C_MUTED)),
             Span::styled(" edit  •  ", Style::default().fg(C_MUTED)),
-            Span::styled("Space", Style::default().fg(C_MUTED)),
-            Span::styled(" toggle  •  ", Style::default().fg(C_MUTED)),
             Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
             Span::styled(" back", Style::default().fg(C_MUTED)),
         ]
@@ -557,7 +574,7 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
         layout.get("logo"),
         layout.get("title"),
         layout.get("divider"),
-        "Time Doctor",
+        "Manage Credentials",
         hint_spans,
     );
 
@@ -572,24 +589,7 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
             match row {
                 TimeSettingRow::Blank => ListItem::new(Line::raw("")),
 
-                TimeSettingRow::Separator => ListItem::new(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "── Credentials ─────────────────────────────────",
-                        Style::default().fg(C_MUTED),
-                    ),
-                ])),
-
                 TimeSettingRow::Back => back_item(is_sel),
-
-                TimeSettingRow::Toggle { label, hint, on } => {
-                    let label_text = if hint.is_empty() {
-                        label.to_string()
-                    } else {
-                        format!("{label}  ({hint})")
-                    };
-                    toggle_item(is_sel, *on, label_text)
-                }
 
                 TimeSettingRow::Password { is_set } => {
                     let badge = if *is_set { "[set]    " } else { "[not set]" };
@@ -616,7 +616,6 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                 }
 
                 TimeSettingRow::EditField { field, label, value, masked } => {
-                    // Check if this field is currently being edited
                     let active_buf = match &app.input_mode {
                         InputMode::EditingField { field: f, buf } if f == field => Some(buf.as_str()),
                         _ => None,
@@ -674,8 +673,207 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     );
 }
 
-fn draw_confirm_delete(f: &mut ratatui::Frame, area: Rect, name: &str) {
-    let msg = format!("Delete \"{}\"?", name);
+fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("list", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let hint_spans: Vec<Span<'static>> = match &app.input_mode {
+        InputMode::ConfirmDeletePeriod(_) => vec![
+            Span::styled("↵/y", Style::default().fg(C_MUTED)),
+            Span::styled(" confirm  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("Esc/n", Style::default().fg(C_MUTED)),
+            Span::styled(" cancel", Style::default().fg(C_MUTED)),
+        ],
+        _ => vec![
+            Span::styled("↵", Style::default().fg(C_MUTED)),
+            Span::styled(" select  •  ", Style::default().fg(C_MUTED)),
+            Span::styled("⌫/Esc", Style::default().fg(C_MUTED)),
+            Span::styled(" back", Style::default().fg(C_MUTED)),
+        ],
+    };
+
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        "Contract Periods",
+        hint_spans,
+    );
+
+    let cp_rows = app.cp_list_items();
+    let selected = app.cp_list_state.selected().unwrap_or(0);
+
+    let items: Vec<ListItem> = cp_rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let is_sel = selected == i;
+            match row {
+                CpListRow::Blank => ListItem::new(Line::raw("")),
+                CpListRow::Back => back_item(is_sel),
+                CpListRow::AddPeriod => link_item(is_sel, "+ Add period"),
+                CpListRow::Period { from, weekly_hours, .. } => {
+                    let hours_display = if weekly_hours.fract() == 0.0 {
+                        format!("{}h/week", *weekly_hours as u32)
+                    } else {
+                        format!("{weekly_hours}h/week")
+                    };
+                    let detail = format!("{}  {}", from, hours_display);
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
+                            Span::styled(
+                                "[del]",
+                                Style::default().fg(C_DANGEROUS).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(format!("  {detail}"), Style::default().fg(C_TEXT)),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled("[del]", Style::default().fg(C_MUTED)),
+                            Span::styled(format!("  {detail}"), Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
+            }
+        })
+        .collect();
+
+    f.render_stateful_widget(
+        List::new(items),
+        layout.get("list"),
+        &mut app.cp_list_state.clone(),
+    );
+
+    // ── Confirmation dialog overlay ──
+    if let InputMode::ConfirmDeletePeriod(idx) = &app.input_mode {
+        if let Some(p) = app.contract_periods.get(*idx) {
+            draw_confirm_dialog(f, area, &format!("Delete period {}?", p.from));
+        }
+    }
+}
+
+fn draw_add_contract_period(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+
+    let layout = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("monday", 1)
+        .row("hours", 1)
+        .row("blank3", 1)
+        .row("hint", 1)
+        .row("fill", 0)
+        .margin(1)
+        .split(area);
+
+    let engine = LayoutEngine::new(area.x);
+
+    let hint_spans = vec![
+        Span::styled("↑↓", Style::default().fg(C_MUTED)),
+        Span::styled(" change  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("Tab", Style::default().fg(C_MUTED)),
+        Span::styled(" switch  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("↵", Style::default().fg(C_MUTED)),
+        Span::styled(" save  •  ", Style::default().fg(C_MUTED)),
+        Span::styled("Esc", Style::default().fg(C_MUTED)),
+        Span::styled(" cancel", Style::default().fg(C_MUTED)),
+    ];
+
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        "Add Contract Period",
+        hint_spans,
+    );
+
+    let label_w = 18usize;
+    let monday_focused = app.add_cp_focus == AddCpFocus::Monday;
+    let hours_focused = app.add_cp_focus == AddCpFocus::Hours;
+
+    // ── Monday row ──
+    let monday_label = format!("{:<width$}", "From Monday", width = label_w);
+    let monday_value = app.add_cp_monday.to_string();
+    let monday_line = if monday_focused {
+        Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled(
+                monday_label,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                monday_value,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  (↑↓)", Style::default().fg(C_MUTED)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled(monday_label, Style::default().fg(C_TEXT)),
+            Span::styled(monday_value, Style::default().fg(C_TEXT)),
+        ])
+    };
+    f.render_widget(
+        Paragraph::new(monday_line),
+        layout.get("monday"),
+    );
+
+    // ── Hours row ──
+    let hours_label = format!("{:<width$}", "Weekly hours", width = label_w);
+    let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp_hours_idx];
+    let hours_display = if hours_val.fract() == 0.0 {
+        format!("{}h", hours_val as u32)
+    } else {
+        format!("{hours_val}h")
+    };
+    let hours_line = if hours_focused {
+        Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled(
+                hours_label,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                hours_display,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  (↑↓)", Style::default().fg(C_MUTED)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled(hours_label, Style::default().fg(C_TEXT)),
+            Span::styled(hours_display, Style::default().fg(C_TEXT)),
+        ])
+    };
+    f.render_widget(
+        Paragraph::new(hours_line),
+        layout.get("hours"),
+    );
+}
+
+fn draw_confirm_dialog(f: &mut ratatui::Frame, area: Rect, msg: &str) {
     let dialog_w = (msg.len() as u16 + 4).max(26);
     let dialog_h = 5u16;
 
@@ -702,7 +900,7 @@ fn draw_confirm_delete(f: &mut ratatui::Frame, area: Rect, name: &str) {
     f.render_widget(
         Paragraph::new(vec![
             Line::from(Span::styled(
-                msg,
+                msg.to_string(),
                 Style::default().fg(C_TEXT),
             )),
             Line::raw(""),

@@ -1,8 +1,11 @@
 use anyhow::Result;
-use chrono::NaiveDate;
+use chrono::{Local, NaiveDate};
 use ratatui::widgets::ListState;
 
-// ── Main menu items ───────────────────────────────────────────────────────────
+use crate::config::ContractPeriod;
+use crate::time::compute::get_week_start_monday;
+
+// ── Main menu items ─────────────────��─────────────────────────────────────────
 
 pub const MAIN_ITEMS: &[(&str, &str)] = &[
     ("Sync", "Sync RDS to upstream"),
@@ -11,7 +14,31 @@ pub const MAIN_ITEMS: &[(&str, &str)] = &[
     ("Exit", ""),
 ];
 
-// ── Screens ───────────────────────────────────────────────────────────────────
+// ── Timezone options ───��─────────────────────────────────────────────────────
+
+pub const TIMEZONES: &[&str] = &[
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Sao_Paulo",
+    "Europe/London",
+    "Europe/Berlin",
+    "Europe/Istanbul",
+    "Europe/Moscow",
+    "Asia/Dubai",
+    "Asia/Kolkata",
+    "Asia/Shanghai",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+];
+
+// ── Weekly hours options ─────────────────────────────────────────────────────
+
+pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
+
+// ── Screens ────────────��────────────────────────────────���─────────────────────
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Screen {
@@ -19,6 +46,8 @@ pub enum Screen {
     Settings,
     RepoManager,
     TimeDoctorSettings,
+    ContractPeriods,
+    AddContractPeriod,
 }
 
 // ── Input mode (used inside RepoManager and TimeDoctorSettings) ──────────────
@@ -28,6 +57,7 @@ pub enum InputMode {
     Normal,
     AddingRepo(String),       // buffer holds URL being typed
     ConfirmDelete(String),    // holds the repo name pending deletion
+    ConfirmDeletePeriod(usize), // holds the period index pending deletion
     EditingField {            // editing a text field in TimeDoctorSettings
         field: TimeDoctorField,
         buf: String,
@@ -39,18 +69,16 @@ pub enum InputMode {
 pub enum TimeDoctorField {
     Email,
     Password,
-    StartDate,
-    Timezone,
-    ContractPeriods,
 }
 
-// ── Settings row types ────────────────────────────────────────────────────────
+// ── Settings row types ─────────────���────────────────────────────────���─────────
 
 #[derive(Clone, Copy)]
 pub enum ToggleKind {
     SyncAll,
     UseCache,
     SkipCurrentWeek,
+    UseTimeCache,
 }
 
 #[derive(Clone)]
@@ -61,10 +89,14 @@ pub enum SettingRow {
         hint: &'static str,
         on: bool,
     },
+    TimezoneSelector {
+        value: String,
+    },
     Separator,
     Blank,
     ManageRepos,
     TimeDoctorSettings,
+    ContractPeriodsLink,
     Back,
 }
 
@@ -73,34 +105,30 @@ impl SettingRow {
         matches!(
             self,
             SettingRow::Toggle { .. }
+                | SettingRow::TimezoneSelector { .. }
                 | SettingRow::ManageRepos
                 | SettingRow::TimeDoctorSettings
+                | SettingRow::ContractPeriodsLink
                 | SettingRow::Back
         )
     }
 }
 
-// ── Time Doctor settings row types ───────────────────────────────────────────
+// ── Time Doctor settings row types ─────────��─────────────────────────────────
 
 #[derive(Clone)]
 pub enum TimeSettingRow {
-    /// Editable text field (email, timezone, start date, contract periods)
+    /// Editable text field (email)
     EditField {
         field: TimeDoctorField,
         label: &'static str,
-        value: String,          // current config value (empty = not set)
-        masked: bool,           // true → display as stars
+        value: String,
+        masked: bool,
     },
     /// Password row — shows [set] / [not set] badge instead of value
     Password {
         is_set: bool,
     },
-    Toggle {
-        label: &'static str,
-        hint: &'static str,
-        on: bool,
-    },
-    Separator,
     Blank,
     Back,
 }
@@ -111,13 +139,43 @@ impl TimeSettingRow {
             self,
             TimeSettingRow::EditField { .. }
                 | TimeSettingRow::Password { .. }
-                | TimeSettingRow::Toggle { .. }
                 | TimeSettingRow::Back
         )
     }
 }
 
-// ── Repo manager row types ────────────────────────────────────────────────────
+// ── Contract periods row types ──────��────────────────────────────────────────
+
+#[derive(Clone)]
+pub enum CpListRow {
+    Period {
+        index: usize,
+        from: NaiveDate,
+        weekly_hours: f64,
+    },
+    Blank,
+    AddPeriod,
+    Back,
+}
+
+impl CpListRow {
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            CpListRow::Period { .. } | CpListRow::AddPeriod | CpListRow::Back
+        )
+    }
+}
+
+// ── Add contract period focus ────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum AddCpFocus {
+    Monday,
+    Hours,
+}
+
+// ── Repo manager row types ────────────���───────────────────────────────────────
 
 #[derive(Clone)]
 pub enum RepoManagerRow {
@@ -147,7 +205,15 @@ impl RepoManagerRow {
     }
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
+// ── Contract period entry ─────────────────────────────────────────���──────────
+
+#[derive(Clone)]
+pub struct ContractPeriodEntry {
+    pub from: NaiveDate,
+    pub weekly_hours: f64,
+}
+
+// ── App ─────────���──────────────────────────��──────────────────────────────────
 
 pub struct App {
     pub screen: Screen,
@@ -155,6 +221,7 @@ pub struct App {
     pub settings_state: ListState,
     pub repo_manager_state: ListState,
     pub td_settings_state: ListState,
+    pub cp_list_state: ListState,
     pub input_mode: InputMode,
     // in-memory settings state
     pub sync_all: bool,
@@ -162,11 +229,15 @@ pub struct App {
     pub repos: Vec<RepoEntry>,
     // in-memory Time Doctor settings
     pub td_email: String,
-    pub td_timezone: String,
-    pub td_start_date: String,
+    pub td_timezone_idx: usize,
     pub td_skip_current_week: bool,
-    pub td_contract_periods: String,
+    pub td_use_time_cache: bool,
     pub td_password_is_set: bool,
+    pub contract_periods: Vec<ContractPeriodEntry>,
+    // Add contract period state
+    pub add_cp_monday: NaiveDate,
+    pub add_cp_hours_idx: usize,
+    pub add_cp_focus: AddCpFocus,
 }
 
 #[derive(Clone)]
@@ -174,6 +245,16 @@ pub struct RepoEntry {
     pub name: String,
     pub url: String,
     pub enabled: bool,
+}
+
+fn timezone_index(tz: &str) -> usize {
+    TIMEZONES.iter().position(|&t| t == tz).unwrap_or(7) // default: Europe/Istanbul
+}
+
+fn next_monday_from_today() -> NaiveDate {
+    let today = Local::now().date_naive();
+    let monday = get_week_start_monday(today);
+    if monday == today { monday } else { monday + chrono::Duration::days(7) }
 }
 
 impl App {
@@ -187,6 +268,8 @@ impl App {
         repo_manager_state.select(Some(0));
         let mut td_settings_state = ListState::default();
         td_settings_state.select(Some(0));
+        let mut cp_list_state = ListState::default();
+        cp_list_state.select(Some(0));
         let repos = config
             .sync
             .upstream_repos
@@ -198,28 +281,25 @@ impl App {
             })
             .collect();
         let td_email = config.time.email.clone().unwrap_or_default();
-        let td_timezone = config
+        let td_tz = config
             .time
             .timezone
-            .clone()
-            .unwrap_or_else(|| "Europe/Istanbul".to_string());
-        let td_start_date = config
-            .time
-            .start_date
-            .map(|d| d.to_string())
-            .unwrap_or_default();
+            .as_deref()
+            .unwrap_or("Europe/Istanbul");
+        let td_timezone_idx = timezone_index(td_tz);
         let td_skip_current_week = config.time.skip_current_week;
-        let td_contract_periods = config
+        let td_use_time_cache = config.time.use_time_cache;
+        let contract_periods: Vec<ContractPeriodEntry> = config
             .time
             .contract_periods
             .as_deref()
-            .map(|ps| {
-                ps.iter()
-                    .map(|p| format!("{}:{}", p.from, p.weekly_hours))
-                    .collect::<Vec<_>>()
-                    .join(",")
+            .unwrap_or(&[])
+            .iter()
+            .map(|p| ContractPeriodEntry {
+                from: p.from,
+                weekly_hours: p.weekly_hours,
             })
-            .unwrap_or_default();
+            .collect();
         let td_password_is_set = crate::time::auth::load_token_from_keychain().is_some();
         Ok(Self {
             screen: Screen::MainMenu,
@@ -227,16 +307,20 @@ impl App {
             settings_state,
             repo_manager_state,
             td_settings_state,
+            cp_list_state,
             input_mode: InputMode::Normal,
             sync_all: config.sync.sync_all_by_default,
             use_cache: config.sync.use_cache,
             repos,
             td_email,
-            td_timezone,
-            td_start_date,
+            td_timezone_idx,
             td_skip_current_week,
-            td_contract_periods,
+            td_use_time_cache,
             td_password_is_set,
+            contract_periods,
+            add_cp_monday: next_monday_from_today(),
+            add_cp_hours_idx: 1, // default 20h
+            add_cp_focus: AddCpFocus::Monday,
         })
     }
 
@@ -267,8 +351,18 @@ impl App {
                 hint: "exclude incomplete week",
                 on: self.td_skip_current_week,
             },
+            SettingRow::Toggle {
+                kind: ToggleKind::UseTimeCache,
+                label: "Use time cache",
+                hint: "",
+                on: self.td_use_time_cache,
+            },
+            SettingRow::TimezoneSelector {
+                value: TIMEZONES[self.td_timezone_idx].to_string(),
+            },
             SettingRow::Blank,
             SettingRow::TimeDoctorSettings,
+            SettingRow::ContractPeriodsLink,
             SettingRow::Blank,
             SettingRow::Back,
         ]
@@ -286,34 +380,26 @@ impl App {
                 is_set: self.td_password_is_set,
             },
             TimeSettingRow::Blank,
-            TimeSettingRow::Separator,
-            TimeSettingRow::Blank,
-            TimeSettingRow::EditField {
-                field: TimeDoctorField::Timezone,
-                label: "Timezone",
-                value: self.td_timezone.clone(),
-                masked: false,
-            },
-            TimeSettingRow::EditField {
-                field: TimeDoctorField::StartDate,
-                label: "Start date",
-                value: self.td_start_date.clone(),
-                masked: false,
-            },
-            TimeSettingRow::Toggle {
-                label: "Skip current week",
-                hint: "exclude incomplete week",
-                on: self.td_skip_current_week,
-            },
-            TimeSettingRow::EditField {
-                field: TimeDoctorField::ContractPeriods,
-                label: "Contract periods",
-                value: self.td_contract_periods.clone(),
-                masked: false,
-            },
-            TimeSettingRow::Blank,
             TimeSettingRow::Back,
         ]
+    }
+
+    pub fn cp_list_items(&self) -> Vec<CpListRow> {
+        let mut rows: Vec<CpListRow> = self
+            .contract_periods
+            .iter()
+            .enumerate()
+            .map(|(i, p)| CpListRow::Period {
+                index: i,
+                from: p.from,
+                weekly_hours: p.weekly_hours,
+            })
+            .collect();
+        rows.push(CpListRow::Blank);
+        rows.push(CpListRow::AddPeriod);
+        rows.push(CpListRow::Blank);
+        rows.push(CpListRow::Back);
+        rows
     }
 
     pub fn repo_manager_items(&self) -> Vec<RepoManagerRow> {
@@ -363,8 +449,25 @@ impl App {
                 self.td_skip_current_week = !self.td_skip_current_week;
                 self.persist_td_settings();
             }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::UseTimeCache,
+                ..
+            }) => {
+                self.td_use_time_cache = !self.td_use_time_cache;
+                self.persist_td_settings();
+            }
             _ => {}
         }
+    }
+
+    pub fn cycle_timezone(&mut self, delta: i32) {
+        let len = TIMEZONES.len();
+        if delta > 0 {
+            self.td_timezone_idx = (self.td_timezone_idx + 1) % len;
+        } else {
+            self.td_timezone_idx = (self.td_timezone_idx + len - 1) % len;
+        }
+        self.persist_td_settings();
     }
 
     pub fn toggle_repo(&mut self, name: &str) {
@@ -394,6 +497,63 @@ impl App {
         let cur = self.repo_manager_state.selected().unwrap_or(0);
         if cur > last_interactive {
             self.repo_manager_state.select(Some(last_interactive));
+        }
+    }
+
+    pub fn confirm_delete_period(&mut self, index: usize) {
+        self.input_mode = InputMode::ConfirmDeletePeriod(index);
+    }
+
+    pub fn execute_delete_period(&mut self, index: usize) {
+        if index < self.contract_periods.len() {
+            self.contract_periods.remove(index);
+            self.persist_td_settings();
+        }
+        self.input_mode = InputMode::Normal;
+        // Clamp cursor
+        let rows = self.cp_list_items();
+        let last_interactive = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.is_interactive())
+            .map(|(i, _)| i)
+            .next_back()
+            .unwrap_or(0);
+        let cur = self.cp_list_state.selected().unwrap_or(0);
+        if cur > last_interactive {
+            self.cp_list_state.select(Some(last_interactive));
+        }
+    }
+
+    pub fn init_add_contract_period(&mut self) {
+        self.add_cp_monday = next_monday_from_today();
+        self.add_cp_hours_idx = 1; // 20h
+        self.add_cp_focus = AddCpFocus::Monday;
+        self.screen = Screen::AddContractPeriod;
+    }
+
+    pub fn save_new_contract_period(&mut self) {
+        let entry = ContractPeriodEntry {
+            from: self.add_cp_monday,
+            weekly_hours: WEEKLY_HOURS_OPTIONS[self.add_cp_hours_idx],
+        };
+        self.contract_periods.push(entry);
+        self.contract_periods.sort_by_key(|p| p.from);
+        self.persist_td_settings();
+        self.screen = Screen::ContractPeriods;
+    }
+
+    pub fn cycle_add_cp_monday(&mut self, delta: i32) {
+        let days = if delta > 0 { 7 } else { -7 };
+        self.add_cp_monday += chrono::Duration::days(days);
+    }
+
+    pub fn cycle_add_cp_hours(&mut self, delta: i32) {
+        let len = WEEKLY_HOURS_OPTIONS.len();
+        if delta > 0 {
+            self.add_cp_hours_idx = (self.add_cp_hours_idx + 1) % len;
+        } else {
+            self.add_cp_hours_idx = (self.add_cp_hours_idx + len - 1) % len;
         }
     }
 
@@ -447,17 +607,23 @@ impl App {
             } else {
                 Some(self.td_email.clone())
             };
-            config.time.timezone = if self.td_timezone.is_empty() {
-                None
-            } else {
-                Some(self.td_timezone.clone())
-            };
-            config.time.start_date = NaiveDate::parse_from_str(&self.td_start_date, "%Y-%m-%d").ok();
+            config.time.timezone = Some(TIMEZONES[self.td_timezone_idx].to_string());
+            // start_date auto-derived from first contract period
+            config.time.start_date = self.contract_periods.first().map(|p| p.from);
             config.time.skip_current_week = self.td_skip_current_week;
-            config.time.contract_periods = if self.td_contract_periods.is_empty() {
+            config.time.use_time_cache = self.td_use_time_cache;
+            config.time.contract_periods = if self.contract_periods.is_empty() {
                 None
             } else {
-                crate::config::parse_contract_periods(&self.td_contract_periods).ok()
+                Some(
+                    self.contract_periods
+                        .iter()
+                        .map(|p| ContractPeriod {
+                            from: p.from,
+                            weekly_hours: p.weekly_hours,
+                        })
+                        .collect(),
+                )
             };
             let _ = crate::config::save(&config);
         }

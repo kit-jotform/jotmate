@@ -26,10 +26,13 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     let email = time_cfg.email.as_deref().unwrap();
     let company_id = crate::config::TIMEDOCTOR_COMPANY_ID;
     let timezone = time_cfg.timezone.as_deref().unwrap();
-    let start_date = time_cfg.start_date.unwrap();
+    let contract_periods = time_cfg.contract_periods.as_deref().unwrap_or(&[]);
+    let start_date = time_cfg
+        .start_date
+        .or_else(|| contract_periods.first().map(|p| p.from))
+        .ok_or_else(|| anyhow::anyhow!("No start date or contract periods configured"))?;
     let skip_current = args.skip_current_week || time_cfg.skip_current_week;
     let reset_from = time_cfg.reset_cumulative_from_date;
-    let contract_periods = time_cfg.contract_periods.as_deref().unwrap_or(&[]);
 
     // Get auth token (with retry on 401)
     let cookie = auth::get_or_refresh_token(email).await?;

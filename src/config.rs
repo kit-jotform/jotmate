@@ -76,6 +76,8 @@ pub struct TimeConfig {
     pub start_date: Option<NaiveDate>,
     #[serde(default = "default_true")]
     pub skip_current_week: bool,
+    #[serde(default = "default_true")]
+    pub use_time_cache: bool,
     pub contract_periods: Option<Vec<ContractPeriod>>,
     pub reset_cumulative_from_date: Option<NaiveDate>,
 }
