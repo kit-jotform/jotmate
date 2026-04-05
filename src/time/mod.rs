@@ -32,6 +32,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         .or_else(|| contract_periods.first().map(|p| p.from))
         .ok_or_else(|| anyhow::anyhow!("No start date or contract periods configured"))?;
     let skip_current = args.skip_current_week || time_cfg.skip_current_week;
+    let show_cumulative = time_cfg.show_cumulative;
     let reset_from = time_cfg.reset_cumulative_from_date;
 
     // Get auth token (with retry on 401)
@@ -99,7 +100,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     }
 
     compute::compute_cumulative(&mut rows, reset_from);
-    display::print_results(&rows);
+    display::print_results(&rows, show_cumulative);
 
     Ok(())
 }

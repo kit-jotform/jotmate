@@ -10,8 +10,29 @@ use crate::cli::SyncArgs;
 use crate::config::UpstreamRepo;
 use cache::compute_github_base;
 
-pub async fn run(args: SyncArgs) -> Result<()> {
+pub async fn run(mut args: SyncArgs) -> Result<()> {
     let config = crate::config::load()?;
+
+    // Merge config defaults into args (CLI flags override config)
+    if config.sync.sync_all_by_default && !args.sync_all {
+        args.sync_all = true;
+    }
+    if config.sync.skip_fork_sync && !args.skip_fork_sync {
+        args.skip_fork_sync = true;
+    }
+    if config.sync.skip_rebase && !args.skip_rebase {
+        args.skip_rebase = true;
+    }
+    if config.sync.skip_rds_sync && !args.skip_rds_sync {
+        args.skip_rds_sync = true;
+    }
+    if config.sync.skip_git_fetch && !args.skip_fetch {
+        args.skip_fetch = true;
+    }
+    if config.sync.skip_dirty_sync && !args.skip_dirty_sync {
+        args.skip_dirty_sync = true;
+    }
+
     let upstream_repos = &config.sync.upstream_repos;
     let paths = resolve_repo_paths(upstream_repos, config.sync.use_cache)?;
     let github_base = compute_github_base(&paths).ok_or_else(|| {

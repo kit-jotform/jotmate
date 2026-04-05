@@ -78,8 +78,14 @@ pub enum TimeDoctorField {
 pub enum ToggleKind {
     SyncAll,
     UseCache,
+    SkipForkSync,
+    SkipRebase,
+    SkipRdsSync,
+    SkipGitFetch,
+    SkipDirtySync,
     SkipCurrentWeek,
     UseTimeCache,
+    ShowCumulative,
 }
 
 #[derive(Clone)]
@@ -227,12 +233,18 @@ pub struct App {
     // in-memory settings state
     pub sync_all: bool,
     pub use_cache: bool,
+    pub skip_fork_sync: bool,
+    pub skip_rebase: bool,
+    pub skip_rds_sync: bool,
+    pub skip_git_fetch: bool,
+    pub skip_dirty_sync: bool,
     pub repos: Vec<RepoEntry>,
     // in-memory Time Doctor settings
     pub td_email: String,
     pub td_timezone_idx: usize,
     pub td_skip_current_week: bool,
     pub td_use_time_cache: bool,
+    pub td_show_cumulative: bool,
     pub td_password_is_set: bool,
     pub contract_periods: Vec<ContractPeriodEntry>,
     // Add contract period state
@@ -290,6 +302,7 @@ impl App {
         let td_timezone_idx = timezone_index(td_tz);
         let td_skip_current_week = config.time.skip_current_week;
         let td_use_time_cache = config.time.use_time_cache;
+        let td_show_cumulative = config.time.show_cumulative;
         let contract_periods: Vec<ContractPeriodEntry> = config
             .time
             .contract_periods
@@ -312,11 +325,17 @@ impl App {
             input_mode: InputMode::Normal,
             sync_all: config.sync.sync_all_by_default,
             use_cache: config.sync.use_cache,
+            skip_fork_sync: config.sync.skip_fork_sync,
+            skip_rebase: config.sync.skip_rebase,
+            skip_rds_sync: config.sync.skip_rds_sync,
+            skip_git_fetch: config.sync.skip_git_fetch,
+            skip_dirty_sync: config.sync.skip_dirty_sync,
             repos,
             td_email,
             td_timezone_idx,
             td_skip_current_week,
             td_use_time_cache,
+            td_show_cumulative,
             td_password_is_set,
             contract_periods,
             add_cp_monday: next_monday_from_today(),
@@ -341,6 +360,36 @@ impl App {
                 hint: "",
                 on: self.use_cache,
             },
+            SettingRow::Toggle {
+                kind: ToggleKind::SkipForkSync,
+                label: "Skip fork sync",
+                hint: "skip fetch+merge+push upstream",
+                on: self.skip_fork_sync,
+            },
+            SettingRow::Toggle {
+                kind: ToggleKind::SkipRebase,
+                label: "Skip rebase",
+                hint: "skip branch rebase after merge",
+                on: self.skip_rebase,
+            },
+            SettingRow::Toggle {
+                kind: ToggleKind::SkipRdsSync,
+                label: "Skip RDS sync",
+                hint: "skip ./sync in each repo",
+                on: self.skip_rds_sync,
+            },
+            SettingRow::Toggle {
+                kind: ToggleKind::SkipGitFetch,
+                label: "Skip git fetch",
+                hint: "skip git fetch upstream",
+                on: self.skip_git_fetch,
+            },
+            SettingRow::Toggle {
+                kind: ToggleKind::SkipDirtySync,
+                label: "Skip dirty repo sync",
+                hint: "skip ./sync on uncommitted changes",
+                on: self.skip_dirty_sync,
+            },
             SettingRow::Blank,
             SettingRow::ManageRepos,
             SettingRow::Blank,
@@ -357,6 +406,12 @@ impl App {
                 label: "Use time cache",
                 hint: "",
                 on: self.td_use_time_cache,
+            },
+            SettingRow::Toggle {
+                kind: ToggleKind::ShowCumulative,
+                label: "Show cumulative balance",
+                hint: "running hour balance",
+                on: self.td_show_cumulative,
             },
             SettingRow::Blank,
             SettingRow::TimezoneSelector {
@@ -445,6 +500,41 @@ impl App {
                 self.persist_settings();
             }
             Some(SettingRow::Toggle {
+                kind: ToggleKind::SkipForkSync,
+                ..
+            }) => {
+                self.skip_fork_sync = !self.skip_fork_sync;
+                self.persist_settings();
+            }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::SkipRebase,
+                ..
+            }) => {
+                self.skip_rebase = !self.skip_rebase;
+                self.persist_settings();
+            }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::SkipRdsSync,
+                ..
+            }) => {
+                self.skip_rds_sync = !self.skip_rds_sync;
+                self.persist_settings();
+            }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::SkipGitFetch,
+                ..
+            }) => {
+                self.skip_git_fetch = !self.skip_git_fetch;
+                self.persist_settings();
+            }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::SkipDirtySync,
+                ..
+            }) => {
+                self.skip_dirty_sync = !self.skip_dirty_sync;
+                self.persist_settings();
+            }
+            Some(SettingRow::Toggle {
                 kind: ToggleKind::SkipCurrentWeek,
                 ..
             }) => {
@@ -456,6 +546,13 @@ impl App {
                 ..
             }) => {
                 self.td_use_time_cache = !self.td_use_time_cache;
+                self.persist_td_settings();
+            }
+            Some(SettingRow::Toggle {
+                kind: ToggleKind::ShowCumulative,
+                ..
+            }) => {
+                self.td_show_cumulative = !self.td_show_cumulative;
                 self.persist_td_settings();
             }
             _ => {}
@@ -589,6 +686,11 @@ impl App {
         if let Ok(mut config) = crate::config::load() {
             config.sync.sync_all_by_default = self.sync_all;
             config.sync.use_cache = self.use_cache;
+            config.sync.skip_fork_sync = self.skip_fork_sync;
+            config.sync.skip_rebase = self.skip_rebase;
+            config.sync.skip_rds_sync = self.skip_rds_sync;
+            config.sync.skip_git_fetch = self.skip_git_fetch;
+            config.sync.skip_dirty_sync = self.skip_dirty_sync;
             config.sync.upstream_repos = self
                 .repos
                 .iter()
@@ -614,6 +716,7 @@ impl App {
             config.time.start_date = self.contract_periods.first().map(|p| p.from);
             config.time.skip_current_week = self.td_skip_current_week;
             config.time.use_time_cache = self.td_use_time_cache;
+            config.time.show_cumulative = self.td_show_cumulative;
             config.time.contract_periods = if self.contract_periods.is_empty() {
                 None
             } else {

@@ -29,6 +29,11 @@ trim() {
 # Parse command-line arguments
 FILTER_PROJECTS=()
 FORCE_SYNC_ALL=false
+SKIP_FORK_SYNC=false
+SKIP_REBASE=false
+SKIP_RDS_SYNC=false
+SKIP_GIT_FETCH=false
+SKIP_DIRTY_SYNC=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --only)
@@ -52,9 +57,29 @@ while [[ $# -gt 0 ]]; do
             FORCE_SYNC_ALL=true
             shift
             ;;
+        --skip-fork-sync)
+            SKIP_FORK_SYNC=true
+            shift
+            ;;
+        --skip-rebase)
+            SKIP_REBASE=true
+            shift
+            ;;
+        --skip-rds-sync)
+            SKIP_RDS_SYNC=true
+            shift
+            ;;
+        --skip-fetch)
+            SKIP_GIT_FETCH=true
+            shift
+            ;;
+        --skip-dirty-sync)
+            SKIP_DIRTY_SYNC=true
+            shift
+            ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
-            echo "Usage: $0 [--only project1,project2,...] [--sync-all]"
+            echo "Usage: $0 [--only project1,project2,...] [--sync-all] [--skip-fork-sync] [--skip-rebase] [--skip-rds-sync] [--skip-fetch] [--skip-dirty-sync]"
             exit 1
             ;;
     esac
@@ -165,8 +190,12 @@ prepare_project_sync() {
     (
         cd "$PROJECT_DIR" >/dev/null 2>&1 || exit 0
 
-        # Any local modifications (including untracked files) should trigger ./sync.
+        # Any local modifications (including untracked files) should trigger ./sync,
+        # unless --skip-dirty-sync is set.
         if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+            if [ "$SKIP_DIRTY_SYNC" = true ]; then
+                exit 1  # skip ./sync
+            fi
             exit 0
         fi
 
@@ -209,25 +238,34 @@ prepare_project_sync() {
 sync_fork() {
     local PROJECT_DIR=$1
     local PROJECT_NAME=$2
-    
+
+    if [ "$SKIP_FORK_SYNC" = true ]; then
+        echo -e "${YELLOW}[${PROJECT_NAME}]${NC} Fork sync skipped (--skip-fork-sync)"
+        return $FORK_SYNC_EXIT_UNCHANGED
+    fi
+
     echo -e "${BLUE}[${PROJECT_NAME}]${NC} Checking if fork sync is needed..."
-    
+
     cd "$PROJECT_DIR" || {
         echo -e "${RED}[${PROJECT_NAME}]${NC} Failed to enter directory"
         return 1
     }
-    
+
     # Check if upstream remote exists
     if ! git remote | grep -q "^upstream$"; then
         echo -e "${YELLOW}[${PROJECT_NAME}]${NC} No upstream remote configured, skipping..."
         return 0
     fi
-    
-    # Fetch upstream to check if sync is needed
-    echo -e "${BLUE}[${PROJECT_NAME}]${NC} Fetching upstream..."
-    if ! git fetch upstream 2>/dev/null; then
-        echo -e "${RED}[${PROJECT_NAME}]${NC} Failed to fetch upstream"
-        return 1
+
+    if [ "$SKIP_GIT_FETCH" = true ]; then
+        echo -e "${YELLOW}[${PROJECT_NAME}]${NC} Git fetch skipped (--skip-fetch)"
+    else
+        # Fetch upstream to check if sync is needed
+        echo -e "${BLUE}[${PROJECT_NAME}]${NC} Fetching upstream..."
+        if ! git fetch upstream 2>/dev/null; then
+            echo -e "${RED}[${PROJECT_NAME}]${NC} Failed to fetch upstream"
+            return 1
+        fi
     fi
     
     # Detect the default branch name (try main, master, or get from upstream HEAD)
@@ -320,23 +358,27 @@ sync_fork() {
             [ "$STASHED" = true ] && git stash pop >/dev/null 2>&1
             return 1
         fi
-        
-        echo -e "${BLUE}[${PROJECT_NAME}]${NC} Rebasing ${CURRENT_BRANCH} on ${DEFAULT_BRANCH}..."
-        if ! git rebase "$DEFAULT_BRANCH" 2>/dev/null; then
-            echo -e "${RED}[${PROJECT_NAME}]${NC} Rebase conflict detected, aborting rebase..."
-            git rebase --abort 2>/dev/null
-            [ "$STASHED" = true ] && git stash pop >/dev/null 2>&1
-            return 1
+
+        if [ "$SKIP_REBASE" = true ]; then
+            echo -e "${YELLOW}[${PROJECT_NAME}]${NC} Rebase skipped (--skip-rebase)"
+        else
+            echo -e "${BLUE}[${PROJECT_NAME}]${NC} Rebasing ${CURRENT_BRANCH} on ${DEFAULT_BRANCH}..."
+            if ! git rebase "$DEFAULT_BRANCH" 2>/dev/null; then
+                echo -e "${RED}[${PROJECT_NAME}]${NC} Rebase conflict detected, aborting rebase..."
+                git rebase --abort 2>/dev/null
+                [ "$STASHED" = true ] && git stash pop >/dev/null 2>&1
+                return 1
+            fi
+
+            echo -e "${BLUE}[${PROJECT_NAME}]${NC} Pushing ${CURRENT_BRANCH} with --force-with-lease..."
+            if ! git push --force-with-lease origin "$CURRENT_BRANCH" 2>/dev/null; then
+                echo -e "${RED}[${PROJECT_NAME}]${NC} Failed to push ${CURRENT_BRANCH}"
+                [ "$STASHED" = true ] && git stash pop >/dev/null 2>&1
+                return 1
+            fi
+
+            echo -e "${GREEN}[${PROJECT_NAME}]${NC} Successfully rebased and pushed ${CURRENT_BRANCH}"
         fi
-        
-        echo -e "${BLUE}[${PROJECT_NAME}]${NC} Pushing ${CURRENT_BRANCH} with --force-with-lease..."
-        if ! git push --force-with-lease origin "$CURRENT_BRANCH" 2>/dev/null; then
-            echo -e "${RED}[${PROJECT_NAME}]${NC} Failed to push ${CURRENT_BRANCH}"
-            [ "$STASHED" = true ] && git stash pop >/dev/null 2>&1
-            return 1
-        fi
-        
-        echo -e "${GREEN}[${PROJECT_NAME}]${NC} Successfully rebased and pushed ${CURRENT_BRANCH}"
     fi
     
     # Pop stashed changes if any
@@ -515,69 +557,75 @@ for i in "${!PROJECTS[@]}"; do
     display_fork_output "$PROJECT_NAME" "$FORK_LOG_FILE" "${FORK_EXIT_CODES[$i]}"
 done
 
-echo -e "\n${CYAN}╔════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║     Starting Concurrent Sync Jobs      ║${NC}"
-echo -e "${CYAN}╚════════════════════════════════════════╝${NC}\n"
+if [ "$SKIP_RDS_SYNC" = true ]; then
+    echo -e "\n${YELLOW}RDS sync skipped (--skip-rds-sync)${NC}\n"
+else
+    echo -e "\n${CYAN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║     Starting Concurrent Sync Jobs      ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}\n"
 
-# Initialize arrays to track sync processes
-PIDS=()
-SYNC_PID_INDEXES=()
+    # Initialize arrays to track sync processes
+    PIDS=()
+    SYNC_PID_INDEXES=()
 
-# Run all sync commands in parallel (each in its own directory)
-# Capture output to separate files (only if included in filter)
-for i in "${!PROJECTS[@]}"; do
-    PROJECT_NAME="${PROJECTS[$i]}"
-    if [ "$FORCE_SYNC_ALL" != true ] && ! should_include_project "$PROJECT_NAME"; then
-        continue
-    fi
-
-    SYNC_LOG_FILE=$(sync_log_path "$PROJECT_NAME")
-    if prepare_project_sync "$GITHUB_BASE/$PROJECT_NAME" "$PROJECT_NAME" "${FORK_EXIT_CODES[$i]}"; then
-        (cd "$GITHUB_BASE/$PROJECT_NAME" && ./sync > "$SYNC_LOG_FILE" 2>&1) &
-        PID=$!
-        PIDS+=("$PID")
-        SYNC_PID_INDEXES+=("$i")
-        echo -e "${GREEN}✓${NC} Started ${BLUE}${PROJECT_NAME}/sync${NC} (PID: $PID)"
-    else
-        PREPARE_STATUS=$?
-        if [ "$PREPARE_STATUS" -eq 2 ]; then
-            echo "Failed: pull-before-sync check failed (git pull --ff-only origin <current-branch>)" > "$SYNC_LOG_FILE"
-            SYNC_EXIT_CODES[$i]=1
-            echo -e "${RED}✗${NC} Failed pre-sync pull for ${BLUE}${PROJECT_NAME}${NC}; skipping ./sync"
-        else
-            echo "Skipped: no upstream updates, no local changes, and nothing to pull from origin" > "$SYNC_LOG_FILE"
-            echo -e "${YELLOW}○${NC} Skipped ${BLUE}${PROJECT_NAME}/sync${NC} (no upstream updates, no local changes, nothing to pull)"
+    # Run all sync commands in parallel (each in its own directory)
+    # Capture output to separate files (only if included in filter)
+    for i in "${!PROJECTS[@]}"; do
+        PROJECT_NAME="${PROJECTS[$i]}"
+        if [ "$FORCE_SYNC_ALL" != true ] && ! should_include_project "$PROJECT_NAME"; then
+            continue
         fi
-    fi
-done
 
-if [ ${#PIDS[@]} -gt 0 ]; then
-    wait_for_pids_with_progress \
-        "PIDS" \
-        "⏳ Waiting for all processes to complete..." \
-        "process(es) still running..." \
-        "✓ All processes completed!"
-
-    # Wait for all processes and capture their exit codes
-    for idx in "${!PIDS[@]}"; do
-        pid="${PIDS[$idx]}"
-        wait "$pid"
-        SYNC_EXIT_CODES[${SYNC_PID_INDEXES[$idx]}]=$?
+        SYNC_LOG_FILE=$(sync_log_path "$PROJECT_NAME")
+        if prepare_project_sync "$GITHUB_BASE/$PROJECT_NAME" "$PROJECT_NAME" "${FORK_EXIT_CODES[$i]}"; then
+            (cd "$GITHUB_BASE/$PROJECT_NAME" && ./sync > "$SYNC_LOG_FILE" 2>&1) &
+            PID=$!
+            PIDS+=("$PID")
+            SYNC_PID_INDEXES+=("$i")
+            echo -e "${GREEN}✓${NC} Started ${BLUE}${PROJECT_NAME}/sync${NC} (PID: $PID)"
+        else
+            PREPARE_STATUS=$?
+            if [ "$PREPARE_STATUS" -eq 2 ]; then
+                echo "Failed: pull-before-sync check failed (git pull --ff-only origin <current-branch>)" > "$SYNC_LOG_FILE"
+                SYNC_EXIT_CODES[$i]=1
+                echo -e "${RED}✗${NC} Failed pre-sync pull for ${BLUE}${PROJECT_NAME}${NC}; skipping ./sync"
+            else
+                echo "Skipped: no upstream updates, no local changes, and nothing to pull from origin" > "$SYNC_LOG_FILE"
+                echo -e "${YELLOW}○${NC} Skipped ${BLUE}${PROJECT_NAME}/sync${NC} (no upstream updates, no local changes, nothing to pull)"
+            fi
+        fi
     done
 fi
 
-# Display results with output
-echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║              Sync Results              ║${NC}"
-echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+if [ "$SKIP_RDS_SYNC" != true ]; then
+    if [ ${#PIDS[@]} -gt 0 ]; then
+        wait_for_pids_with_progress \
+            "PIDS" \
+            "⏳ Waiting for all processes to complete..." \
+            "process(es) still running..." \
+            "✓ All processes completed!"
 
-for i in "${!PROJECTS[@]}"; do
-    PROJECT_NAME="${PROJECTS[$i]}"
-    if [ "$FORCE_SYNC_ALL" != true ] && ! should_include_project "$PROJECT_NAME"; then
-        continue
+        # Wait for all processes and capture their exit codes
+        for idx in "${!PIDS[@]}"; do
+            pid="${PIDS[$idx]}"
+            wait "$pid"
+            SYNC_EXIT_CODES[${SYNC_PID_INDEXES[$idx]}]=$?
+        done
     fi
-    display_output "${PROJECT_NAME}/sync" "$(sync_log_path "$PROJECT_NAME")" "${SYNC_EXIT_CODES[$i]}"
-done
+
+    # Display results with output
+    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║              Sync Results              ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+
+    for i in "${!PROJECTS[@]}"; do
+        PROJECT_NAME="${PROJECTS[$i]}"
+        if [ "$FORCE_SYNC_ALL" != true ] && ! should_include_project "$PROJECT_NAME"; then
+            continue
+        fi
+        display_output "${PROJECT_NAME}/sync" "$(sync_log_path "$PROJECT_NAME")" "${SYNC_EXIT_CODES[$i]}"
+    done
+fi
 
 # Final summary
 echo -e "\n${CYAN}╔════════════════════════════════════════╗${NC}"

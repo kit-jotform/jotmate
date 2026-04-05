@@ -26,6 +26,26 @@ pub struct SyncArgs {
     /// Force sync all repos regardless of upstream diff
     #[arg(long)]
     pub sync_all: bool,
+
+    /// Skip fork sync (fetch upstream + merge + push)
+    #[arg(long)]
+    pub skip_fork_sync: bool,
+
+    /// Skip rebasing current branch after fork sync
+    #[arg(long)]
+    pub skip_rebase: bool,
+
+    /// Skip running ./sync in each repo
+    #[arg(long)]
+    pub skip_rds_sync: bool,
+
+    /// Skip git fetch upstream
+    #[arg(long)]
+    pub skip_fetch: bool,
+
+    /// Skip RDS sync when repo has uncommitted changes
+    #[arg(long)]
+    pub skip_dirty_sync: bool,
 }
 
 #[derive(Args, Clone, Debug, Default)]

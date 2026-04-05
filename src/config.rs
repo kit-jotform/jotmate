@@ -53,6 +53,21 @@ pub struct SyncConfig {
     /// If true, use the repo path cache; if false, always rediscover
     #[serde(default = "default_true")]
     pub use_cache: bool,
+    /// Skip the fork sync step (git fetch upstream + merge + push)
+    #[serde(default = "default_true")]
+    pub skip_fork_sync: bool,
+    /// Skip rebasing the current branch onto the default branch after fork sync
+    #[serde(default = "default_true")]
+    pub skip_rebase: bool,
+    /// Skip running ./sync in each repo directory
+    #[serde(default = "default_true")]
+    pub skip_rds_sync: bool,
+    /// Skip git fetch upstream (useful for offline work)
+    #[serde(default = "default_true")]
+    pub skip_git_fetch: bool,
+    /// Skip RDS sync when repo has uncommitted changes
+    #[serde(default = "default_true")]
+    pub skip_dirty_sync: bool,
 }
 
 impl Default for SyncConfig {
@@ -62,6 +77,11 @@ impl Default for SyncConfig {
             default_only: None,
             sync_all_by_default: false,
             use_cache: true,
+            skip_fork_sync: true,
+            skip_rebase: true,
+            skip_rds_sync: true,
+            skip_git_fetch: true,
+            skip_dirty_sync: true,
         }
     }
 }
@@ -78,6 +98,8 @@ pub struct TimeConfig {
     pub skip_current_week: bool,
     #[serde(default = "default_true")]
     pub use_time_cache: bool,
+    #[serde(default = "default_true")]
+    pub show_cumulative: bool,
     pub contract_periods: Option<Vec<ContractPeriod>>,
     pub reset_cumulative_from_date: Option<NaiveDate>,
 }

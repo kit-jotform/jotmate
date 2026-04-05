@@ -34,6 +34,21 @@ fn build_flag_args(args: &SyncArgs) -> Vec<String> {
     if args.sync_all {
         flags.push("--sync-all".to_string());
     }
+    if args.skip_fork_sync {
+        flags.push("--skip-fork-sync".to_string());
+    }
+    if args.skip_rebase {
+        flags.push("--skip-rebase".to_string());
+    }
+    if args.skip_rds_sync {
+        flags.push("--skip-rds-sync".to_string());
+    }
+    if args.skip_fetch {
+        flags.push("--skip-fetch".to_string());
+    }
+    if args.skip_dirty_sync {
+        flags.push("--skip-dirty-sync".to_string());
+    }
     flags
 }
 
