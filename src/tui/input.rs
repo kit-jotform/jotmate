@@ -1,7 +1,7 @@
 use crossterm::event::KeyCode;
 
 use super::app::{
-    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
+    App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
     SettingRow, TimeDoctorField, TimeSettingRow, MAIN_ITEMS,
 };
 
@@ -54,9 +54,10 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
         },
         Screen::ContractPeriods => match &app.input_mode {
             InputMode::ConfirmDeletePeriod(_) => handle_confirm_delete_period(app, code),
+            InputMode::EditingCpMonday => handle_cp_monday_edit(app, code),
+            InputMode::EditingCpHours => handle_cp_hours_edit(app, code),
             _ => handle_contract_periods(app, code),
         },
-        Screen::AddContractPeriod => handle_add_contract_period(app, code),
     }
 }
 
@@ -191,8 +192,12 @@ fn handle_general_toggles(app: &mut App, code: KeyCode, is_sync: bool) -> Action
             Some(GeneralToggleRow::Back) => {
                 app.screen = Screen::Settings;
             }
-            Some(GeneralToggleRow::Toggle { kind, .. }) => {
-                app.toggle_by_kind(*kind);
+            Some(GeneralToggleRow::Toggle {
+                kind, disabled, ..
+            }) => {
+                if !disabled {
+                    app.toggle_by_kind(*kind);
+                }
             }
             Some(GeneralToggleRow::TimezoneSelector { .. }) => {
                 app.input_mode = InputMode::SelectingTimezone;
@@ -446,8 +451,14 @@ fn handle_contract_periods(app: &mut App, code: KeyCode) -> Action {
                 Some(CpListRow::Back) => {
                     app.screen = Screen::Settings;
                 }
-                Some(CpListRow::AddPeriod) => {
-                    app.init_add_contract_period();
+                Some(CpListRow::MondayField) => {
+                    app.input_mode = InputMode::EditingCpMonday;
+                }
+                Some(CpListRow::HoursField) => {
+                    app.input_mode = InputMode::EditingCpHours;
+                }
+                Some(CpListRow::SavePeriod) => {
+                    app.save_new_contract_period();
                 }
                 Some(CpListRow::Period { index, .. }) => {
                     app.confirm_delete_period(*index);
@@ -481,29 +492,25 @@ fn handle_confirm_delete_period(app: &mut App, code: KeyCode) -> Action {
     Action::Continue
 }
 
-fn handle_add_contract_period(app: &mut App, code: KeyCode) -> Action {
+fn handle_cp_monday_edit(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Up => match app.add_cp_focus {
-            AddCpFocus::Monday => app.cycle_add_cp_monday(1),
-            AddCpFocus::Hours => app.cycle_add_cp_hours(1),
-        },
-        KeyCode::Down => match app.add_cp_focus {
-            AddCpFocus::Monday => app.cycle_add_cp_monday(-1),
-            AddCpFocus::Hours => app.cycle_add_cp_hours(-1),
-        },
-        KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
-            app.add_cp_focus = match app.add_cp_focus {
-                AddCpFocus::Monday => AddCpFocus::Hours,
-                AddCpFocus::Hours => AddCpFocus::Monday,
-            };
+        KeyCode::Up | KeyCode::Left => app.cycle_add_cp_monday(1),
+        KeyCode::Down | KeyCode::Right => app.cycle_add_cp_monday(-1),
+        KeyCode::Enter | KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
         }
-        KeyCode::Enter => {
-            app.save_new_contract_period();
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_cp_hours_edit(app: &mut App, code: KeyCode) -> Action {
+    match code {
+        KeyCode::Up | KeyCode::Left => app.cycle_add_cp_hours(1),
+        KeyCode::Down | KeyCode::Right => app.cycle_add_cp_hours(-1),
+        KeyCode::Enter | KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
         }
-        KeyCode::Esc | KeyCode::Backspace => {
-            app.screen = Screen::ContractPeriods;
-        }
-        KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
     Action::Continue

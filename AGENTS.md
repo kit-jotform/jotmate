@@ -78,6 +78,10 @@ All colors use `Color::Indexed(n)` for terminal-safe 256-color values. Never use
 - Selected rows render with: `▸ ` prefix (in `C_PRIMARY`) + text in `C_ACCENT + BOLD`.
 - Unselected rows render with: `  ` indent + text in `C_TEXT` (or `C_MUTED` for nav items like Back).
 
+**Enter-to-activate pattern** (inline value selectors):
+
+Inline value selectors (dates, hours, timezone, etc.) must **not** enter editing mode on focus. Arrow keys navigate between rows; Enter activates editing on the focused field. While editing, ↑↓ cycle the value and Enter/Esc confirms. This keeps navigation and editing separate so users can browse without accidentally changing values. The editing state renders as `< value >` with an inline hint `↑↓ change  •  ↵ confirm`. Examples: `InputMode::SelectingTimezone`, `InputMode::EditingCpMonday`, `InputMode::EditingCpHours`.
+
 **Screen header pattern** (Settings and RepoManager screens share `draw_screen_header`):
 
 - 3-row `LOGO_SMALL` centered at the top, colored `C_PRIMARY`.

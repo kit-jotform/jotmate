@@ -9,7 +9,7 @@ use ratatui::{
 use ratatui::widgets::{Block, Borders, Clear};
 
 use super::app::{
-    AddCpFocus, App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
+    App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen,
     SettingRow, TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
 };
 use super::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
@@ -91,12 +91,28 @@ fn back_item(is_sel: bool) -> ListItem<'static> {
     ]))
 }
 
-fn toggle_item(is_sel: bool, on: bool, label: String) -> ListItem<'static> {
+fn toggle_item(
+    is_sel: bool,
+    on: bool,
+    label: String,
+    indent: bool,
+    disabled: bool,
+) -> ListItem<'static> {
+    let prefix = if indent { "    " } else { "" };
     let badge = if on { "[ON ] " } else { "[OFF] " };
-    let badge_color = if on { C_SUCCESS } else { C_MUTED };
-    if is_sel {
+    if disabled {
+        // Disabled items are fully muted
+        let arrow = if is_sel { "▸ " } else { "  " };
+        ListItem::new(Line::from(vec![
+            Span::styled(arrow, Style::default().fg(C_MUTED)),
+            Span::styled(prefix, Style::default().fg(C_MUTED)),
+            Span::styled(badge, Style::default().fg(C_MUTED)),
+            Span::styled(label, Style::default().fg(C_MUTED)),
+        ]))
+    } else if is_sel {
         ListItem::new(Line::from(vec![
             Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled(prefix, Style::default()),
             Span::styled(
                 badge,
                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
@@ -107,8 +123,10 @@ fn toggle_item(is_sel: bool, on: bool, label: String) -> ListItem<'static> {
             ),
         ]))
     } else {
+        let badge_color = if on { C_SUCCESS } else { C_MUTED };
         ListItem::new(Line::from(vec![
             Span::raw("  "),
+            Span::styled(prefix, Style::default()),
             Span::styled(
                 badge,
                 Style::default()
@@ -145,7 +163,6 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::TdGeneralSettings => draw_general_toggles(f, app, "Time Doctor", false),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
-        Screen::AddContractPeriod => draw_add_contract_period(f, app),
     }
 }
 
@@ -453,14 +470,19 @@ fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync:
                 GeneralToggleRow::Blank => ListItem::new(Line::raw("")),
                 GeneralToggleRow::Back => back_item(is_sel),
                 GeneralToggleRow::Toggle {
-                    label, hint, on, ..
+                    label,
+                    hint,
+                    on,
+                    indent,
+                    disabled,
+                    ..
                 } => {
                     let label_text = if hint.is_empty() {
                         label.to_string()
                     } else {
                         format!("{label}  ({hint})")
                     };
-                    toggle_item(is_sel, *on, label_text)
+                    toggle_item(is_sel, *on, label_text, *indent, *disabled)
                 }
                 GeneralToggleRow::TimezoneSelector { value } => {
                     let label_w = 18usize;
@@ -537,7 +559,7 @@ fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
                 RepoManagerRow::Back => back_item(is_sel),
 
                 RepoManagerRow::RepoToggle { name, url, enabled } => {
-                    toggle_item(is_sel, *enabled, format!("{name}  <{url}>"))
+                    toggle_item(is_sel, *enabled, format!("{name}  <{url}>"), false, false)
                 }
 
                 RepoManagerRow::RemoveReposLink => {
@@ -796,6 +818,9 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
 
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDeletePeriod(_) => hint_confirm_cancel(),
+        InputMode::EditingCpMonday | InputMode::EditingCpHours => {
+            hint_muted(&["↑↓", " change  •  ", "↵", " confirm"])
+        }
         _ => hint_select_back(),
     };
 
@@ -811,6 +836,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
 
     let cp_rows = app.cp_list_items();
     let selected = app.cp_list_state.selected().unwrap_or(0);
+    let label_w = 18usize;
 
     let items: Vec<ListItem> = cp_rows
         .iter()
@@ -820,7 +846,92 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
             match row {
                 CpListRow::Blank => ListItem::new(Line::raw("")),
                 CpListRow::Back => back_item(is_sel),
-                CpListRow::AddPeriod => link_item(is_sel, "+ Add period"),
+                CpListRow::SavePeriod => link_item(is_sel, "Save period"),
+                CpListRow::MondayField => {
+                    let label = format!("{:<width$}", "From Monday", width = label_w);
+                    let value = app.add_cp_monday.to_string();
+                    let editing = matches!(app.input_mode, InputMode::EditingCpMonday);
+                    if editing {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                label,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                format!("< {value} >"),
+                                Style::default().fg(C_ACCENT),
+                            ),
+                            Span::styled(
+                                "  ↑↓ change  •  ↵ confirm",
+                                Style::default().fg(C_MUTED),
+                            ),
+                        ]))
+                    } else if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                label,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                value,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(label, Style::default().fg(C_TEXT)),
+                            Span::styled(value, Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
+                CpListRow::HoursField => {
+                    let label = format!("{:<width$}", "Weekly hours", width = label_w);
+                    let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp_hours_idx];
+                    let value = if hours_val.fract() == 0.0 {
+                        format!("{}h", hours_val as u32)
+                    } else {
+                        format!("{hours_val}h")
+                    };
+                    let editing = matches!(app.input_mode, InputMode::EditingCpHours);
+                    if editing {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                label,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                format!("< {value} >"),
+                                Style::default().fg(C_ACCENT),
+                            ),
+                            Span::styled(
+                                "  ↑↓ change  •  ↵ confirm",
+                                Style::default().fg(C_MUTED),
+                            ),
+                        ]))
+                    } else if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                label,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                value,
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(label, Style::default().fg(C_TEXT)),
+                            Span::styled(value, Style::default().fg(C_TEXT)),
+                        ]))
+                    }
+                }
                 CpListRow::Period {
                     from, weekly_hours, ..
                 } => {
@@ -865,106 +976,6 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
             draw_confirm_dialog(f, area, &format!("Delete period {}?", p.from));
         }
     }
-}
-
-fn draw_add_contract_period(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-
-    let layout = ScreenLayout::new()
-        .row("logo", 3)
-        .row("blank1", 1)
-        .row("title", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
-        .row("monday", 1)
-        .row("hours", 1)
-        .row("blank3", 1)
-        .row("hint", 1)
-        .row("fill", 0)
-        .margin(1)
-        .split(area);
-
-    let engine = LayoutEngine::new(area.x);
-
-    let hint_spans = hint_muted(&[
-        "↑↓",
-        " change  •  ",
-        "Tab",
-        " switch  •  ",
-        "↵",
-        " save  •  ",
-        "Esc",
-        " cancel",
-    ]);
-
-    draw_screen_header(
-        f,
-        &engine,
-        layout.get("logo"),
-        layout.get("title"),
-        layout.get("divider"),
-        "Add Contract Period",
-        hint_spans,
-    );
-
-    let label_w = 18usize;
-    let monday_focused = app.add_cp_focus == AddCpFocus::Monday;
-    let hours_focused = app.add_cp_focus == AddCpFocus::Hours;
-
-    // ── Monday row ──
-    let monday_label = format!("{:<width$}", "From Monday", width = label_w);
-    let monday_value = app.add_cp_monday.to_string();
-    let monday_line = if monday_focused {
-        Line::from(vec![
-            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-            Span::styled(
-                monday_label,
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                monday_value,
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("  (↑↓)", Style::default().fg(C_MUTED)),
-        ])
-    } else {
-        Line::from(vec![
-            Span::raw("  "),
-            Span::styled(monday_label, Style::default().fg(C_TEXT)),
-            Span::styled(monday_value, Style::default().fg(C_TEXT)),
-        ])
-    };
-    f.render_widget(Paragraph::new(monday_line), layout.get("monday"));
-
-    // ── Hours row ──
-    let hours_label = format!("{:<width$}", "Weekly hours", width = label_w);
-    let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp_hours_idx];
-    let hours_display = if hours_val.fract() == 0.0 {
-        format!("{}h", hours_val as u32)
-    } else {
-        format!("{hours_val}h")
-    };
-    let hours_line = if hours_focused {
-        Line::from(vec![
-            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-            Span::styled(
-                hours_label,
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                hours_display,
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("  (↑↓)", Style::default().fg(C_MUTED)),
-        ])
-    } else {
-        Line::from(vec![
-            Span::raw("  "),
-            Span::styled(hours_label, Style::default().fg(C_TEXT)),
-            Span::styled(hours_display, Style::default().fg(C_TEXT)),
-        ])
-    };
-    f.render_widget(Paragraph::new(hours_line), layout.get("hours"));
 }
 
 fn draw_confirm_dialog(f: &mut ratatui::Frame, area: Rect, msg: &str) {

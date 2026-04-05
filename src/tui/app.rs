@@ -50,7 +50,6 @@ pub enum Screen {
     TdGeneralSettings,
     TimeDoctorSettings,
     ContractPeriods,
-    AddContractPeriod,
 }
 
 // ── Input mode (used inside RepoManager and TimeDoctorSettings) ──────────────
@@ -62,6 +61,8 @@ pub enum InputMode {
     ConfirmDelete(String),      // holds the repo name pending deletion
     ConfirmDeletePeriod(usize), // holds the period index pending deletion
     SelectingTimezone,          // ↑↓ cycles timezone, Enter/Esc confirms (in GeneralToggle screen)
+    EditingCpMonday,            // ↑↓ cycles monday date, Enter/Esc confirms
+    EditingCpHours,             // ↑↓ cycles hours option, Enter/Esc confirms
     EditingField {
         // editing a text field in TimeDoctorSettings
         field: TimeDoctorField,
@@ -142,6 +143,8 @@ pub enum GeneralToggleRow {
         label: &'static str,
         hint: &'static str,
         on: bool,
+        indent: bool,
+        disabled: bool,
     },
     TimezoneSelector {
         value: String,
@@ -201,7 +204,9 @@ pub enum CpListRow {
         weekly_hours: f64,
     },
     Blank,
-    AddPeriod,
+    MondayField,
+    HoursField,
+    SavePeriod,
     Back,
 }
 
@@ -209,17 +214,13 @@ impl CpListRow {
     pub fn is_interactive(&self) -> bool {
         matches!(
             self,
-            CpListRow::Period { .. } | CpListRow::AddPeriod | CpListRow::Back
+            CpListRow::Period { .. }
+                | CpListRow::MondayField
+                | CpListRow::HoursField
+                | CpListRow::SavePeriod
+                | CpListRow::Back
         )
     }
-}
-
-// ── Add contract period focus ────────────────────────────────────────────────
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum AddCpFocus {
-    Monday,
-    Hours,
 }
 
 // ── Repo manager row types ────────────���───────────────────────────────────────
@@ -310,10 +311,9 @@ pub struct App {
     pub td_show_cumulative: bool,
     pub td_password_is_set: bool,
     pub contract_periods: Vec<ContractPeriodEntry>,
-    // Add contract period state
+    // Add contract period state (inline in ContractPeriods screen)
     pub add_cp_monday: NaiveDate,
     pub add_cp_hours_idx: usize,
-    pub add_cp_focus: AddCpFocus,
 }
 
 #[derive(Clone)]
@@ -404,7 +404,6 @@ impl App {
             contract_periods,
             add_cp_monday: next_monday_from_today(),
             add_cp_hours_idx: 1, // default 20h
-            add_cp_focus: AddCpFocus::Monday,
         })
     }
 
@@ -432,42 +431,58 @@ impl App {
                 label: "Sync all by default",
                 hint: "--sync-all",
                 on: self.sync_all,
+                indent: false,
+                disabled: false,
             },
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::UseCache,
                 label: "Use repo path cache",
                 hint: "",
                 on: self.use_cache,
+                indent: false,
+                disabled: false,
             },
+            GeneralToggleRow::Blank,
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipForkSync,
                 label: "Skip fork sync",
                 hint: "skip fetch+merge+push upstream",
                 on: self.skip_fork_sync,
-            },
-            GeneralToggleRow::Toggle {
-                kind: ToggleKind::SkipRebase,
-                label: "Skip rebase",
-                hint: "skip branch rebase after merge",
-                on: self.skip_rebase,
-            },
-            GeneralToggleRow::Toggle {
-                kind: ToggleKind::SkipRdsSync,
-                label: "Skip RDS sync",
-                hint: "skip ./sync in each repo",
-                on: self.skip_rds_sync,
+                indent: false,
+                disabled: false,
             },
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipGitFetch,
                 label: "Skip git fetch",
                 hint: "skip git fetch upstream",
                 on: self.skip_git_fetch,
+                indent: true,
+                disabled: self.skip_fork_sync,
+            },
+            GeneralToggleRow::Toggle {
+                kind: ToggleKind::SkipRebase,
+                label: "Skip rebase",
+                hint: "skip branch rebase after merge",
+                on: self.skip_rebase,
+                indent: true,
+                disabled: self.skip_fork_sync,
+            },
+            GeneralToggleRow::Blank,
+            GeneralToggleRow::Toggle {
+                kind: ToggleKind::SkipRdsSync,
+                label: "Skip RDS sync",
+                hint: "skip ./sync in each repo",
+                on: self.skip_rds_sync,
+                indent: false,
+                disabled: false,
             },
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipDirtySync,
                 label: "Skip dirty repo sync",
                 hint: "skip ./sync on uncommitted changes",
                 on: self.skip_dirty_sync,
+                indent: true,
+                disabled: self.skip_rds_sync,
             },
             GeneralToggleRow::Blank,
             GeneralToggleRow::Back,
@@ -481,18 +496,24 @@ impl App {
                 label: "Skip current week",
                 hint: "exclude incomplete week",
                 on: self.td_skip_current_week,
+                indent: false,
+                disabled: false,
             },
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::UseTimeCache,
                 label: "Use time cache",
                 hint: "",
                 on: self.td_use_time_cache,
+                indent: false,
+                disabled: false,
             },
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::ShowCumulative,
                 label: "Show cumulative balance",
                 hint: "running hour balance",
                 on: self.td_show_cumulative,
+                indent: false,
+                disabled: false,
             },
             GeneralToggleRow::Blank,
             GeneralToggleRow::TimezoneSelector {
@@ -531,7 +552,9 @@ impl App {
             })
             .collect();
         rows.push(CpListRow::Blank);
-        rows.push(CpListRow::AddPeriod);
+        rows.push(CpListRow::MondayField);
+        rows.push(CpListRow::HoursField);
+        rows.push(CpListRow::SavePeriod);
         rows.push(CpListRow::Blank);
         rows.push(CpListRow::Back);
         rows
@@ -654,13 +677,6 @@ impl App {
         }
     }
 
-    pub fn init_add_contract_period(&mut self) {
-        self.add_cp_monday = next_monday_from_today();
-        self.add_cp_hours_idx = 1; // 20h
-        self.add_cp_focus = AddCpFocus::Monday;
-        self.screen = Screen::AddContractPeriod;
-    }
-
     pub fn save_new_contract_period(&mut self) {
         let entry = ContractPeriodEntry {
             from: self.add_cp_monday,
@@ -669,7 +685,9 @@ impl App {
         self.contract_periods.push(entry);
         self.contract_periods.sort_by_key(|p| p.from);
         self.persist_td_settings();
-        self.screen = Screen::ContractPeriods;
+        // Reset add fields for next entry
+        self.add_cp_monday = next_monday_from_today();
+        self.add_cp_hours_idx = 1;
     }
 
     pub fn cycle_add_cp_monday(&mut self, delta: i32) {
