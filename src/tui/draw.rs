@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -25,6 +25,10 @@ const C_SUCCESS: Color = Color::Indexed(10); // bright green — consistent acro
 const C_MUTED: Color = Color::Indexed(8); // dark gray — consistent across terminals
 const C_LOGO: Color = C_TEXT;
 const C_DANGEROUS: Color = Color::Indexed(9); // bright red — consistent across terminals
+
+fn fmt_date(d: NaiveDate) -> String {
+    d.format("%d-%m-%Y").to_string()
+}
 
 const NAME_COL_W: u16 = 16; // fixed width for the name column
 const DIVIDER_WIDTH: u16 = 53;
@@ -850,7 +854,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 CpListRow::SavePeriod => link_item(is_sel, "Save period"),
                 CpListRow::MondayField => {
                     let label = format!("{:<width$}", "From Monday", width = label_w);
-                    let value = app.add_cp_monday.to_string();
+                    let value = fmt_date(app.add_cp_monday);
                     let editing = matches!(app.input_mode, InputMode::EditingCpMonday);
                     if editing {
                         ListItem::new(Line::from(vec![
@@ -929,7 +933,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         format!("{weekly_hours}h/week")
                     };
-                    let detail = format!("{}  {}", from, hours_display);
+                    let detail = format!("{}  {}", fmt_date(*from), hours_display);
                     if is_sel {
                         ListItem::new(Line::from(vec![
                             Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
@@ -962,7 +966,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     // ── Confirmation dialog overlay ──
     if let InputMode::ConfirmDeletePeriod(idx) = &app.input_mode {
         if let Some(p) = app.contract_periods.get(*idx) {
-            draw_confirm_dialog(f, area, &format!("Delete period {}?", p.from));
+            draw_confirm_dialog(f, area, &format!("Delete period {}?", fmt_date(p.from)));
         }
     }
 }

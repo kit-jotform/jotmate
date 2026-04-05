@@ -217,10 +217,10 @@ fn handle_general_toggles(app: &mut App, code: KeyCode, is_sync: bool) -> Action
 
 fn handle_timezone_select(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Up | KeyCode::Left => {
+        KeyCode::Up | KeyCode::Right => {
             app.cycle_timezone(-1);
         }
-        KeyCode::Down | KeyCode::Right => {
+        KeyCode::Down | KeyCode::Left => {
             app.cycle_timezone(1);
         }
         KeyCode::Enter | KeyCode::Esc => {
@@ -496,8 +496,8 @@ fn handle_confirm_delete_period(app: &mut App, code: KeyCode) -> Action {
 
 fn handle_cp_monday_edit(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Up | KeyCode::Left => app.cycle_add_cp_monday(1),
-        KeyCode::Down | KeyCode::Right => app.cycle_add_cp_monday(-1),
+        KeyCode::Up | KeyCode::Right => app.cycle_add_cp_monday(1),
+        KeyCode::Down | KeyCode::Left => app.cycle_add_cp_monday(-1),
         KeyCode::Enter | KeyCode::Esc => {
             app.input_mode = InputMode::Normal;
         }
@@ -508,8 +508,8 @@ fn handle_cp_monday_edit(app: &mut App, code: KeyCode) -> Action {
 
 fn handle_cp_hours_edit(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Up | KeyCode::Left => app.cycle_add_cp_hours(1),
-        KeyCode::Down | KeyCode::Right => app.cycle_add_cp_hours(-1),
+        KeyCode::Up | KeyCode::Right => app.cycle_add_cp_hours(1),
+        KeyCode::Down | KeyCode::Left => app.cycle_add_cp_hours(-1),
         KeyCode::Enter | KeyCode::Esc => {
             app.input_mode = InputMode::Normal;
         }
