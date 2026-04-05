@@ -347,6 +347,7 @@ pub enum CpListRow {
         weekly_hours: f64,
     },
     Blank,
+    Separator,
     MondayField,
     HoursField,
     SavePeriod,
@@ -694,9 +695,12 @@ impl App {
             })
             .collect();
         rows.push(CpListRow::Blank);
+        rows.push(CpListRow::Separator);
         rows.push(CpListRow::MondayField);
         rows.push(CpListRow::HoursField);
+        rows.push(CpListRow::Blank);
         rows.push(CpListRow::SavePeriod);
+        rows.push(CpListRow::Separator);
         rows.push(CpListRow::Blank);
         rows.push(CpListRow::Back);
         rows

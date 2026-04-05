@@ -850,6 +850,13 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
             let is_sel = selected == i;
             match row {
                 CpListRow::Blank => ListItem::new(Line::raw("")),
+                CpListRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "─".repeat(DIVIDER_WIDTH as usize),
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
                 CpListRow::Back => back_item(is_sel),
                 CpListRow::SavePeriod => link_item(is_sel, "Save period"),
                 CpListRow::MondayField => {
@@ -881,7 +888,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         ListItem::new(Line::from(vec![
                             Span::raw("  "),
-                            Span::styled(label, Style::default().fg(C_TEXT)),
+                            Span::styled(label, Style::default().fg(C_MUTED)),
                             Span::styled(value, Style::default().fg(C_TEXT)),
                         ]))
                     }
@@ -920,7 +927,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         ListItem::new(Line::from(vec![
                             Span::raw("  "),
-                            Span::styled(label, Style::default().fg(C_TEXT)),
+                            Span::styled(label, Style::default().fg(C_MUTED)),
                             Span::styled(value, Style::default().fg(C_TEXT)),
                         ]))
                     }
