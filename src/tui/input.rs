@@ -11,20 +11,19 @@ fn navigate<T>(
     delta: i32,
     is_interactive: impl Fn(&T) -> bool,
 ) -> usize {
-    let last = rows.len() - 1;
-    if delta < 0 {
-        let mut next = current.saturating_sub(1);
-        while next > 0 && !is_interactive(&rows[next]) {
-            next -= 1;
+    let len = rows.len();
+    let mut next = current;
+    for _ in 0..len {
+        if delta < 0 {
+            next = if next == 0 { len - 1 } else { next - 1 };
+        } else {
+            next = if next == len - 1 { 0 } else { next + 1 };
         }
-        next
-    } else {
-        let mut next = (current + 1).min(last);
-        while next < last && !is_interactive(&rows[next]) {
-            next += 1;
+        if is_interactive(&rows[next]) {
+            return next;
         }
-        next
     }
+    current
 }
 
 pub enum Action {
@@ -65,12 +64,13 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
     match code {
         KeyCode::Up | KeyCode::Left => {
             let i = app.main_state.selected().unwrap_or(0);
-            app.main_state.select(Some(i.saturating_sub(1)));
+            let last = MAIN_ITEMS.len() - 1;
+            app.main_state.select(Some(if i == 0 { last } else { i - 1 }));
         }
         KeyCode::Down | KeyCode::Right => {
             let i = app.main_state.selected().unwrap_or(0);
-            app.main_state
-                .select(Some((i + 1).min(MAIN_ITEMS.len() - 1)));
+            let last = MAIN_ITEMS.len() - 1;
+            app.main_state.select(Some(if i == last { 0 } else { i + 1 }));
         }
         KeyCode::Enter => {
             let i = app.main_state.selected().unwrap_or(0);
