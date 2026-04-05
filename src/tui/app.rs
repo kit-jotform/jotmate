@@ -509,7 +509,7 @@ impl App {
         let td_skip_current_week = config.time.skip_current_week;
         let td_use_time_cache = config.time.use_time_cache;
         let td_show_cumulative = config.time.show_cumulative;
-        let contract_periods: Vec<ContractPeriodEntry> = config
+        let mut contract_periods: Vec<ContractPeriodEntry> = config
             .time
             .contract_periods
             .as_deref()
@@ -520,6 +520,7 @@ impl App {
                 weekly_hours: p.weekly_hours,
             })
             .collect();
+        contract_periods.sort_by_key(|p| p.from);
         let td_password_is_set = crate::time::auth::load_token_from_keychain().is_some();
         Ok(Self {
             screen: Screen::MainMenu,
@@ -828,8 +829,12 @@ impl App {
             from: self.add_cp_monday,
             weekly_hours: WEEKLY_HOURS_OPTIONS[self.add_cp_hours_idx],
         };
-        self.contract_periods.push(entry);
-        self.contract_periods.sort_by_key(|p| p.from);
+        if let Some(existing) = self.contract_periods.iter_mut().find(|p| p.from == entry.from) {
+            existing.weekly_hours = entry.weekly_hours;
+        } else {
+            self.contract_periods.push(entry);
+            self.contract_periods.sort_by_key(|p| p.from);
+        }
         self.persist_td_settings();
         // Reset add fields for next entry
         self.add_cp_monday = next_monday_from_today();
