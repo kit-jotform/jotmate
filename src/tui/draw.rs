@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, Borders, Clear};
 
 use super::app::{
     App, CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, Screen, SettingRow,
-    TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
+    TimeDoctorField, TimeSettingRow, MAIN_ITEMS, WEEKLY_HOURS_OPTIONS,
 };
 use super::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
@@ -712,32 +712,48 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                 TimeSettingRow::Back => back_item(is_sel),
 
                 TimeSettingRow::Password { is_set } => {
-                    let badge = if *is_set { "[set]    " } else { "[not set]" };
-                    let badge_color = if *is_set { C_SUCCESS } else { C_MUTED };
-                    if is_sel {
+                    let active_buf = match &app.input_mode {
+                        InputMode::EditingField {
+                            field: TimeDoctorField::Password,
+                            buf,
+                        } => Some(buf.as_str()),
+                        _ => None,
+                    };
+
+                    let display_value = if let Some(buf) = active_buf {
+                        format!("{}_ ", "*".repeat(buf.len()))
+                    } else if *is_set {
+                        "[saved]".to_string()
+                    } else {
+                        "—".to_string()
+                    };
+
+                    let label_padded = format!("{:<18}", "Password");
+
+                    if is_sel || active_buf.is_some() {
+                        let value_style = if active_buf.is_some() {
+                            Style::default().fg(C_ACCENT)
+                        } else {
+                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                        };
                         ListItem::new(Line::from(vec![
                             Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
                             Span::styled(
-                                badge,
-                                Style::default()
-                                    .fg(badge_color)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                " Password",
+                                label_padded,
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
+                            Span::styled(display_value, value_style),
                         ]))
                     } else {
+                        let value_style = if *is_set {
+                            Style::default().fg(C_TEXT)
+                        } else {
+                            Style::default().fg(C_MUTED)
+                        };
                         ListItem::new(Line::from(vec![
                             Span::raw("  "),
-                            Span::styled(
-                                badge,
-                                Style::default()
-                                    .fg(badge_color)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(" Password", Style::default().fg(C_TEXT)),
+                            Span::styled(label_padded, Style::default().fg(C_TEXT)),
+                            Span::styled(display_value, value_style),
                         ]))
                     }
                 }
