@@ -18,7 +18,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area.x);
 
     let hint_spans = match &app.td_report {
-        TdReportState::Loading => hint_muted(&["loading…"]),
+        TdReportState::Loading | TdReportState::NeedsReauth => hint_muted(&["loading…"]),
         TdReportState::Error(_) => hint_muted(&["⌫/Esc", " back"]),
         TdReportState::Ready { .. } => hint_muted(&["↑↓", " scroll  •  ", "⌫/Esc", " back"]),
     };
@@ -47,7 +47,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     );
 
     match &app.td_report {
-        TdReportState::Loading => {
+        TdReportState::Loading | TdReportState::NeedsReauth => {
             f.render_widget(
                 Paragraph::new(Line::from(vec![
                     Span::raw("  "),
@@ -68,36 +68,42 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         }
 
         TdReportState::Ready { rows, show_cumulative } => {
-            // Header row + data rows
-            let mut lines: Vec<Line> = Vec::with_capacity(rows.len() + 2);
+            // Split content_area: fixed 2-row header + up to 6-row scrollable data
+            const MAX_VISIBLE_ROWS: usize = 6;
+            let data_area_height = MAX_VISIBLE_ROWS.min(rows.len()) as u16;
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(2), Constraint::Length(data_area_height)])
+                .split(content_area);
+            let header_area = chunks[0];
+            let data_area = chunks[1];
 
-            // Column header
-            let header = build_header(*show_cumulative);
-            lines.push(header);
-            lines.push(Line::from(Span::styled(
+            // Fixed header (never scrolls)
+            let divider = Line::from(Span::styled(
                 format!("  {}", "─".repeat(62)),
                 Style::default().fg(C_MUTED),
-            )));
+            ));
+            f.render_widget(
+                Paragraph::new(vec![build_header(*show_cumulative), divider]),
+                header_area,
+            );
 
-            for row in rows {
-                lines.push(build_row(row, *show_cumulative));
-            }
-
-            let total_lines = lines.len();
-            let visible = content_area.height as usize;
+            // Scrollable data rows
+            let data_lines: Vec<Line> = rows.iter().map(|r| build_row(r, *show_cumulative)).collect();
+            let total_lines = data_lines.len();
+            let visible = data_area.height as usize;
             let max_scroll = total_lines.saturating_sub(visible);
             let scroll = app.td_report_scroll.min(max_scroll);
 
-            // Render with scrollbar if needed
             if total_lines > visible {
-                let chunks = Layout::default()
+                let hchunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Min(0), Constraint::Length(1)])
-                    .split(content_area);
+                    .split(data_area);
 
                 f.render_widget(
-                    Paragraph::new(lines).scroll((scroll as u16, 0)),
-                    chunks[0],
+                    Paragraph::new(data_lines).scroll((scroll as u16, 0)),
+                    hchunks[0],
                 );
 
                 let mut sb_state = ScrollbarState::default()
@@ -105,13 +111,13 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                     .position(scroll);
                 f.render_stateful_widget(
                     Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                    chunks[1],
+                    hchunks[1],
                     &mut sb_state,
                 );
             } else {
                 f.render_widget(
-                    Paragraph::new(lines).scroll((scroll as u16, 0)),
-                    content_area,
+                    Paragraph::new(data_lines).scroll((scroll as u16, 0)),
+                    data_area,
                 );
             }
         }

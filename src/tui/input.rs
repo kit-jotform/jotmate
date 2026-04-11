@@ -562,7 +562,7 @@ fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
         }
         KeyCode::Down | KeyCode::Right => {
             if let TdReportState::Ready { rows, .. } = &app.td_report {
-                let max_scroll = rows.len().saturating_sub(1);
+                let max_scroll = rows.len().saturating_sub(6);
                 app.td_report_scroll = (app.td_report_scroll + 1).min(max_scroll);
             }
         }

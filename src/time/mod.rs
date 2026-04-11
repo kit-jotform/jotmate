@@ -86,8 +86,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
                         .unwrap_or(false)
                     {
                         eprintln!("Session expired, re-authenticating...");
-                        auth::delete_token_from_keychain()?;
-                        auth_cookie = auth::get_or_refresh_token(email).await?;
+                        auth_cookie = auth::reauth(email).await?;
                         // Note: the failed weeks in this batch are skipped; user can re-run
                         eprintln!(
                             "Re-authenticated. Some weeks may be missing — re-run to fetch them."

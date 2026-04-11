@@ -68,6 +68,7 @@ pub enum TdReportState {
         show_cumulative: bool,
     },
     Error(String),
+    NeedsReauth,
 }
 
 // ── Sync progress types ─────────────────────────────────────────────────────
@@ -448,14 +449,13 @@ async fn fetch_td_report(
         .map(|p| p.from)
         .ok_or_else(|| "No contract periods configured".to_string())?;
 
-    let cookie = crate::time::auth::get_or_refresh_token(&email)
+    let auth_cookie = crate::time::auth::get_or_refresh_token(&email)
         .await
         .map_err(|e| e.to_string())?;
 
     let client = reqwest::Client::new();
     let mondays = weeks_to_fetch(start_date, skip_current);
     let mut rows: Vec<crate::time::compute::WeekRow> = Vec::new();
-    let auth_cookie = cookie;
 
     for monday in mondays {
         let week_label = format_week_range(monday);
@@ -496,7 +496,19 @@ async fn fetch_td_report(
             &client, &auth_cookie, from_dt, to_dt, company_id, &timezone,
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            let is_expired = e
+                .downcast_ref::<crate::error::AppError>()
+                .map(|ae| matches!(ae, crate::error::AppError::TokenExpired))
+                .unwrap_or(false);
+            if is_expired {
+                // Delete stale token so next get_or_refresh_token goes to login
+                let _ = crate::time::auth::delete_token_from_keychain();
+                "TOKEN_EXPIRED".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
 
         if past {
             crate::time::cache::write_week_cache(company_id, monday, &stats);
@@ -1162,7 +1174,11 @@ impl App {
                 };
                 crate::time::compute::compute_cumulative(&mut rows, reset_from);
                 rows.reverse();
+                self.td_report_scroll = rows.len().saturating_sub(6);
                 self.td_report = TdReportState::Ready { rows, show_cumulative };
+            }
+            Err(msg) if msg == "TOKEN_EXPIRED" => {
+                self.td_report = TdReportState::NeedsReauth;
             }
             Err(msg) => {
                 self.td_report = TdReportState::Error(msg);

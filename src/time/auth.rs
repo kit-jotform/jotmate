@@ -178,7 +178,16 @@ pub async fn get_or_refresh_token(email: &str) -> Result<String> {
     if let Some(token) = load_token_from_keychain() {
         return Ok(token);
     }
+    do_login(email).await
+}
 
+/// Delete the stale session token and re-authenticate from scratch.
+pub async fn reauth(email: &str) -> Result<String> {
+    let _ = delete_token_from_keychain();
+    do_login(email).await
+}
+
+async fn do_login(email: &str) -> Result<String> {
     let password = if let Some(pw) = load_password_from_keychain() {
         pw
     } else {

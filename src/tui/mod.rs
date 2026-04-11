@@ -145,6 +145,26 @@ async fn event_loop(
         // When loading the TD report, poll for results
         if app.screen == Screen::TimeDoctorReport {
             app.poll_td_report();
+
+            // Session expired — teardown TUI, re-auth in foreground, restart fetch
+            if matches!(app.td_report, app::TdReportState::NeedsReauth) {
+                teardown_terminal(terminal);
+                let email = app.td_email.clone();
+                match crate::time::auth::reauth(&email).await {
+                    Ok(_) => {
+                        eprintln!("Re-authenticated. Reloading report...");
+                        std::thread::sleep(std::time::Duration::from_millis(800));
+                    }
+                    Err(e) => {
+                        eprintln!("Re-authentication failed: {e}");
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                    }
+                }
+                *terminal = setup_terminal()?;
+                app.td_report = app::TdReportState::Loading;
+                app.launch_td_report();
+            }
+
             if event::poll(Duration::from_millis(150))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind != KeyEventKind::Press {
