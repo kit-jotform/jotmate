@@ -7,12 +7,12 @@ use ratatui::{
 };
 
 use super::app::{App, Screen, MAIN_ITEMS};
+use super::draw::DIVIDER_WIDTH;
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT};
 use super::widgets::{IconWidget, LOGO};
 
 const NAME_COL_W: u16 = 16;
-const DIVIDER_WIDTH: u16 = 53;
 
 pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();

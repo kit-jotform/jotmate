@@ -6,7 +6,7 @@ use ratatui::{
 use super::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use super::draw::{
     back_item, draw_screen_header, hint_navigate_toggle, inline_field_item, link_item,
-    separator_item, sub_screen_layout, toggle_item, FieldState,
+    separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W_TZ,
 };
 use super::layout::LayoutEngine;
 
@@ -122,9 +122,7 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
                     } else {
                         FieldState::Normal
                     };
-                    // Editing mode shows an inline hint after the value, so keep label tight.
-                    // Selected/Normal have no hint, so pad out to align with other fields.
-                    inline_field_item("Timezone", value, state, 13)
+                    inline_field_item("Timezone", value, state, FIELD_LABEL_W_TZ)
                 }
             }
         })

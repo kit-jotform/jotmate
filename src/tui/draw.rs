@@ -202,6 +202,9 @@ pub(super) fn inline_field_item(
 }
 
 pub(super) const FIELD_LABEL_W: usize = 18;
+/// Narrower label column for the timezone selector — the inline editing hint
+/// (↑↓ change • ↵ confirm • ⌫ cancel) needs the extra room to fit in UI_WIDTH.
+pub(super) const FIELD_LABEL_W_TZ: usize = 13;
 
 pub(super) fn link_item(is_sel: bool, label: &str) -> ListItem<'static> {
     link_item_styled(is_sel, label, C_TEXT)
