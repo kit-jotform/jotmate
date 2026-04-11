@@ -160,33 +160,25 @@ fn col_widths(show_cumulative: bool) -> (usize, usize) {
 
 fn build_header(show_cumulative: bool) -> Line<'static> {
     let (week_w, num_w) = col_widths(show_cumulative);
+    let header_style = Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD);
+    let cell = |text: &str, width: usize, left: bool| {
+        let s = if left {
+            format!("{:<width$}", text, width = width)
+        } else {
+            format!("{:>width$}", text, width = width)
+        };
+        Span::styled(s, header_style)
+    };
 
     let mut spans = vec![
-        Span::styled(
-            format!("{:<width$}", "Week", width = week_w),
-            Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!("{:>width$}", "Worked", width = num_w),
-            Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!("{:>width$}", "Target", width = num_w),
-            Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!("{:>width$}", "Balance", width = num_w),
-            Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
-        ),
+        cell("Week", week_w, true),
+        cell("Worked", num_w, false),
+        cell("Target", num_w, false),
+        cell("Balance", num_w, false),
     ];
-
     if show_cumulative {
-        spans.push(Span::styled(
-            format!("{:>width$}", "Cuml.", width = num_w),
-            Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
-        ));
+        spans.push(cell("Cuml.", num_w, false));
     }
-
     Line::from(spans)
 }
 
