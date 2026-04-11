@@ -8,7 +8,9 @@ mod draw_time;
 mod input;
 mod layout;
 mod palette;
+mod rows;
 mod sync_screen;
+mod sync_state;
 mod widgets;
 
 use anyhow::Result;

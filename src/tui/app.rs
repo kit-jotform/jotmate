@@ -5,10 +5,17 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use crate::config::{ContractPeriod, UpstreamRepo};
 use crate::time::compute::get_week_start_monday;
+
+pub use super::rows::{
+    CpListRow, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, SettingRow,
+    TimeDoctorField, TimeSettingRow, ToggleKind,
+};
+pub use super::sync_state::{
+    ForkStatus, RdsStatus, RepoSyncState, SyncScreenState, SyncUpdate,
+};
 
 // ── Main menu items ────────────────────────────────────────────────────────────
 
@@ -43,7 +50,7 @@ pub const TIMEZONES: &[&str] = &[
 
 pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
 
-// ── Screens ──────────────────────────────────────────────────────────────────────
+// ── Screens ───────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Screen {
@@ -71,358 +78,7 @@ pub enum TdReportState {
     NeedsReauth,
 }
 
-// ── Sync progress types ─────────────────────────────────────────────────────
-
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub enum ForkStatus {
-    Pending,
-    FetchingUpstream,
-    CheckingDiff,
-    UpToDate,
-    Stashing,
-    CheckingOut,
-    Merging,
-    PushingDefault,
-    Rebasing,
-    PushingBranch,
-    Unstashing,
-    Done,
-    Skipped(String),
-    Error(String),
-}
-
-impl ForkStatus {
-    pub fn label(&self) -> &str {
-        match self {
-            ForkStatus::Pending => "waiting…",
-            ForkStatus::FetchingUpstream => "fetching upstream…",
-            ForkStatus::CheckingDiff => "checking diff…",
-            ForkStatus::UpToDate => "up to date",
-            ForkStatus::Stashing => "stashing…",
-            ForkStatus::CheckingOut => "checking out…",
-            ForkStatus::Merging => "merging…",
-            ForkStatus::PushingDefault => "pushing default…",
-            ForkStatus::Rebasing => "rebasing…",
-            ForkStatus::PushingBranch => "pushing branch…",
-            ForkStatus::Unstashing => "unstashing…",
-            ForkStatus::Done => "done",
-            ForkStatus::Skipped(_) => "skipped",
-            ForkStatus::Error(_) => "error",
-        }
-    }
-
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            ForkStatus::Done | ForkStatus::UpToDate | ForkStatus::Skipped(_) | ForkStatus::Error(_)
-        )
-    }
-
-    pub fn is_error(&self) -> bool {
-        matches!(self, ForkStatus::Error(_))
-    }
-}
-
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub enum RdsStatus {
-    Pending,
-    Preparing,
-    Pulling,
-    Running,
-    Done,
-    Skipped(String),
-    Error(String),
-}
-
-impl RdsStatus {
-    pub fn label(&self) -> &str {
-        match self {
-            RdsStatus::Pending => "waiting…",
-            RdsStatus::Preparing => "preparing…",
-            RdsStatus::Pulling => "pulling…",
-            RdsStatus::Running => "running ./sync…",
-            RdsStatus::Done => "done",
-            RdsStatus::Skipped(_) => "skipped",
-            RdsStatus::Error(_) => "error",
-        }
-    }
-
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            RdsStatus::Done | RdsStatus::Skipped(_) | RdsStatus::Error(_)
-        )
-    }
-
-    pub fn is_error(&self) -> bool {
-        matches!(self, RdsStatus::Error(_))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RepoSyncState {
-    pub name: String,
-    pub path: PathBuf,
-    pub fork_status: ForkStatus,
-    pub rds_status: RdsStatus,
-    pub started_at: Option<Instant>,
-    pub elapsed_secs: f64,
-}
-
-impl RepoSyncState {
-    pub fn is_complete(&self) -> bool {
-        self.fork_status.is_terminal() && self.rds_status.is_terminal()
-    }
-
-    pub fn is_active(&self) -> bool {
-        !self.fork_status.is_terminal() || !self.rds_status.is_terminal()
-    }
-
-    pub fn has_error(&self) -> bool {
-        self.fork_status.is_error() || self.rds_status.is_error()
-    }
-
-    pub fn is_skipped(&self) -> bool {
-        matches!(
-            (&self.fork_status, &self.rds_status),
-            (
-                ForkStatus::Skipped(_) | ForkStatus::UpToDate,
-                RdsStatus::Skipped(_)
-            )
-        )
-    }
-}
-
-pub enum SyncUpdate {
-    Fork(usize, ForkStatus),
-    Rds(usize, RdsStatus),
-    Elapsed(usize, f64),
-}
-
-pub struct SyncScreenState {
-    pub repos: Vec<RepoSyncState>,
-    pub tick: u8,
-    pub sync_handle: Option<JoinHandle<()>>,
-    pub update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
-}
-
-// ── Input mode (used inside RepoManager and TimeDoctorSettings) ──────────────
-
-#[derive(Clone, PartialEq)]
-pub enum InputMode {
-    Normal,
-    AddingRepo(String),         // buffer holds URL being typed
-    ConfirmDelete(String),      // holds the repo name pending deletion
-    ConfirmDeletePeriod(usize), // holds the period index pending deletion
-    SelectingTimezone(usize),   // ↑↓ cycles timezone; stored value = snapshot for cancel
-    EditingCpMonday(NaiveDate), // ↑↓ cycles monday date; stored value = snapshot for cancel
-    EditingCpHours(usize),      // ↑↓ cycles hours option; stored value = snapshot for cancel
-    EditingField {
-        // editing a text field in TimeDoctorSettings
-        field: TimeDoctorField,
-        buf: String,
-    },
-}
-
-/// Which Time Doctor field is being edited
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum TimeDoctorField {
-    Email,
-    Password,
-}
-
-// ── Settings row types ────────────────────────────────────────────────────────────
-
-#[derive(Clone, Copy)]
-pub enum ToggleKind {
-    SyncAll,
-    UseCache,
-    SkipForkSync,
-    SkipRebase,
-    SkipRdsSync,
-    SkipGitFetch,
-    SkipDirtySync,
-    SkipCurrentWeek,
-    UseTimeCache,
-    ShowCumulative,
-}
-
-impl ToggleKind {
-    pub fn is_sync(self) -> bool {
-        matches!(
-            self,
-            ToggleKind::SyncAll
-                | ToggleKind::UseCache
-                | ToggleKind::SkipForkSync
-                | ToggleKind::SkipRebase
-                | ToggleKind::SkipRdsSync
-                | ToggleKind::SkipGitFetch
-                | ToggleKind::SkipDirtySync
-        )
-    }
-}
-
-#[derive(Clone)]
-pub enum SettingRow {
-    Separator,
-    Blank,
-    SyncGeneralLink,
-    ManageRepos,
-    TdGeneralLink,
-    TimeDoctorSettings,
-    ContractPeriodsLink,
-    Back,
-}
-
-impl SettingRow {
-    pub fn is_interactive(&self) -> bool {
-        matches!(
-            self,
-            SettingRow::SyncGeneralLink
-                | SettingRow::ManageRepos
-                | SettingRow::TdGeneralLink
-                | SettingRow::TimeDoctorSettings
-                | SettingRow::ContractPeriodsLink
-                | SettingRow::Back
-        )
-    }
-}
-
-// ── General toggle row (shared by Sync General & TD General sub-screens) ────
-
-#[derive(Clone)]
-pub enum GeneralToggleRow {
-    Toggle {
-        kind: ToggleKind,
-        label: &'static str,
-        hint: &'static str,
-        on: bool,
-        indent: bool,
-        disabled: bool,
-    },
-    TimezoneSelector {
-        value: String,
-    },
-    Blank,
-    Back,
-}
-
-impl GeneralToggleRow {
-    pub fn is_interactive(&self) -> bool {
-        matches!(
-            self,
-            GeneralToggleRow::Toggle { .. }
-                | GeneralToggleRow::TimezoneSelector { .. }
-                | GeneralToggleRow::Back
-        )
-    }
-}
-
-// ── Time Doctor settings row types ─────────────────────────────────────────
-
-#[derive(Clone)]
-pub enum TimeSettingRow {
-    /// Editable text field (email)
-    EditField {
-        field: TimeDoctorField,
-        label: &'static str,
-        value: String,
-        masked: bool,
-    },
-    /// Password row — shows [set] / [not set] badge instead of value
-    Password {
-        is_set: bool,
-    },
-    Blank,
-    Back,
-}
-
-impl TimeSettingRow {
-    pub fn is_interactive(&self) -> bool {
-        matches!(
-            self,
-            TimeSettingRow::EditField { .. }
-                | TimeSettingRow::Password { .. }
-                | TimeSettingRow::Back
-        )
-    }
-}
-
-// ── Contract periods row types ────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub enum CpListRow {
-    Period {
-        index: usize,
-        from: NaiveDate,
-        weekly_hours: f64,
-    },
-    Blank,
-    Separator,
-    MondayField,
-    HoursField,
-    SavePeriod,
-    Back,
-}
-
-impl CpListRow {
-    pub fn is_interactive(&self) -> bool {
-        matches!(
-            self,
-            CpListRow::Period { .. }
-                | CpListRow::MondayField
-                | CpListRow::HoursField
-                | CpListRow::SavePeriod
-                | CpListRow::Back
-        )
-    }
-}
-
-// ── Repo manager row types ──────────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub enum RepoManagerRow {
-    Blank,
-    RepoToggle {
-        name: String,
-        url: String,
-        enabled: bool,
-    },
-    AddUrl,
-    RemoveReposLink,
-    Back,
-}
-
-impl RepoManagerRow {
-    pub fn is_interactive(&self) -> bool {
-        matches!(
-            self,
-            RepoManagerRow::RepoToggle { .. }
-                | RepoManagerRow::AddUrl
-                | RepoManagerRow::RemoveReposLink
-                | RepoManagerRow::Back
-        )
-    }
-}
-
-// ── Remove repos row types ──────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub enum RemoveRepoRow {
-    Blank,
-    RepoDelete { name: String, url: String },
-    Back,
-}
-
-impl RemoveRepoRow {
-    pub fn is_interactive(&self) -> bool {
-        matches!(self, RemoveRepoRow::RepoDelete { .. } | RemoveRepoRow::Back)
-    }
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Navigation helpers ────────────────────────────────────────────────────────
 
 fn list_state_at(index: usize) -> ListState {
     let mut s = ListState::default();
@@ -477,61 +133,7 @@ fn clamp_to_last_interactive<T>(
     current.min(last)
 }
 
-// ── App ─────────────────────────────────────────────────────────────────────
-
-pub struct App {
-    pub screen: Screen,
-    pub list_states: HashMap<Screen, ListState>,
-    pub td_report: TdReportState,
-    pub td_report_scroll: usize,
-    pub input_mode: InputMode,
-    // in-memory settings state
-    pub sync_all: bool,
-    pub use_cache: bool,
-    pub skip_fork_sync: bool,
-    pub skip_rebase: bool,
-    pub skip_rds_sync: bool,
-    pub skip_git_fetch: bool,
-    pub skip_dirty_sync: bool,
-    pub repos: Vec<UpstreamRepo>,
-    // in-memory Time Doctor settings
-    pub td_email: String,
-    pub td_timezone_idx: usize,
-    pub td_skip_current_week: bool,
-    pub td_use_time_cache: bool,
-    pub td_show_cumulative: bool,
-    pub td_password_is_set: bool,
-    pub contract_periods: Vec<ContractPeriod>,
-    // Add contract period state (inline in ContractPeriods screen)
-    pub add_cp_monday: NaiveDate,
-    pub add_cp_hours_idx: usize,
-    // Sync progress state
-    pub sync_state: Option<SyncScreenState>,
-    // Auth error message to show on TimeDoctorSettings screen
-    pub auth_error: Option<String>,
-    // Channel for receiving TD report results from the background fetch task
-    pub td_report_rx: Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
-}
-
-/// Run a Time Doctor report fetch and map `TokenExpired` to the `TOKEN_EXPIRED` sentinel
-/// consumed by `poll_td_report`, so the TUI can drop into foreground re-auth.
-async fn fetch_report_result(
-    email: &str,
-    opts: crate::time::FetchOpts,
-) -> std::result::Result<Vec<crate::time::compute::WeekRow>, String> {
-    crate::time::fetch_report(email, opts).await.map_err(|e| {
-        let is_expired = e
-            .downcast_ref::<crate::error::AppError>()
-            .map(|ae| matches!(ae, crate::error::AppError::TokenExpired))
-            .unwrap_or(false);
-        if is_expired {
-            let _ = crate::time::auth::delete_token_from_keychain();
-            "TOKEN_EXPIRED".to_string()
-        } else {
-            e.to_string()
-        }
-    })
-}
+// ── with_rows! macro ──────────────────────────────────────────────────────────
 
 /// Dispatches an expression across every list-screen's row-provider so both
 /// `first_interactive` and `navigate_rows` can share one match arm per screen.
@@ -590,6 +192,62 @@ fn this_monday() -> NaiveDate {
     get_week_start_monday(Local::now().date_naive())
 }
 
+// ── App struct ────────────────────────────────────────────────────────────────
+
+pub struct App {
+    pub screen: Screen,
+    pub list_states: HashMap<Screen, ListState>,
+    pub td_report: TdReportState,
+    pub td_report_scroll: usize,
+    pub input_mode: InputMode,
+    // in-memory sync settings
+    pub sync_all: bool,
+    pub use_cache: bool,
+    pub skip_fork_sync: bool,
+    pub skip_rebase: bool,
+    pub skip_rds_sync: bool,
+    pub skip_git_fetch: bool,
+    pub skip_dirty_sync: bool,
+    pub repos: Vec<UpstreamRepo>,
+    // in-memory Time Doctor settings
+    pub td_email: String,
+    pub td_timezone_idx: usize,
+    pub td_skip_current_week: bool,
+    pub td_use_time_cache: bool,
+    pub td_show_cumulative: bool,
+    pub td_password_is_set: bool,
+    pub contract_periods: Vec<ContractPeriod>,
+    // Add contract period state (inline in ContractPeriods screen)
+    pub add_cp_monday: NaiveDate,
+    pub add_cp_hours_idx: usize,
+    // Sync progress state
+    pub sync_state: Option<SyncScreenState>,
+    // Auth error message to show on TimeDoctorSettings screen
+    pub auth_error: Option<String>,
+    // Channel for receiving TD report results from the background fetch task
+    pub td_report_rx: Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
+}
+
+/// Run a Time Doctor report fetch and map `TokenExpired` to the `TOKEN_EXPIRED` sentinel
+/// consumed by `poll_td_report`, so the TUI can drop into foreground re-auth.
+async fn fetch_report_result(
+    email: &str,
+    opts: crate::time::FetchOpts,
+) -> std::result::Result<Vec<crate::time::compute::WeekRow>, String> {
+    crate::time::fetch_report(email, opts).await.map_err(|e| {
+        let is_expired = e
+            .downcast_ref::<crate::error::AppError>()
+            .map(|ae| matches!(ae, crate::error::AppError::TokenExpired))
+            .unwrap_or(false);
+        if is_expired {
+            let _ = crate::time::auth::delete_token_from_keychain();
+            "TOKEN_EXPIRED".to_string()
+        } else {
+            e.to_string()
+        }
+    })
+}
+
 impl App {
     pub fn new() -> Result<Self> {
         let config = crate::config::load()?;
@@ -641,6 +299,8 @@ impl App {
             td_report_rx: None,
         })
     }
+
+    // ── Row builders ──────────────────────────────────────────────────────────
 
     pub fn settings_items(&self) -> Vec<SettingRow> {
         vec![
@@ -829,7 +489,7 @@ impl App {
         rows
     }
 
-    // ── List state accessors ───────────────────────────────────────────────
+    // ── List state accessors ───────────────────────────────────────────────────
 
     pub fn list_state(&self, screen: Screen) -> &ListState {
         self.list_states
@@ -870,6 +530,8 @@ impl App {
         );
         self.select(screen, next);
     }
+
+    // ── Toggle + settings mutation ────────────────────────────────────────────
 
     pub fn toggle_by_kind(&mut self, kind: ToggleKind) {
         let flag = match kind {
@@ -995,6 +657,8 @@ impl App {
         }
     }
 
+    // ── Sync screen ───────────────────────────────────────────────────────────
+
     /// Initialize sync screen state from enabled repos and resolved paths.
     pub fn start_sync(
         &mut self,
@@ -1059,6 +723,8 @@ impl App {
             .unwrap_or(true)
     }
 
+    // ── Repo management ───────────────────────────────────────────────────────
+
     /// Derive a short name from a URL (last path component, stripped of .git).
     fn name_from_url(url: &str) -> String {
         url.trim_end_matches('/')
@@ -1084,6 +750,8 @@ impl App {
             self.persist_settings();
         }
     }
+
+    // ── Config persistence ────────────────────────────────────────────────────
 
     pub fn persist_settings(&self) {
         self.mutate_and_save(|cfg| {
@@ -1119,6 +787,8 @@ impl App {
             let _ = crate::config::save(&config);
         }
     }
+
+    // ── Time Doctor report ────────────────────────────────────────────────────
 
     /// Navigate to the Time Doctor report screen and kick off a background fetch.
     pub fn launch_td_report(&mut self) {
