@@ -24,6 +24,7 @@ fn keychain_get(account: &str) -> Option<String> {
             "-a", account,
             "-w", // print password only
         ])
+        .stderr(std::process::Stdio::null())
         .output()
         .ok()?;
     if out.status.success() {
@@ -65,6 +66,7 @@ fn keychain_delete(account: &str) -> Result<()> {
             "-s", KEYCHAIN_SERVICE,
             "-a", account,
         ])
+        .stderr(std::process::Stdio::null())
         .status()
         .context("security CLI not found")?;
     // Ignore "not found" (exit 44)

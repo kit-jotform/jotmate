@@ -541,7 +541,7 @@ fn handle_cp_hours_edit(app: &mut App, code: KeyCode) -> Action {
 
 fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => {
+        KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace => {
             if let Some(state) = app.sync_state.take() {
                 if let Some(handle) = state.sync_handle {
                     handle.abort();
@@ -549,6 +549,7 @@ fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
             }
             app.screen = Screen::MainMenu;
         }
+        KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
     Action::Continue
@@ -566,9 +567,10 @@ fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
                 app.td_report_scroll = (app.td_report_scroll + 1).min(max_scroll);
             }
         }
-        KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('q') => {
+        KeyCode::Esc | KeyCode::Backspace => {
             app.screen = Screen::MainMenu;
         }
+        KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
     Action::Continue

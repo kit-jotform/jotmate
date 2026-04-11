@@ -36,6 +36,8 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     // Split the list area into scrollable content + fixed back footer
     let list_area = layout.get("list");
     let (content_area, back_area) = split_content_back(list_area);
+    // Inset content 3 chars on each side
+    let content_area = inset_horizontal(content_area, 3);
 
     // Fixed "← Back" footer, always visible
     f.render_widget(
@@ -80,7 +82,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
 
             // Fixed header (never scrolls)
             let divider = Line::from(Span::styled(
-                format!("  {}", "─".repeat(62)),
+                "─".repeat(header_area.width as usize),
                 Style::default().fg(C_MUTED),
             ));
             f.render_widget(
@@ -124,6 +126,15 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     }
 }
 
+fn inset_horizontal(area: Rect, margin: u16) -> Rect {
+    let inset = margin * 2;
+    Rect {
+        x: area.x + margin,
+        width: area.width.saturating_sub(inset),
+        ..area
+    }
+}
+
 /// Split `area` into (content, back_footer) — footer is 2 rows: blank + Back item.
 fn split_content_back(area: Rect) -> (Rect, Rect) {
     let chunks = Layout::default()
@@ -133,12 +144,19 @@ fn split_content_back(area: Rect) -> (Rect, Rect) {
     (chunks[0], chunks[1])
 }
 
+const WEEK_W: usize = 24;
+const TOTAL_W: usize = 73; // UI_WIDTH(79) - 6 margins
+
+fn col_widths(show_cumulative: bool) -> (usize, usize) {
+    let num_cols = if show_cumulative { 4 } else { 3 };
+    let num_w = (TOTAL_W - WEEK_W) / num_cols;
+    (WEEK_W, num_w)
+}
+
 fn build_header(show_cumulative: bool) -> Line<'static> {
-    let week_w = 20usize;
-    let num_w = 9usize;
+    let (week_w, num_w) = col_widths(show_cumulative);
 
     let mut spans = vec![
-        Span::raw("  "),
         Span::styled(
             format!("{:<width$}", "Week", width = week_w),
             Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
@@ -159,7 +177,7 @@ fn build_header(show_cumulative: bool) -> Line<'static> {
 
     if show_cumulative {
         spans.push(Span::styled(
-            format!("{:>width$}", "Running", width = num_w),
+            format!("{:>width$}", "Cuml.", width = num_w),
             Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD),
         ));
     }
@@ -168,8 +186,7 @@ fn build_header(show_cumulative: bool) -> Line<'static> {
 }
 
 fn build_row(row: &crate::time::compute::WeekRow, show_cumulative: bool) -> Line<'static> {
-    let week_w = 20usize;
-    let num_w = 9usize;
+    let (week_w, num_w) = col_widths(show_cumulative);
 
     let worked_h = row.worked_secs as f64 / 3600.0;
     let balance = row.balance_hours;
@@ -193,7 +210,6 @@ fn build_row(row: &crate::time::compute::WeekRow, show_cumulative: bool) -> Line
     };
 
     let mut spans = vec![
-        Span::raw("  "),
         Span::styled(label, Style::default().fg(week_color)),
         Span::styled(worked_str, Style::default().fg(C_TEXT)),
         Span::styled(target_str, Style::default().fg(C_MUTED)),
