@@ -422,7 +422,9 @@ fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
             match field {
                 TimeDoctorField::Email => app.td_email = buf,
                 TimeDoctorField::Password => {
-                    app.set_td_password(&buf);
+                    if !app.set_td_password(&buf) {
+                        app.auth_error = Some("Failed to save password to keychain".to_string());
+                    }
                     return Action::Continue;
                 }
             }

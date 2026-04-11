@@ -537,7 +537,7 @@ impl App {
             .collect();
         contract_periods.sort_by_key(|p| p.from);
         let add_cp_monday = contract_periods.last().map(|p| p.from).unwrap_or_else(this_monday);
-        let td_password_is_set = crate::time::auth::load_token_from_keychain().is_some();
+        let td_password_is_set = crate::time::auth::load_password_from_keychain().is_some();
         Ok(Self {
             screen: Screen::MainMenu,
             main_state,
@@ -999,15 +999,21 @@ impl App {
     }
 
     /// Save password to keychain and update in-memory flag.
-    pub fn set_td_password(&mut self, password: &str) {
+    /// Returns true if the password was saved successfully.
+    pub fn set_td_password(&mut self, password: &str) -> bool {
         if password.is_empty() {
-            return;
+            return false;
         }
         // Delete old session token so a fresh login is triggered with the new password
         let _ = crate::time::auth::delete_token_from_keychain();
-        if let Ok(entry) = keyring::Entry::new("jotmate-timedoctor", "password") {
-            let _ = entry.set_password(password);
-            self.td_password_is_set = true;
+        match keyring::Entry::new("jotmate-timedoctor", "password")
+            .and_then(|e| e.set_password(password))
+        {
+            Ok(()) => {
+                self.td_password_is_set = true;
+                true
+            }
+            Err(_) => false,
         }
     }
 }

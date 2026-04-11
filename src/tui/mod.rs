@@ -76,6 +76,7 @@ async fn run_tui(initial_screen: Screen) -> Result<()> {
                     let td_rows = app.td_settings_items();
                     let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
                     app.td_settings_state.select(Some(first));
+                    app.auth_error = Some("Email or password not configured".to_string());
                     continue;
                 }
 
@@ -97,7 +98,7 @@ async fn run_tui(initial_screen: Screen) -> Result<()> {
                         if is_auth_err {
                             // Reload password state (user may have changed it)
                             app.td_password_is_set =
-                                crate::time::auth::load_token_from_keychain().is_some();
+                                crate::time::auth::load_password_from_keychain().is_some();
                             let msg = e.to_string();
                             terminal = setup_terminal()?;
                             app.screen = Screen::TimeDoctorSettings;

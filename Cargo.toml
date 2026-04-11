@@ -12,7 +12,7 @@ path = "src/main.rs"
 clap        = { version = "4.5",  features = ["derive", "env"] }
 tokio       = { version = "1.43", features = ["full"] }
 reqwest     = { version = "0.12", features = ["json", "cookies", "rustls-tls"], default-features = false }
-keyring     = "3.6"
+keyring     = { version = "3.6", features = ["apple-native"] }
 serde       = { version = "1.0",  features = ["derive"] }
 serde_json  = "1.0"
 toml        = "0.8"
