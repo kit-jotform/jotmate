@@ -809,9 +809,30 @@ fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
         })
         .collect();
 
+    let list_area = layout.get("list");
+
+    // If there's an auth error, split: error line on top, list below
+    let (error_area, items_area) = if app.auth_error.is_some() {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(2), Constraint::Min(0)])
+            .split(list_area);
+        (Some(chunks[0]), chunks[1])
+    } else {
+        (None, list_area)
+    };
+
+    if let (Some(area), Some(msg)) = (error_area, &app.auth_error) {
+        let text = format!("  ✗ {msg}");
+        f.render_widget(
+            Paragraph::new(text).style(Style::default().fg(C_DANGEROUS)),
+            area,
+        );
+    }
+
     f.render_stateful_widget(
         List::new(items),
-        layout.get("list"),
+        items_area,
         &mut app.td_settings_state.clone(),
     );
 }

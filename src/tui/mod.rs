@@ -56,14 +56,59 @@ async fn run_tui(initial_screen: Screen) -> Result<()> {
         app.settings_state.select(Some(first));
     }
 
-    let result = event_loop(&mut terminal, &mut app).await;
-    teardown_terminal(&mut terminal);
+    loop {
+        let result = event_loop(&mut terminal, &mut app).await;
+        teardown_terminal(&mut terminal);
 
-    // If the user selected Time from the main menu, run it now
-    // (after restoring the terminal so its output is visible)
-    if let Ok(Some(action)) = result {
-        if action == "time" {
-            crate::time::run(Default::default()).await?;
+        // If the user selected Time from the main menu, run it now
+        // (after restoring the terminal so its output is visible)
+        match result {
+            Ok(Some(action)) if action == "time" => {
+                // Pre-flight: redirect to credentials screen if not configured
+                if app.td_email.is_empty() || !app.td_password_is_set {
+                    terminal = setup_terminal()?;
+                    app.screen = Screen::TimeDoctorSettings;
+                    let td_rows = app.td_settings_items();
+                    let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                    app.td_settings_state.select(Some(first));
+                    continue;
+                }
+
+                match crate::time::run(Default::default()).await {
+                    Ok(()) => break,
+                    Err(e) => {
+                        // On auth failure, re-enter the TUI on credentials screen
+                        let is_auth_err = e
+                            .downcast_ref::<crate::error::AppError>()
+                            .map(|ae| {
+                                matches!(
+                                    ae,
+                                    crate::error::AppError::AuthFailed(_)
+                                        | crate::error::AppError::TokenExpired
+                                )
+                            })
+                            .unwrap_or(false);
+
+                        if is_auth_err {
+                            // Reload password state (user may have changed it)
+                            app.td_password_is_set =
+                                crate::time::auth::load_token_from_keychain().is_some();
+                            let msg = e.to_string();
+                            terminal = setup_terminal()?;
+                            app.screen = Screen::TimeDoctorSettings;
+                            let td_rows = app.td_settings_items();
+                            let first =
+                                td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                            app.td_settings_state.select(Some(first));
+                            app.auth_error = Some(msg);
+                            continue;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            _ => break,
         }
     }
 

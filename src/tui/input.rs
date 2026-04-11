@@ -374,12 +374,15 @@ fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
             let i = app.td_settings_state.selected().unwrap_or(0);
             match rows.get(i).cloned() {
                 Some(TimeSettingRow::Back) => {
+                    app.auth_error = None;
                     app.screen = Screen::Settings;
                 }
                 Some(TimeSettingRow::EditField { field, value, .. }) => {
+                    app.auth_error = None;
                     app.input_mode = InputMode::EditingField { field, buf: value };
                 }
                 Some(TimeSettingRow::Password { .. }) => {
+                    app.auth_error = None;
                     app.input_mode = InputMode::EditingField {
                         field: TimeDoctorField::Password,
                         buf: String::new(),
@@ -389,6 +392,7 @@ fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
             }
         }
         KeyCode::Esc | KeyCode::Backspace => {
+            app.auth_error = None;
             app.screen = Screen::Settings;
         }
         KeyCode::Char('q') => return Action::Back,

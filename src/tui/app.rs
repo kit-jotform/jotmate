@@ -460,6 +460,8 @@ pub struct App {
     pub add_cp_hours_idx: usize,
     // Sync progress state
     pub sync_state: Option<SyncScreenState>,
+    // Auth error message to show on TimeDoctorSettings screen
+    pub auth_error: Option<String>,
 }
 
 #[derive(Clone)]
@@ -547,6 +549,7 @@ impl App {
             add_cp_monday,
             add_cp_hours_idx: 1, // default 20h
             sync_state: None,
+            auth_error: None,
         })
     }
 
