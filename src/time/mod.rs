@@ -5,7 +5,8 @@ pub mod compute;
 pub mod display;
 
 use anyhow::Result;
-use chrono::{TimeZone, Utc};
+use chrono::TimeZone;
+use chrono_tz::Tz;
 use tokio::time::{sleep, Duration};
 
 use crate::cli::TimeArgs;
@@ -136,8 +137,19 @@ async fn fetch_week(
     }
 
     let sunday = get_week_end_sunday(monday);
-    let from_dt = Utc.from_utc_datetime(&monday.and_hms_opt(0, 0, 0).unwrap());
-    let to_dt = Utc.from_utc_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap());
+    let tz: Tz = timezone
+        .parse()
+        .unwrap_or(chrono_tz::UTC);
+    let from_dt = tz
+        .from_local_datetime(&monday.and_hms_opt(0, 0, 0).unwrap())
+        .earliest()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .ok_or_else(|| anyhow::anyhow!("Could not convert {} to timezone {}", monday, timezone))?;
+    let to_dt = tz
+        .from_local_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap())
+        .latest()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .ok_or_else(|| anyhow::anyhow!("Could not convert {} to timezone {}", sunday, timezone))?;
 
     let stats = api::get_week_stats(client, cookie, from_dt, to_dt, company_id, timezone).await?;
 

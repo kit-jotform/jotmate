@@ -480,8 +480,17 @@ async fn fetch_td_report(
         }
 
         let sunday = get_week_end_sunday(monday);
-        let from_dt = Utc.from_utc_datetime(&monday.and_hms_opt(0, 0, 0).unwrap());
-        let to_dt = Utc.from_utc_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap());
+        let tz: chrono_tz::Tz = timezone.parse().unwrap_or(chrono_tz::UTC);
+        let from_dt = tz
+            .from_local_datetime(&monday.and_hms_opt(0, 0, 0).unwrap())
+            .earliest()
+            .map(|dt| dt.with_timezone(&Utc))
+            .ok_or_else(|| format!("Could not convert {} to timezone {}", monday, timezone))?;
+        let to_dt = tz
+            .from_local_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap())
+            .latest()
+            .map(|dt| dt.with_timezone(&Utc))
+            .ok_or_else(|| format!("Could not convert {} to timezone {}", sunday, timezone))?;
 
         let stats = crate::time::api::get_week_stats(
             &client, &auth_cookie, from_dt, to_dt, company_id, &timezone,
@@ -1125,7 +1134,7 @@ impl App {
             .collect();
 
         tokio::spawn(async move {
-            let result = fetch_td_report(email, skip_current, use_cache, show_cumulative, timezone, contract_periods).await;
+            let result = fetch_td_report(email, skip_current, !use_cache, show_cumulative, timezone, contract_periods).await;
             let _ = tx.send(result);
         });
     }
@@ -1152,6 +1161,7 @@ impl App {
                     }
                 };
                 crate::time::compute::compute_cumulative(&mut rows, reset_from);
+                rows.reverse();
                 self.td_report = TdReportState::Ready { rows, show_cumulative };
             }
             Err(msg) => {
