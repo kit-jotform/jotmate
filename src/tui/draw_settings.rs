@@ -1,16 +1,16 @@
 use ratatui::{
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{List, ListItem},
 };
 
-use super::app::{App, GeneralToggleRow, InputMode, SettingRow};
+use super::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use super::draw::{
-    back_item, draw_screen_header, hint_navigate_toggle, link_item, sub_screen_layout, toggle_item,
-    HINT_CYCLE_VALUE,
+    back_item, draw_screen_header, hint_navigate_toggle, inline_field_item, link_item,
+    sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W,
 };
 use super::layout::LayoutEngine;
-use super::palette::{C_ACCENT, C_MUTED, C_PRIMARY, C_TEXT};
+use super::palette::C_MUTED;
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -28,7 +28,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     );
 
     let setting_rows = app.settings_items();
-    let selected = app.settings_state.selected().unwrap_or(0);
+    let selected = app.selected_index(Screen::Settings);
 
     let items: Vec<ListItem> = setting_rows
         .iter()
@@ -70,7 +70,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         layout.get("list"),
-        &mut app.settings_state.clone(),
+        &mut app.list_state(Screen::Settings).clone(),
     );
 }
 
@@ -89,17 +89,17 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
         hint_navigate_toggle(),
     );
 
+    let screen = if is_sync {
+        Screen::SyncGeneralSettings
+    } else {
+        Screen::TdGeneralSettings
+    };
     let rows = if is_sync {
         app.sync_general_items()
     } else {
         app.td_general_items()
     };
-    let state = if is_sync {
-        &app.sync_general_state
-    } else {
-        &app.td_general_state
-    };
-    let selected = state.selected().unwrap_or(0);
+    let selected = app.selected_index(screen);
 
     let items: Vec<ListItem> = rows
         .iter()
@@ -125,42 +125,23 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
                     toggle_item(is_sel, *on, label_text, *indent, *disabled)
                 }
                 GeneralToggleRow::TimezoneSelector { value } => {
-                    let label_w = 18usize;
-                    let label_padded = format!("{:<width$}", "Timezone", width = label_w);
                     let selecting = matches!(app.input_mode, InputMode::SelectingTimezone);
-                    if selecting {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label_padded,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(format!("< {} >", value), Style::default().fg(C_ACCENT)),
-                            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
-                        ]))
+                    let state = if selecting {
+                        FieldState::Editing
                     } else if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label_padded,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                value.clone(),
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                        ]))
+                        FieldState::Selected
                     } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(label_padded, Style::default().fg(C_TEXT)),
-                            Span::styled(value.clone(), Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                        FieldState::Normal
+                    };
+                    inline_field_item("Timezone", value, state, FIELD_LABEL_W)
                 }
             }
         })
         .collect();
 
-    f.render_stateful_widget(List::new(items), layout.get("list"), &mut state.clone());
+    f.render_stateful_widget(
+        List::new(items),
+        layout.get("list"),
+        &mut app.list_state(screen).clone(),
+    );
 }

@@ -5,13 +5,24 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, CpListRow, InputMode, TimeDoctorField, TimeSettingRow, WEEKLY_HOURS_OPTIONS};
+fn field_state(is_sel: bool, editing: bool) -> FieldState {
+    if editing {
+        FieldState::Editing
+    } else if is_sel {
+        FieldState::Selected
+    } else {
+        FieldState::Normal
+    }
+}
+
+use super::app::{App, CpListRow, InputMode, Screen, TimeDoctorField, TimeSettingRow, WEEKLY_HOURS_OPTIONS};
 use super::draw::{
     back_item, draw_confirm_dialog, draw_screen_header, fmt_date, hint_confirm_cancel,
-    hint_muted, hint_select_back, link_item, sub_screen_layout, DIVIDER_WIDTH, HINT_CYCLE_VALUE,
+    hint_muted, hint_select_back, inline_field_item, link_item, sub_screen_layout, FieldState,
+    DIVIDER_WIDTH, FIELD_LABEL_W,
 };
 use super::layout::LayoutEngine;
-use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_TEXT};
+use super::palette::{C_DANGEROUS, C_MUTED, C_TEXT};
 
 pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -35,7 +46,7 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     );
 
     let td_rows = app.td_settings_items();
-    let selected = app.td_settings_state.selected().unwrap_or(0);
+    let selected = app.selected_index(Screen::TimeDoctorSettings);
 
     let items: Vec<ListItem> = td_rows
         .iter()
@@ -55,43 +66,15 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                         } => Some(buf.as_str()),
                         _ => None,
                     };
-
                     let display_value = if let Some(buf) = active_buf {
-                        format!("{}_ ", "*".repeat(buf.len()))
+                        format!("{}_", "*".repeat(buf.len()))
                     } else if *is_set {
                         "[saved]".to_string()
                     } else {
                         "—".to_string()
                     };
-
-                    let label_padded = format!("{:<18}", "Password");
-
-                    if is_sel || active_buf.is_some() {
-                        let value_style = if active_buf.is_some() {
-                            Style::default().fg(C_ACCENT)
-                        } else {
-                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                        };
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label_padded,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(display_value, value_style),
-                        ]))
-                    } else {
-                        let value_style = if *is_set {
-                            Style::default().fg(C_TEXT)
-                        } else {
-                            Style::default().fg(C_MUTED)
-                        };
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(label_padded, Style::default().fg(C_TEXT)),
-                            Span::styled(display_value, value_style),
-                        ]))
-                    }
+                    let state = field_state(is_sel, active_buf.is_some());
+                    inline_field_item("Password", &display_value, state, FIELD_LABEL_W)
                 }
 
                 TimeSettingRow::EditField {
@@ -106,12 +89,11 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                         }
                         _ => None,
                     };
-
                     let display_value = if let Some(buf) = active_buf {
                         if *masked {
-                            format!("{}_ ", "*".repeat(buf.len()))
+                            format!("{}_", "*".repeat(buf.len()))
                         } else {
-                            format!("{buf}_ ")
+                            format!("{buf}_")
                         }
                     } else if value.is_empty() {
                         "—".to_string()
@@ -120,36 +102,8 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         value.clone()
                     };
-
-                    let label_w = 18usize;
-                    let label_padded = format!("{:<width$}", label, width = label_w);
-
-                    if is_sel || active_buf.is_some() {
-                        let value_style = if active_buf.is_some() {
-                            Style::default().fg(C_ACCENT)
-                        } else {
-                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                        };
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label_padded,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(display_value, value_style),
-                        ]))
-                    } else {
-                        let value_style = if value.is_empty() {
-                            Style::default().fg(C_MUTED)
-                        } else {
-                            Style::default().fg(C_TEXT)
-                        };
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(label_padded, Style::default().fg(C_TEXT)),
-                            Span::styled(display_value, value_style),
-                        ]))
-                    }
+                    let state = field_state(is_sel, active_buf.is_some());
+                    inline_field_item(label, &display_value, state, FIELD_LABEL_W)
                 }
             }
         })
@@ -178,7 +132,7 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         items_area,
-        &mut app.td_settings_state.clone(),
+        &mut app.list_state(Screen::TimeDoctorSettings).clone(),
     );
 }
 
@@ -206,8 +160,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     );
 
     let cp_rows = app.cp_list_items();
-    let selected = app.cp_list_state.selected().unwrap_or(0);
-    let label_w = 18usize;
+    let selected = app.selected_index(Screen::ContractPeriods);
 
     let items: Vec<ListItem> = cp_rows
         .iter()
@@ -226,41 +179,16 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 CpListRow::Back => back_item(is_sel),
                 CpListRow::SavePeriod => link_item(is_sel, "Save period"),
                 CpListRow::MondayField => {
-                    let label = format!("{:<width$}", "From Monday", width = label_w);
                     let value = fmt_date(app.add_cp_monday);
                     let editing = matches!(app.input_mode, InputMode::EditingCpMonday);
-                    if editing {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
-                            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
-                        ]))
-                    } else if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                value,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                        ]))
-                    } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(label, Style::default().fg(C_MUTED)),
-                            Span::styled(value, Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                    inline_field_item(
+                        "From Monday",
+                        &value,
+                        field_state(is_sel, editing),
+                        FIELD_LABEL_W,
+                    )
                 }
                 CpListRow::HoursField => {
-                    let label = format!("{:<width$}", "Weekly hours", width = label_w);
                     let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp_hours_idx];
                     let value = if hours_val.fract() == 0.0 {
                         format!("{}h", hours_val as u32)
@@ -268,35 +196,12 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                         format!("{hours_val}h")
                     };
                     let editing = matches!(app.input_mode, InputMode::EditingCpHours);
-                    if editing {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
-                            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
-                        ]))
-                    } else if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-                            Span::styled(
-                                label,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                value,
-                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-                            ),
-                        ]))
-                    } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(label, Style::default().fg(C_MUTED)),
-                            Span::styled(value, Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                    inline_field_item(
+                        "Weekly hours",
+                        &value,
+                        field_state(is_sel, editing),
+                        FIELD_LABEL_W,
+                    )
                 }
                 CpListRow::Period {
                     from, weekly_hours, ..
@@ -333,7 +238,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         layout.get("list"),
-        &mut app.cp_list_state.clone(),
+        &mut app.list_state(Screen::ContractPeriods).clone(),
     );
 
     if let InputMode::ConfirmDeletePeriod(idx) = &app.input_mode {

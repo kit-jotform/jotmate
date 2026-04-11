@@ -3,18 +3,16 @@ pub mod auth;
 pub mod cache;
 pub mod compute;
 pub mod display;
+pub mod fetch;
 
 use anyhow::Result;
-use chrono::TimeZone;
-use chrono_tz::Tz;
 use tokio::time::{sleep, Duration};
 
 use crate::cli::TimeArgs;
 use crate::config;
 use crate::error::AppError;
-use compute::{
-    format_week_range, get_target_hours, get_week_end_sunday, is_past_week, weeks_to_fetch, WeekRow,
-};
+use compute::WeekRow;
+pub use fetch::{fetch_week, FetchOpts};
 
 const BATCH_SIZE: usize = 10;
 const BATCH_DELAY_MS: u64 = 500;
@@ -25,7 +23,6 @@ pub async fn run(args: TimeArgs) -> Result<()> {
 
     let time_cfg = &cfg.time;
     let email = time_cfg.email.as_deref().unwrap();
-    let company_id = crate::config::TIMEDOCTOR_COMPANY_ID;
     let timezone = time_cfg.timezone.as_deref().unwrap();
     let contract_periods = time_cfg.contract_periods.as_deref().unwrap_or(&[]);
     let start_date = time_cfg
@@ -36,12 +33,20 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     let show_cumulative = time_cfg.show_cumulative;
     let reset_from = time_cfg.reset_cumulative_from_date;
 
+    let opts = FetchOpts {
+        timezone: timezone.to_string(),
+        contract_periods: contract_periods.to_vec(),
+        start_date,
+        skip_current,
+        no_cache: args.no_cache,
+    };
+
     // Get auth token (with retry on 401)
     let cookie = auth::get_or_refresh_token(email).await?;
 
     let client = reqwest::Client::new();
 
-    let mondays = weeks_to_fetch(start_date, skip_current);
+    let mondays = compute::weeks_to_fetch(opts.start_date, opts.skip_current);
     if mondays.is_empty() {
         println!("No weeks to fetch.");
         return Ok(());
@@ -61,19 +66,9 @@ pub async fn run(args: TimeArgs) -> Result<()> {
             sleep(Duration::from_millis(BATCH_DELAY_MS)).await;
         }
 
-        let mut batch_futures = Vec::new();
-        for &monday in chunk {
-            batch_futures.push(fetch_week(
-                &client,
-                &auth_cookie,
-                monday,
-                company_id,
-                timezone,
-                contract_periods,
-                args.no_cache,
-            ));
-        }
-
+        let batch_futures = chunk
+            .iter()
+            .map(|&monday| fetch_week(&client, &auth_cookie, monday, &opts));
         let results = futures::future::join_all(batch_futures).await;
 
         for result in results {
@@ -105,68 +100,18 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     Ok(())
 }
 
-async fn fetch_week(
-    client: &reqwest::Client,
-    cookie: &str,
-    monday: chrono::NaiveDate,
-    company_id: &str,
-    timezone: &str,
-    contract_periods: &[crate::config::ContractPeriod],
-    no_cache: bool,
-) -> Result<WeekRow> {
-    let week_label = format_week_range(monday);
-    let past = is_past_week(monday);
+/// Fetch all weeks sequentially for the TUI. Bails on token expiry.
+pub async fn fetch_report(email: &str, opts: FetchOpts) -> Result<Vec<WeekRow>> {
+    let auth_cookie = auth::get_or_refresh_token(email).await?;
+    let client = reqwest::Client::new();
+    let mondays = compute::weeks_to_fetch(opts.start_date, opts.skip_current);
 
-    // Try cache for past weeks
-    if past && !no_cache {
-        if let Some(stats) = cache::read_week_cache(company_id, monday) {
-            let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
-            let target_hours = get_target_hours(monday, contract_periods);
-            let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
-            return Ok(WeekRow {
-                monday,
-                week_label,
-                worked_secs,
-                target_hours,
-                balance_hours,
-                cumulative_hours: 0.0,
-                from_cache: true,
-            });
-        }
+    let mut rows: Vec<WeekRow> = Vec::new();
+    for monday in mondays {
+        let row = fetch_week(&client, &auth_cookie, monday, &opts).await?;
+        rows.push(row);
+        // Small delay between API calls to avoid hammering
+        sleep(Duration::from_millis(50)).await;
     }
-
-    let sunday = get_week_end_sunday(monday);
-    let tz: Tz = timezone
-        .parse()
-        .unwrap_or(chrono_tz::UTC);
-    let from_dt = tz
-        .from_local_datetime(&monday.and_hms_opt(0, 0, 0).unwrap())
-        .earliest()
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .ok_or_else(|| anyhow::anyhow!("Could not convert {} to timezone {}", monday, timezone))?;
-    let to_dt = tz
-        .from_local_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap())
-        .latest()
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .ok_or_else(|| anyhow::anyhow!("Could not convert {} to timezone {}", sunday, timezone))?;
-
-    let stats = api::get_week_stats(client, cookie, from_dt, to_dt, company_id, timezone).await?;
-
-    if past {
-        cache::write_week_cache(company_id, monday, &stats);
-    }
-
-    let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
-    let target_hours = get_target_hours(monday, contract_periods);
-    let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
-
-    Ok(WeekRow {
-        monday,
-        week_label,
-        worked_secs,
-        target_hours,
-        balance_hours,
-        cumulative_hours: 0.0,
-        from_cache: false,
-    })
+    Ok(rows)
 }

@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, MAIN_ITEMS};
+use super::app::{App, Screen, MAIN_ITEMS};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT};
 use super::widgets::{IconWidget, LOGO};
@@ -118,7 +118,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, (name, desc))| {
-            let selected = app.main_state.selected() == Some(i);
+            let selected = app.selected_index(Screen::MainMenu) == i;
             if selected {
                 let name_padded = format!("{:<width$}", name, width = NAME_COL_W as usize);
                 let mut spans = vec![
@@ -154,7 +154,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         rows.get("menu"),
-        &mut app.main_state.clone(),
+        &mut app.list_state(Screen::MainMenu).clone(),
     );
 
     // ── Hint ──

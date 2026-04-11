@@ -45,7 +45,7 @@ pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
 
 // ── Screens ──────────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Screen {
     MainMenu,
     Settings,
@@ -432,120 +432,55 @@ pub struct ContractPeriodEntry {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-async fn fetch_td_report(
-    email: String,
-    skip_current: bool,
-    no_cache: bool,
-    _show_cumulative: bool,
-    timezone: String,
-    contract_periods: Vec<crate::config::ContractPeriod>,
-) -> Result<Vec<crate::time::compute::WeekRow>, String> {
-    use crate::time::compute::{format_week_range, get_target_hours, get_week_end_sunday, is_past_week, weeks_to_fetch};
-    use chrono::{TimeZone, Utc};
-
-    let company_id = crate::config::TIMEDOCTOR_COMPANY_ID;
-    let start_date = contract_periods
-        .first()
-        .map(|p| p.from)
-        .ok_or_else(|| "No contract periods configured".to_string())?;
-
-    let auth_cookie = crate::time::auth::get_or_refresh_token(&email)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let client = reqwest::Client::new();
-    let mondays = weeks_to_fetch(start_date, skip_current);
-    let mut rows: Vec<crate::time::compute::WeekRow> = Vec::new();
-
-    for monday in mondays {
-        let week_label = format_week_range(monday);
-        let past = is_past_week(monday);
-
-        if past && !no_cache {
-            if let Some(stats) = crate::time::cache::read_week_cache(company_id, monday) {
-                let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
-                let target_hours = get_target_hours(monday, &contract_periods);
-                let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
-                rows.push(crate::time::compute::WeekRow {
-                    monday,
-                    week_label,
-                    worked_secs,
-                    target_hours,
-                    balance_hours,
-                    cumulative_hours: 0.0,
-                    from_cache: true,
-                });
-                continue;
-            }
-        }
-
-        let sunday = get_week_end_sunday(monday);
-        let tz: chrono_tz::Tz = timezone.parse().unwrap_or(chrono_tz::UTC);
-        let from_dt = tz
-            .from_local_datetime(&monday.and_hms_opt(0, 0, 0).unwrap())
-            .earliest()
-            .map(|dt| dt.with_timezone(&Utc))
-            .ok_or_else(|| format!("Could not convert {} to timezone {}", monday, timezone))?;
-        let to_dt = tz
-            .from_local_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap())
-            .latest()
-            .map(|dt| dt.with_timezone(&Utc))
-            .ok_or_else(|| format!("Could not convert {} to timezone {}", sunday, timezone))?;
-
-        let stats = crate::time::api::get_week_stats(
-            &client, &auth_cookie, from_dt, to_dt, company_id, &timezone,
-        )
-        .await
-        .map_err(|e| {
-            let is_expired = e
-                .downcast_ref::<crate::error::AppError>()
-                .map(|ae| matches!(ae, crate::error::AppError::TokenExpired))
-                .unwrap_or(false);
-            if is_expired {
-                // Delete stale token so next get_or_refresh_token goes to login
-                let _ = crate::time::auth::delete_token_from_keychain();
-                "TOKEN_EXPIRED".to_string()
-            } else {
-                e.to_string()
-            }
-        })?;
-
-        if past {
-            crate::time::cache::write_week_cache(company_id, monday, &stats);
-        }
-
-        let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
-        let target_hours = get_target_hours(monday, &contract_periods);
-        let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
-
-        rows.push(crate::time::compute::WeekRow {
-            monday,
-            week_label,
-            worked_secs,
-            target_hours,
-            balance_hours,
-            cumulative_hours: 0.0,
-            from_cache: false,
-        });
-
-        // Small delay between API calls to avoid hammering
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-    }
-
-    Ok(rows)
-}
-
 fn list_state_at(index: usize) -> ListState {
     let mut s = ListState::default();
     s.select(Some(index));
     s
 }
 
+fn first_interactive<T>(rows: &[T], is_interactive: impl Fn(&T) -> bool) -> usize {
+    rows.iter().position(is_interactive).unwrap_or(0)
+}
+
+fn navigate_simple(len: usize, current: usize, delta: i32) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    let last = len - 1;
+    if delta < 0 {
+        if current == 0 { last } else { current - 1 }
+    } else if current == last {
+        0
+    } else {
+        current + 1
+    }
+}
+
+fn navigate_rows<T>(
+    rows: &[T],
+    current: usize,
+    delta: i32,
+    is_interactive: impl Fn(&T) -> bool,
+) -> usize {
+    let len = rows.len();
+    if len == 0 {
+        return current;
+    }
+    let mut next = current;
+    for _ in 0..len {
+        next = navigate_simple(len, next, delta);
+        if is_interactive(&rows[next]) {
+            return next;
+        }
+    }
+    current
+}
+
 fn clamp_to_last_interactive<T>(
     rows: &[T],
-    state: &mut ListState,
+    current: usize,
     is_interactive: impl Fn(&T) -> bool,
-) {
+) -> usize {
     let last = rows
         .iter()
         .enumerate()
@@ -553,24 +488,14 @@ fn clamp_to_last_interactive<T>(
         .map(|(i, _)| i)
         .next_back()
         .unwrap_or(0);
-    let cur = state.selected().unwrap_or(0);
-    if cur > last {
-        state.select(Some(last));
-    }
+    current.min(last)
 }
 
 // ── App ─────────────────────────────────────────────────────────────────────
 
 pub struct App {
     pub screen: Screen,
-    pub main_state: ListState,
-    pub settings_state: ListState,
-    pub sync_general_state: ListState,
-    pub repo_manager_state: ListState,
-    pub remove_repo_state: ListState,
-    pub td_general_state: ListState,
-    pub td_settings_state: ListState,
-    pub cp_list_state: ListState,
+    pub list_states: HashMap<Screen, ListState>,
     pub td_report: TdReportState,
     pub td_report_scroll: usize,
     pub input_mode: InputMode,
@@ -620,14 +545,19 @@ fn this_monday() -> NaiveDate {
 impl App {
     pub fn new() -> Result<Self> {
         let config = crate::config::load()?;
-        let main_state = list_state_at(0);
-        let settings_state = list_state_at(0);
-        let sync_general_state = list_state_at(0);
-        let repo_manager_state = list_state_at(0);
-        let remove_repo_state = list_state_at(0);
-        let td_general_state = list_state_at(0);
-        let td_settings_state = list_state_at(0);
-        let cp_list_state = list_state_at(0);
+        let list_states: HashMap<Screen, ListState> = [
+            Screen::MainMenu,
+            Screen::Settings,
+            Screen::SyncGeneralSettings,
+            Screen::RepoManager,
+            Screen::RemoveRepos,
+            Screen::TdGeneralSettings,
+            Screen::TimeDoctorSettings,
+            Screen::ContractPeriods,
+        ]
+        .into_iter()
+        .map(|s| (s, list_state_at(0)))
+        .collect();
         let repos = config
             .sync
             .upstream_repos
@@ -660,14 +590,7 @@ impl App {
         let td_password_is_set = crate::time::auth::load_password_from_keychain().is_some();
         Ok(Self {
             screen: Screen::MainMenu,
-            main_state,
-            settings_state,
-            sync_general_state,
-            repo_manager_state,
-            remove_repo_state,
-            td_general_state,
-            td_settings_state,
-            cp_list_state,
+            list_states,
             td_report: TdReportState::Loading,
             td_report_scroll: 0,
             input_mode: InputMode::Normal,
@@ -881,6 +804,61 @@ impl App {
         rows
     }
 
+    // ── List state accessors ───────────────────────────────────────────────
+
+    pub fn list_state(&self, screen: Screen) -> &ListState {
+        self.list_states
+            .get(&screen)
+            .unwrap_or_else(|| panic!("no ListState for screen {:?}", screen as u8))
+    }
+
+    pub fn list_state_mut(&mut self, screen: Screen) -> &mut ListState {
+        self.list_states
+            .get_mut(&screen)
+            .unwrap_or_else(|| panic!("no ListState for screen {:?}", screen as u8))
+    }
+
+    pub fn selected_index(&self, screen: Screen) -> usize {
+        self.list_state(screen).selected().unwrap_or(0)
+    }
+
+    pub fn select(&mut self, screen: Screen, i: usize) {
+        self.list_state_mut(screen).select(Some(i));
+    }
+
+    /// Select the first interactive row of the given screen (for use when navigating in).
+    pub fn select_first_interactive(&mut self, screen: Screen) {
+        let i = match screen {
+            Screen::Settings => first_interactive(&self.settings_items(), SettingRow::is_interactive),
+            Screen::SyncGeneralSettings => first_interactive(&self.sync_general_items(), GeneralToggleRow::is_interactive),
+            Screen::TdGeneralSettings => first_interactive(&self.td_general_items(), GeneralToggleRow::is_interactive),
+            Screen::RepoManager => first_interactive(&self.repo_manager_items(), RepoManagerRow::is_interactive),
+            Screen::RemoveRepos => first_interactive(&self.remove_repo_items(), RemoveRepoRow::is_interactive),
+            Screen::TimeDoctorSettings => first_interactive(&self.td_settings_items(), TimeSettingRow::is_interactive),
+            Screen::ContractPeriods => first_interactive(&self.cp_list_items(), CpListRow::is_interactive),
+            _ => 0,
+        };
+        self.select(screen, i);
+    }
+
+    /// Navigate the current screen's list by `delta`, skipping non-interactive rows.
+    pub fn navigate_current(&mut self, delta: i32) {
+        let screen = self.screen;
+        let cur = self.selected_index(screen);
+        let next = match screen {
+            Screen::MainMenu => navigate_simple(MAIN_ITEMS.len(), cur, delta),
+            Screen::Settings => navigate_rows(&self.settings_items(), cur, delta, SettingRow::is_interactive),
+            Screen::SyncGeneralSettings => navigate_rows(&self.sync_general_items(), cur, delta, GeneralToggleRow::is_interactive),
+            Screen::TdGeneralSettings => navigate_rows(&self.td_general_items(), cur, delta, GeneralToggleRow::is_interactive),
+            Screen::RepoManager => navigate_rows(&self.repo_manager_items(), cur, delta, RepoManagerRow::is_interactive),
+            Screen::RemoveRepos => navigate_rows(&self.remove_repo_items(), cur, delta, RemoveRepoRow::is_interactive),
+            Screen::TimeDoctorSettings => navigate_rows(&self.td_settings_items(), cur, delta, TimeSettingRow::is_interactive),
+            Screen::ContractPeriods => navigate_rows(&self.cp_list_items(), cur, delta, CpListRow::is_interactive),
+            _ => cur,
+        };
+        self.select(screen, next);
+    }
+
     pub fn toggle_by_kind(&mut self, kind: ToggleKind) {
         let flag = match kind {
             ToggleKind::SyncAll => &mut self.sync_all,
@@ -928,7 +906,9 @@ impl App {
         self.persist_settings();
         self.input_mode = InputMode::Normal;
         let rows = self.remove_repo_items();
-        clamp_to_last_interactive(&rows, &mut self.remove_repo_state, RemoveRepoRow::is_interactive);
+        let cur = self.selected_index(Screen::RemoveRepos);
+        let clamped = clamp_to_last_interactive(&rows, cur, RemoveRepoRow::is_interactive);
+        self.select(Screen::RemoveRepos, clamped);
     }
 
     pub fn confirm_delete_period(&mut self, index: usize) {
@@ -942,7 +922,9 @@ impl App {
         }
         self.input_mode = InputMode::Normal;
         let rows = self.cp_list_items();
-        clamp_to_last_interactive(&rows, &mut self.cp_list_state, CpListRow::is_interactive);
+        let cur = self.selected_index(Screen::ContractPeriods);
+        let clamped = clamp_to_last_interactive(&rows, cur, CpListRow::is_interactive);
+        self.select(Screen::ContractPeriods, clamped);
     }
 
     pub fn save_new_contract_period(&mut self) {
@@ -956,8 +938,8 @@ impl App {
             self.contract_periods.push(entry);
             self.contract_periods.sort_by_key(|p| p.from);
             // New period added — bump selection to stay on the same row
-            let i = self.cp_list_state.selected().unwrap_or(0);
-            self.cp_list_state.select(Some(i + 1));
+            let i = self.selected_index(Screen::ContractPeriods);
+            self.select(Screen::ContractPeriods, i + 1);
         }
         self.persist_td_settings();
         // Reset add fields for next entry
@@ -1130,23 +1112,43 @@ impl App {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.td_report_rx = Some(rx);
 
-        // Capture config values for the async task
         let email = self.td_email.clone();
-        let skip_current = self.td_skip_current_week;
-        let use_cache = self.td_use_time_cache;
-        let show_cumulative = self.td_show_cumulative;
-        let timezone = TIMEZONES[self.td_timezone_idx].to_string();
-        let contract_periods: Vec<crate::config::ContractPeriod> = self
+        let contract_periods: Vec<ContractPeriod> = self
             .contract_periods
             .iter()
-            .map(|p| crate::config::ContractPeriod {
+            .map(|p| ContractPeriod {
                 from: p.from,
                 weekly_hours: p.weekly_hours,
             })
             .collect();
+        let Some(start_date) = contract_periods.first().map(|p| p.from) else {
+            self.td_report = TdReportState::Error("No contract periods configured".to_string());
+            self.td_report_rx = None;
+            return;
+        };
+        let opts = crate::time::FetchOpts {
+            timezone: TIMEZONES[self.td_timezone_idx].to_string(),
+            contract_periods,
+            start_date,
+            skip_current: self.td_skip_current_week,
+            no_cache: !self.td_use_time_cache,
+        };
 
         tokio::spawn(async move {
-            let result = fetch_td_report(email, skip_current, !use_cache, show_cumulative, timezone, contract_periods).await;
+            let result = crate::time::fetch_report(&email, opts)
+                .await
+                .map_err(|e| {
+                    let is_expired = e
+                        .downcast_ref::<crate::error::AppError>()
+                        .map(|ae| matches!(ae, crate::error::AppError::TokenExpired))
+                        .unwrap_or(false);
+                    if is_expired {
+                        let _ = crate::time::auth::delete_token_from_keychain();
+                        "TOKEN_EXPIRED".to_string()
+                    } else {
+                        e.to_string()
+                    }
+                });
             let _ = tx.send(result);
         });
     }

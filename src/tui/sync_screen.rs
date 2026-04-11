@@ -5,14 +5,12 @@ use ratatui::{
 };
 
 use super::app::{App, ForkStatus, RdsStatus};
+use super::draw::{draw_screen_header, hint_muted};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
-use super::widgets::LOGO_SMALL;
 
 use ratatui::style::Color;
 
-use super::palette::{
-    C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN,
-};
+use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
 // ── Spinner frames ──────────────────────────────────────────────────────────
 
@@ -43,63 +41,20 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
 
     let engine = LayoutEngine::new(area.x);
 
-    // ── Small logo ──
-    let logo_w = LOGO_SMALL[0].chars().count() as u16;
-    let logo_lines: Vec<Line> = LOGO_SMALL
-        .iter()
-        .map(|l| {
-            Line::from(Span::styled(
-                *l,
-                Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD),
-            ))
-        })
-        .collect();
-    f.render_widget(
-        Paragraph::new(logo_lines),
-        engine.center(logo_w, rows.get("logo")),
-    );
-
-    // ── Title ──
     let is_complete = app.sync_is_complete();
-    let title = if is_complete {
-        "Sync Complete"
+    let (title, hint_spans) = if is_complete {
+        ("Sync Complete", hint_muted(&["↵/Esc", " dismiss"]))
     } else {
-        "Syncing Repos"
+        ("Syncing Repos", hint_muted(&["q/Esc", " cancel"]))
     };
-    let title_row = engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("title"));
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            title,
-            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-        ))),
-        title_row,
-    );
-
-    // Hint on title row (right-aligned)
-    let hint_spans: Vec<Span> = if is_complete {
-        vec![
-            Span::styled("↵/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" dismiss", Style::default().fg(C_MUTED)),
-        ]
-    } else {
-        vec![
-            Span::styled("q/Esc", Style::default().fg(C_MUTED)),
-            Span::styled(" cancel", Style::default().fg(C_MUTED)),
-        ]
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(hint_spans)).right_aligned(),
-        title_row,
-    );
-
-    // ── Divider ──
-    let divider = "─".repeat(UI_WIDTH as usize);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            divider,
-            Style::default().fg(C_MUTED),
-        ))),
-        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("divider")),
+    draw_screen_header(
+        f,
+        &engine,
+        rows.get("logo"),
+        rows.get("title"),
+        rows.get("divider"),
+        title,
+        hint_spans,
     );
 
     // ── Summary line ──

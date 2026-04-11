@@ -136,18 +136,85 @@ pub(super) fn toggle_item(
     }
 }
 
+/// Visual state for an inline label+value row (timezone selector, date field, password, etc.).
+///
+/// - `Normal`   — not focused: label muted/text, value muted/text.
+/// - `Selected` — focused but not being edited: label+value bold in C_ACCENT with `▸` prefix.
+/// - `Editing`  — focused and being edited: same as Selected, but the value renders as
+///   `< value >` followed by the "↑↓ change • ↵ confirm" hint.
+pub(super) enum FieldState {
+    Normal,
+    Selected,
+    Editing,
+}
+
+/// Render one inline label+value row with consistent state visuals.
+/// `label_w` is the fixed-width padding for the label column.
+pub(super) fn inline_field_item(
+    label: &str,
+    value: &str,
+    state: FieldState,
+    label_w: usize,
+) -> ListItem<'static> {
+    let label_padded = format!("{:<width$}", label, width = label_w);
+    match state {
+        FieldState::Editing => ListItem::new(Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled(
+                label_padded,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
+            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
+        ])),
+        FieldState::Selected => ListItem::new(Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled(
+                label_padded,
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                value.to_string(),
+                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            ),
+        ])),
+        FieldState::Normal => ListItem::new(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(label_padded, Style::default().fg(C_TEXT)),
+            Span::styled(value.to_string(), Style::default().fg(C_TEXT)),
+        ])),
+    }
+}
+
+pub(super) const FIELD_LABEL_W: usize = 18;
+
 pub(super) fn link_item(is_sel: bool, label: &str) -> ListItem<'static> {
-    let style = if is_sel {
+    link_item_styled(is_sel, label, C_TEXT)
+}
+
+/// Like `link_item` but renders the unselected label in `C_MUTED` — used for
+/// sub-actions (e.g. "+ Add upstream URL", "→ Remove Repos") that should read as
+/// secondary affordances until focused.
+pub(super) fn sub_link_item(is_sel: bool, label: &str) -> ListItem<'static> {
+    link_item_styled(is_sel, label, C_MUTED)
+}
+
+fn link_item_styled(
+    is_sel: bool,
+    label: &str,
+    unselected_fg: ratatui::style::Color,
+) -> ListItem<'static> {
+    let label_style = if is_sel {
         Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(C_TEXT)
+        Style::default().fg(unselected_fg)
     };
     ListItem::new(Line::from(vec![
         Span::styled(
             if is_sel { "▸ " } else { "  " },
             Style::default().fg(C_PRIMARY),
         ),
-        Span::styled(label.to_string(), style),
+        Span::styled(label.to_string(), label_style),
     ]))
 }
 

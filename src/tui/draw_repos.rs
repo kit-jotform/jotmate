@@ -4,13 +4,13 @@ use ratatui::{
     widgets::{List, ListItem},
 };
 
-use super::app::{App, InputMode, RemoveRepoRow, RepoManagerRow};
+use super::app::{App, InputMode, RemoveRepoRow, RepoManagerRow, Screen};
 use super::draw::{
     back_item, draw_confirm_dialog, draw_screen_header, hint_confirm_cancel, hint_input_confirm,
-    hint_select_back, sub_screen_layout, toggle_item,
+    hint_select_back, sub_link_item, sub_screen_layout, toggle_item,
 };
 use super::layout::LayoutEngine;
-use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_TEXT};
+use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_TEXT};
 
 pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -32,7 +32,7 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     );
 
     let rm_rows = app.repo_manager_items();
-    let selected = app.repo_manager_state.selected().unwrap_or(0);
+    let selected = app.selected_index(Screen::RepoManager);
 
     let items: Vec<ListItem> = rm_rows
         .iter()
@@ -48,20 +48,7 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
                     toggle_item(is_sel, *enabled, format!("{name}  <{url}>"), false, false)
                 }
 
-                RepoManagerRow::RemoveReposLink => {
-                    let style = if is_sel {
-                        Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(C_MUTED)
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            if is_sel { "▸ " } else { "  " },
-                            Style::default().fg(if is_sel { C_PRIMARY } else { C_MUTED }),
-                        ),
-                        Span::styled("→ Remove Repos", style),
-                    ]))
-                }
+                RepoManagerRow::RemoveReposLink => sub_link_item(is_sel, "→ Remove Repos"),
 
                 RepoManagerRow::AddUrl => match &app.input_mode {
                     InputMode::AddingRepo(buf) => {
@@ -71,20 +58,7 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
                             Style::default().fg(C_ACCENT),
                         )))
                     }
-                    _ => {
-                        let style = if is_sel {
-                            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(C_MUTED)
-                        };
-                        ListItem::new(Line::from(vec![
-                            Span::styled(
-                                if is_sel { "▸ " } else { "  " },
-                                Style::default().fg(C_PRIMARY),
-                            ),
-                            Span::styled("+ Add upstream URL", style),
-                        ]))
-                    }
+                    _ => sub_link_item(is_sel, "+ Add upstream URL"),
                 },
             }
         })
@@ -93,7 +67,7 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         layout.get("list"),
-        &mut app.repo_manager_state.clone(),
+        &mut app.list_state(Screen::RepoManager).clone(),
     );
 }
 
@@ -117,7 +91,7 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
     );
 
     let rows = app.remove_repo_items();
-    let selected = app.remove_repo_state.selected().unwrap_or(0);
+    let selected = app.selected_index(Screen::RemoveRepos);
 
     let items: Vec<ListItem> = rows
         .iter()
@@ -155,7 +129,7 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
     f.render_stateful_widget(
         List::new(items),
         layout.get("list"),
-        &mut app.remove_repo_state.clone(),
+        &mut app.list_state(Screen::RemoveRepos).clone(),
     );
 
     if let InputMode::ConfirmDelete(name) = &app.input_mode {
