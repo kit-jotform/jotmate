@@ -59,6 +59,18 @@ pub fn format_hours(decimal_hours: f64) -> String {
     }
 }
 
+pub fn format_hours_signed(decimal_hours: f64) -> String {
+    let sign = if decimal_hours < 0.0 { "-" } else { "+" };
+    let abs = decimal_hours.abs();
+    let h = abs.floor() as u64;
+    let m = ((abs - abs.floor()) * 60.0).round() as u64;
+    if m == 0 {
+        format!("{sign}{h}h")
+    } else {
+        format!("{sign}{h}h {m}m")
+    }
+}
+
 /// Returns Mondays from start_date to today, newest first.
 pub fn weeks_to_fetch(start_date: NaiveDate, skip_current_week: bool) -> Vec<NaiveDate> {
     let today = Local::now().date_naive();

@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::Paragraph,
 };
 
 use super::app::{App, TdReportState};
@@ -10,7 +10,7 @@ use super::draw::{draw_screen_header, hint_muted, sub_screen_layout};
 use super::layout::LayoutEngine;
 use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
-use crate::time::compute::format_hours;
+use crate::time::compute::{format_hours, format_hours_signed};
 
 pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -80,47 +80,52 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             let header_area = chunks[0];
             let data_area = chunks[1];
 
-            // Fixed header (never scrolls)
+            // Fixed header (never scrolls) — inset 2 chars on right to match gap + scrollbar
+            let header_text_area = Rect { width: header_area.width.saturating_sub(2), ..header_area };
             let divider = Line::from(Span::styled(
-                "─".repeat(header_area.width as usize),
+                "─".repeat(header_text_area.width as usize),
                 Style::default().fg(C_MUTED),
             ));
             f.render_widget(
                 Paragraph::new(vec![build_header(*show_cumulative), divider]),
-                header_area,
+                header_text_area,
             );
 
-            // Scrollable data rows
-            let data_lines: Vec<Line> = rows.iter().map(|r| build_row(r, *show_cumulative)).collect();
+            // Scrollable data rows — always reserve 1 char on the right for the scrollbar
+            let total_rows = rows.len();
+            let data_lines: Vec<Line> = rows.iter().enumerate()
+                .map(|(i, r)| build_row(r, *show_cumulative, i + 1, total_rows))
+                .collect();
             let total_lines = data_lines.len();
             let visible = data_area.height as usize;
             let max_scroll = total_lines.saturating_sub(visible);
             let scroll = app.td_report_scroll.min(max_scroll);
 
+            // Reserve gap(1) + scrollbar(1) on the right
+            let hchunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)])
+                .split(data_area);
+
+            f.render_widget(
+                Paragraph::new(data_lines).scroll((scroll as u16, 0)),
+                hchunks[0],
+            );
+
             if total_lines > visible {
-                let hchunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Min(0), Constraint::Length(1)])
-                    .split(data_area);
-
-                f.render_widget(
-                    Paragraph::new(data_lines).scroll((scroll as u16, 0)),
-                    hchunks[0],
-                );
-
-                let mut sb_state = ScrollbarState::default()
-                    .content_length(max_scroll)
-                    .position(scroll);
-                f.render_stateful_widget(
-                    Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                    hchunks[1],
-                    &mut sb_state,
-                );
-            } else {
-                f.render_widget(
-                    Paragraph::new(data_lines).scroll((scroll as u16, 0)),
-                    data_area,
-                );
+                // Single-char thumb: position proportionally within the track height
+                let track_h = hchunks[2].height as usize;
+                let thumb_row = scroll * track_h.saturating_sub(1) / max_scroll;
+                let lines: Vec<Line> = (0..track_h)
+                    .map(|i| {
+                        if i == thumb_row {
+                            Line::from(Span::styled("▐", Style::default().fg(C_MUTED)))
+                        } else {
+                            Line::from(Span::styled("│", Style::default().fg(C_MUTED)))
+                        }
+                    })
+                    .collect();
+                f.render_widget(Paragraph::new(lines), hchunks[2]);
             }
         }
     }
@@ -144,8 +149,8 @@ fn split_content_back(area: Rect) -> (Rect, Rect) {
     (chunks[0], chunks[1])
 }
 
-const WEEK_W: usize = 24;
-const TOTAL_W: usize = 73; // UI_WIDTH(79) - 6 margins
+const WEEK_W: usize = 26; // 4-char index prefix + 22-char date range
+const TOTAL_W: usize = 71; // UI_WIDTH(79) - 6 margins - 1 gap - 1 scrollbar
 
 fn col_widths(show_cumulative: bool) -> (usize, usize) {
     let num_cols = if show_cumulative { 4 } else { 3 };
@@ -185,7 +190,7 @@ fn build_header(show_cumulative: bool) -> Line<'static> {
     Line::from(spans)
 }
 
-fn build_row(row: &crate::time::compute::WeekRow, show_cumulative: bool) -> Line<'static> {
+fn build_row(row: &crate::time::compute::WeekRow, show_cumulative: bool, index: usize, total: usize) -> Line<'static> {
     let (week_w, num_w) = col_widths(show_cumulative);
 
     let worked_h = row.worked_secs as f64 / 3600.0;
@@ -200,24 +205,28 @@ fn build_row(row: &crate::time::compute::WeekRow, show_cumulative: bool) -> Line
 
     let worked_str = format!("{:>width$}", format_hours(worked_h), width = num_w);
     let target_str = format!("{:>width$}", format_hours(row.target_hours), width = num_w);
-    let balance_str = format!("{:>width$}", format_hours(balance), width = num_w);
+    let balance_str = format!("{:>width$}", format_hours_signed(balance), width = num_w);
 
-    // Truncate week label if needed
-    let label = if row.week_label.len() > week_w {
-        row.week_label[..week_w].to_string()
+    // Index prefix width scales with total (e.g. "9. " = 3, "23. " = 4)
+    let idx_w = total.to_string().len() + 2; // digits + ". "
+    let date_w = week_w.saturating_sub(idx_w);
+    let idx_str = format!("{:>width$}. ", index, width = total.to_string().len());
+    let date_label = if row.week_label.len() > date_w {
+        format!("{:<width$}", &row.week_label[..date_w], width = date_w)
     } else {
-        format!("{:<width$}", row.week_label, width = week_w)
+        format!("{:<width$}", row.week_label, width = date_w)
     };
 
     let mut spans = vec![
-        Span::styled(label, Style::default().fg(week_color)),
+        Span::styled(idx_str, Style::default().fg(C_MUTED)),
+        Span::styled(date_label, Style::default().fg(week_color)),
         Span::styled(worked_str, Style::default().fg(C_TEXT)),
         Span::styled(target_str, Style::default().fg(C_MUTED)),
         Span::styled(balance_str, Style::default().fg(balance_color)),
     ];
 
     if show_cumulative {
-        let cum_str = format!("{:>width$}", format_hours(cumulative), width = num_w);
+        let cum_str = format!("{:>width$}", format_hours_signed(cumulative), width = num_w);
         spans.push(Span::styled(cum_str, Style::default().fg(cum_color)));
     }
 

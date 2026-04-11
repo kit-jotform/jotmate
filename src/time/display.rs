@@ -1,4 +1,4 @@
-use crate::time::compute::{format_hours, WeekRow};
+use crate::time::compute::{format_hours, format_hours_signed, WeekRow};
 
 const GREEN: &str = "\x1b[32m";
 const RED: &str = "\x1b[31m";
@@ -55,8 +55,8 @@ pub fn print_results(rows: &[WeekRow], show_cumulative: bool) {
                 row.week_label,
                 format_hours(row.worked_secs as f64 / 3600.0),
                 format_hours(row.target_hours),
-                format_hours(row.balance_hours),
-                format_hours(row.cumulative_hours),
+                format_hours_signed(row.balance_hours),
+                format_hours_signed(row.cumulative_hours),
             );
         } else {
             println!(
@@ -64,7 +64,7 @@ pub fn print_results(rows: &[WeekRow], show_cumulative: bool) {
                 row.week_label,
                 format_hours(row.worked_secs as f64 / 3600.0),
                 format_hours(row.target_hours),
-                format_hours(row.balance_hours),
+                format_hours_signed(row.balance_hours),
             );
         }
     }
@@ -77,9 +77,8 @@ pub fn print_results(rows: &[WeekRow], show_cumulative: bool) {
             let total = last.cumulative_hours;
             let color = if total >= 0.0 { GREEN } else { RED };
             println!(
-                "\n{BOLD}{color}Total Balance: {}{}{RESET}\n",
-                if total >= 0.0 { "+" } else { "" },
-                format_hours(total)
+                "\n{BOLD}{color}Total Balance: {}{RESET}\n",
+                format_hours_signed(total)
             );
         }
     }
