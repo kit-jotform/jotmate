@@ -1,5 +1,9 @@
 pub(crate) mod app;
 mod draw;
+mod draw_main_menu;
+mod draw_repos;
+mod draw_settings;
+mod draw_time;
 mod input;
 mod layout;
 mod palette;
