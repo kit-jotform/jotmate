@@ -103,6 +103,17 @@ pub(in crate::tui::draw) enum FieldState {
     Editing,
 }
 
+/// Collapse `(is_selected, is_editing)` into a `FieldState`.
+pub(in crate::tui::draw) fn field_state(is_sel: bool, editing: bool) -> FieldState {
+    if editing {
+        FieldState::Editing
+    } else if is_sel {
+        FieldState::Selected
+    } else {
+        FieldState::Normal
+    }
+}
+
 /// Render one inline label+value row with consistent state visuals.
 pub(in crate::tui::draw) fn inline_field_item(
     label: &str,

@@ -51,7 +51,7 @@ Screens managed by an `App` state struct (defined in `app/screen.rs`):
 - `rows.rs` — row enums (`SettingRow`, `RepoManagerRow`, `CpListRow`, `ToggleKind`, …) and `InputMode`
 - `sync_state.rs` — `RepoSyncState`, `ForkStatus`, `RdsStatus`, `SyncUpdate` channel messages
 - `draw/` — per-screen renderers + shared helpers:
-  - `mod.rs` is a dispatcher; each screen has its own file (`main_menu.rs`, `settings.rs`, `repos.rs`, `time.rs`, `td_report.rs`, `sync_screen.rs`)
+  - `mod.rs` is a dispatcher; each screen has its own file (`main_menu.rs`, `settings.rs`, `repos.rs`, `time.rs`, `contract.rs`, `td_report.rs`, `sync.rs`) — matching the `input/` naming
   - `common/` holds shared helpers: `hints.rs`, `items.rs` (list-item builders + `FieldState`), `header.rs` (`draw_screen_header`), `dialog.rs` (`draw_confirm_dialog`)
 - `input/` — per-screen keyboard handlers:
   - `mod.rs` dispatches; `keys.rs` (key classifiers), `helpers.rs` (nav/cycle/text-input helpers), then one file per screen (`main_menu.rs`, `settings.rs`, `repos.rs`, `time.rs`, `contract.rs`, `td_report.rs`, `sync.rs`)
@@ -181,9 +181,10 @@ jotmate/
 │       │   ├── main_menu.rs     # MainMenu renderer
 │       │   ├── settings.rs      # Settings + general-toggle list renderer
 │       │   ├── repos.rs         # RepoManager + RemoveRepos renderers
-│       │   ├── time.rs          # TimeDoctorSettings + ContractPeriods renderers
+│       │   ├── time.rs          # TimeDoctorSettings renderer
+│       │   ├── contract.rs      # ContractPeriods renderer
 │       │   ├── td_report.rs     # TimeDoctorReport renderer
-│       │   ├── sync_screen.rs   # SyncProgress renderer
+│       │   ├── sync.rs          # SyncProgress renderer
 │       │   └── common/          # Shared draw helpers
 │       │       ├── mod.rs       # fmt_date, sub_screen_layout, width constants
 │       │       ├── hints.rs     # Hint-span builders (navigate/toggle, select/back, ...)

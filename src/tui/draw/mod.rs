@@ -7,26 +7,28 @@
 use crate::tui::app::{App, Screen};
 
 mod common;
+mod contract;
 mod main_menu;
 mod repos;
 mod settings;
-mod sync_screen;
+mod sync;
 mod td_report;
 mod time;
 
 // Re-export helpers at `super::*` scope for sibling draw submodules.
 pub(in crate::tui::draw) use common::{
-    back_item, draw_confirm_dialog, draw_screen_header, fmt_date, hint_confirm_cancel,
-    hint_input_confirm, hint_muted, hint_navigate_toggle, hint_select_back, inline_field_item,
-    link_item, separator_item, sub_link_item, sub_screen_layout, toggle_item, FieldState,
-    DIVIDER_WIDTH, FIELD_LABEL_W, FIELD_LABEL_W_TZ,
+    back_item, draw_confirm_dialog, draw_screen_header, field_state, fmt_date,
+    hint_confirm_cancel, hint_input_confirm, hint_muted, hint_navigate_toggle, hint_select_back,
+    inline_field_item, link_item, separator_item, sub_link_item, sub_screen_layout, toggle_item,
+    FieldState, DIVIDER_WIDTH, FIELD_LABEL_W, FIELD_LABEL_W_TZ,
 };
 
+use contract::draw_contract_periods;
 use main_menu::draw_main_menu;
 use repos::{draw_remove_repos, draw_repo_manager};
 use settings::{draw_general_toggles, draw_settings};
 use td_report::draw_td_report;
-use time::{draw_contract_periods, draw_td_settings};
+use time::draw_td_settings;
 
 pub fn draw(f: &mut ratatui::Frame, app: &App) {
     match app.screen {
@@ -39,6 +41,6 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
         Screen::TimeDoctorReport => draw_td_report(f, app),
-        Screen::SyncProgress => sync_screen::draw_sync_progress(f, app),
+        Screen::SyncProgress => sync::draw_sync_progress(f, app),
     }
 }
