@@ -143,9 +143,6 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
 
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDeletePeriod(_) => hint_confirm_cancel(),
-        InputMode::EditingCpMonday | InputMode::EditingCpHours => {
-            hint_muted(&["↑↓", " change  •  ", "↵", " confirm"])
-        }
         _ => hint_select_back(),
     };
 
@@ -180,7 +177,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 CpListRow::SavePeriod => link_item(is_sel, "Save period"),
                 CpListRow::MondayField => {
                     let value = fmt_date(app.add_cp_monday);
-                    let editing = matches!(app.input_mode, InputMode::EditingCpMonday);
+                    let editing = matches!(app.input_mode, InputMode::EditingCpMonday(_));
                     inline_field_item(
                         "From Monday",
                         &value,
@@ -195,7 +192,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         format!("{hours_val}h")
                     };
-                    let editing = matches!(app.input_mode, InputMode::EditingCpHours);
+                    let editing = matches!(app.input_mode, InputMode::EditingCpHours(_));
                     inline_field_item(
                         "Weekly hours",
                         &value,

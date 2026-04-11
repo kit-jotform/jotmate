@@ -106,7 +106,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                "  (←↓↑→ navigate  •  ↵ submit)",
+                "  (↓↑ navigate  •  ↵ submit)",
                 Style::default().fg(C_MUTED),
             ),
         ])),

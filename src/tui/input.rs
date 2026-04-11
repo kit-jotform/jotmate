@@ -30,8 +30,8 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
         },
         Screen::ContractPeriods => match &app.input_mode {
             InputMode::ConfirmDeletePeriod(_) => handle_yes_no(app, code, execute_pending_period_delete),
-            InputMode::EditingCpMonday => handle_cycle(app, code, App::cycle_add_cp_monday),
-            InputMode::EditingCpHours => handle_cycle(app, code, App::cycle_add_cp_hours),
+            InputMode::EditingCpMonday(_) => handle_cycle(app, code, App::cycle_add_cp_monday),
+            InputMode::EditingCpHours(_) => handle_cycle(app, code, App::cycle_add_cp_hours),
             _ => handle_contract_periods(app, code),
         },
         Screen::SyncProgress => handle_sync_progress(app, code),
@@ -58,7 +58,7 @@ fn cycle_delta(code: KeyCode) -> Option<i32> {
 }
 
 fn is_activate(code: KeyCode) -> bool {
-    matches!(code, KeyCode::Enter | KeyCode::Char(' '))
+    matches!(code, KeyCode::Enter)
 }
 
 fn is_back(code: KeyCode) -> bool {
@@ -108,12 +108,18 @@ fn handle_yes_no(app: &mut App, code: KeyCode, on_yes: fn(&mut App)) -> Action {
     Action::Continue
 }
 
-/// Handle the ↑↓ cycle / Enter-Esc confirm pattern for inline value editors.
+/// Handle the ↑↓ cycle / Enter-Esc-Backspace confirm/cancel pattern for inline value editors.
+/// Enter confirms (keeps the cycled value). Esc/Backspace cancels (restores the snapshot).
 fn handle_cycle(app: &mut App, code: KeyCode, cycle: fn(&mut App, i32)) -> Action {
     if let Some(delta) = cycle_delta(code) {
         cycle(app, delta);
-    } else if matches!(code, KeyCode::Enter | KeyCode::Esc) {
+    } else if matches!(code, KeyCode::Enter) {
         app.input_mode = InputMode::Normal;
+    } else if is_back(code) {
+        app.cancel_cycle_edit();
+    } else if code == KeyCode::Char('q') {
+        app.cancel_cycle_edit();
+        return Action::Back;
     }
     Action::Continue
 }
@@ -233,7 +239,7 @@ fn handle_settings(app: &mut App, code: KeyCode) -> Action {
 }
 
 fn handle_general_toggles(app: &mut App, code: KeyCode) -> Action {
-    if matches!(app.input_mode, InputMode::SelectingTimezone) {
+    if matches!(app.input_mode, InputMode::SelectingTimezone(_)) {
         return handle_cycle(app, code, App::cycle_timezone);
     }
     if let Some(a) = handle_list_nav(app, code, Screen::Settings) {
@@ -255,7 +261,7 @@ fn handle_general_toggles(app: &mut App, code: KeyCode) -> Action {
             }
         }
         Some(GeneralToggleRow::TimezoneSelector { .. }) => {
-            app.input_mode = InputMode::SelectingTimezone;
+            app.input_mode = InputMode::SelectingTimezone(app.td_timezone_idx);
         }
         _ => {}
     }
@@ -376,8 +382,8 @@ fn handle_contract_periods(app: &mut App, code: KeyCode) -> Action {
     let rows = app.cp_list_items();
     match rows.get(app.selected_index(Screen::ContractPeriods)) {
         Some(CpListRow::Back) => app.screen = Screen::Settings,
-        Some(CpListRow::MondayField) => app.input_mode = InputMode::EditingCpMonday,
-        Some(CpListRow::HoursField) => app.input_mode = InputMode::EditingCpHours,
+        Some(CpListRow::MondayField) => app.input_mode = InputMode::EditingCpMonday(app.add_cp_monday),
+        Some(CpListRow::HoursField) => app.input_mode = InputMode::EditingCpHours(app.add_cp_hours_idx),
         Some(CpListRow::SavePeriod) => app.save_new_contract_period(),
         Some(CpListRow::Period { index, .. }) => app.confirm_delete_period(*index),
         _ => {}

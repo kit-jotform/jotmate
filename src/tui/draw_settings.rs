@@ -6,7 +6,7 @@ use ratatui::{
 use super::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use super::draw::{
     back_item, draw_screen_header, hint_navigate_toggle, inline_field_item, link_item,
-    separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W,
+    separator_item, sub_screen_layout, toggle_item, FieldState,
 };
 use super::layout::LayoutEngine;
 
@@ -114,7 +114,7 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
                     toggle_item(is_sel, *on, label_text, *indent, *disabled)
                 }
                 GeneralToggleRow::TimezoneSelector { value } => {
-                    let selecting = matches!(app.input_mode, InputMode::SelectingTimezone);
+                    let selecting = matches!(app.input_mode, InputMode::SelectingTimezone(_));
                     let state = if selecting {
                         FieldState::Editing
                     } else if is_sel {
@@ -122,7 +122,9 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
                     } else {
                         FieldState::Normal
                     };
-                    inline_field_item("Timezone", value, state, FIELD_LABEL_W)
+                    // Editing mode shows an inline hint after the value, so keep label tight.
+                    // Selected/Normal have no hint, so pad out to align with other fields.
+                    inline_field_item("Timezone", value, state, 13)
                 }
             }
         })

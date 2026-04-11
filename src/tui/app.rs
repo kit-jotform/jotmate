@@ -216,9 +216,9 @@ pub enum InputMode {
     AddingRepo(String),         // buffer holds URL being typed
     ConfirmDelete(String),      // holds the repo name pending deletion
     ConfirmDeletePeriod(usize), // holds the period index pending deletion
-    SelectingTimezone,          // ↑↓ cycles timezone, Enter/Esc confirms (in GeneralToggle screen)
-    EditingCpMonday,            // ↑↓ cycles monday date, Enter/Esc confirms
-    EditingCpHours,             // ↑↓ cycles hours option, Enter/Esc confirms
+    SelectingTimezone(usize),   // ↑↓ cycles timezone; stored value = snapshot for cancel
+    EditingCpMonday(NaiveDate), // ↑↓ cycles monday date; stored value = snapshot for cancel
+    EditingCpHours(usize),      // ↑↓ cycles hours option; stored value = snapshot for cancel
     EditingField {
         // editing a text field in TimeDoctorSettings
         field: TimeDoctorField,
@@ -890,6 +890,24 @@ impl App {
         } else {
             self.persist_td_settings();
         }
+    }
+
+    /// Cancel an in-progress cycle edit by restoring the snapshot stored in the InputMode variant.
+    pub fn cancel_cycle_edit(&mut self) {
+        match self.input_mode.clone() {
+            InputMode::SelectingTimezone(snapshot) => {
+                self.td_timezone_idx = snapshot;
+                self.persist_td_settings();
+            }
+            InputMode::EditingCpMonday(snapshot) => {
+                self.add_cp_monday = snapshot;
+            }
+            InputMode::EditingCpHours(snapshot) => {
+                self.add_cp_hours_idx = snapshot;
+            }
+            _ => {}
+        }
+        self.input_mode = InputMode::Normal;
     }
 
     pub fn cycle_timezone(&mut self, delta: i32) {

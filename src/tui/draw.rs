@@ -26,7 +26,7 @@ pub(super) fn fmt_date(d: NaiveDate) -> String {
 }
 
 pub(super) const DIVIDER_WIDTH: u16 = 53;
-pub(super) const HINT_CYCLE_VALUE: &str = "  ↑↓ change  •  ↵ confirm";
+pub(super) const HINT_CYCLE_VALUE: &str = "  ↑↓ change  •  ↵ confirm  •  ⌫ cancel";
 /// Visible char width of a settings-screen section separator line (e.g. `"── RDS Sync ───…"`).
 pub(super) const SEPARATOR_WIDTH: usize = 46;
 
@@ -56,7 +56,7 @@ pub(super) fn hint_navigate_toggle() -> Vec<Span<'static>> {
     hint_muted(&[
         "↑↓",
         " navigate  •  ",
-        "Space/↵",
+        "↵",
         " toggle  •  ",
         "⌫/Esc",
         " back",
