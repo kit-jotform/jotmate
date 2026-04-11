@@ -7,7 +7,7 @@ use ratatui::{
 
 use super::app::{App, TdReportState};
 use super::draw::{draw_screen_header, hint_muted, sub_screen_layout};
-use super::layout::LayoutEngine;
+use super::layout::{LayoutEngine, UI_WIDTH};
 use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
 use crate::time::compute::{format_hours, format_hours_signed};
@@ -33,8 +33,9 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         hint_spans,
     );
 
-    // Split the list area into scrollable content + fixed back footer
-    let list_area = layout.get("list");
+    // Split the list area into scrollable content + fixed back footer.
+    // Clamp to UI_WIDTH so the report doesn't bleed across wide terminals.
+    let list_area = clamp_to_ui_width(layout.get("list"), area.x);
     let (content_area, back_area) = split_content_back(list_area);
     // Inset content 3 chars on each side
     let content_area = inset_horizontal(content_area, 3);
@@ -128,6 +129,14 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                 f.render_widget(Paragraph::new(lines), hchunks[2]);
             }
         }
+    }
+}
+
+fn clamp_to_ui_width(area: Rect, base_x: u16) -> Rect {
+    Rect {
+        x: base_x,
+        width: UI_WIDTH.min(area.width),
+        ..area
     }
 }
 

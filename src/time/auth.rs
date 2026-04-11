@@ -196,9 +196,7 @@ async fn do_login(email: &str) -> Result<String> {
         prompt_password(email).await?
     };
 
-    eprintln!("Authenticating...");
     let cookie = login(email, &password).await?;
     save_token_to_keychain(&cookie)?;
-    eprintln!("Authenticated successfully.");
     Ok(cookie)
 }
