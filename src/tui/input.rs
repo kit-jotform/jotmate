@@ -29,7 +29,6 @@ fn navigate<T>(
 pub enum Action {
     Continue,
     Back,
-    Run(String),
     StartSync,
 }
 
@@ -59,6 +58,7 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
             _ => handle_contract_periods(app, code),
         },
         Screen::SyncProgress => handle_sync_progress(app, code),
+        Screen::TimeDoctorReport => handle_td_report(app, code),
     }
 }
 
@@ -80,7 +80,22 @@ fn handle_main(app: &mut App, code: KeyCode) -> Action {
             let i = app.main_state.selected().unwrap_or(0);
             match i {
                 0 => return Action::StartSync,
-                1 => return Action::Run("time".to_string()),
+                1 => {
+                    if app.td_email.is_empty() || !app.td_password_is_set {
+                        app.screen = Screen::TimeDoctorSettings;
+                        let td_rows = app.td_settings_items();
+                        let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                        app.td_settings_state.select(Some(first));
+                        app.auth_error = Some("Email or password not configured".to_string());
+                    } else if app.contract_periods.is_empty() {
+                        app.screen = Screen::ContractPeriods;
+                        let cp_rows = app.cp_list_items();
+                        let first = cp_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
+                        app.cp_list_state.select(Some(first));
+                    } else {
+                        app.launch_td_report();
+                    }
+                }
                 2 => {
                     app.screen = Screen::Settings;
                     let rows = app.settings_items();
@@ -532,6 +547,26 @@ fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
                     handle.abort();
                 }
             }
+            app.screen = Screen::MainMenu;
+        }
+        _ => {}
+    }
+    Action::Continue
+}
+
+fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
+    use super::app::TdReportState;
+    match code {
+        KeyCode::Up | KeyCode::Left => {
+            app.td_report_scroll = app.td_report_scroll.saturating_sub(1);
+        }
+        KeyCode::Down | KeyCode::Right => {
+            if let TdReportState::Ready { rows, .. } = &app.td_report {
+                let max_scroll = rows.len().saturating_sub(1);
+                app.td_report_scroll = (app.td_report_scroll + 1).min(max_scroll);
+            }
+        }
+        KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('q') => {
             app.screen = Screen::MainMenu;
         }
         _ => {}

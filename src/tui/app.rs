@@ -56,6 +56,18 @@ pub enum Screen {
     TimeDoctorSettings,
     ContractPeriods,
     SyncProgress,
+    TimeDoctorReport,
+}
+
+// ── Time Doctor report state ─────────────────────────────────────────────────
+
+pub enum TdReportState {
+    Loading,
+    Ready {
+        rows: Vec<crate::time::compute::WeekRow>,
+        show_cumulative: bool,
+    },
+    Error(String),
 }
 
 // ── Sync progress types ─────────────────────────────────────────────────────
@@ -419,6 +431,89 @@ pub struct ContractPeriodEntry {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+async fn fetch_td_report(
+    email: String,
+    skip_current: bool,
+    no_cache: bool,
+    _show_cumulative: bool,
+    timezone: String,
+    contract_periods: Vec<crate::config::ContractPeriod>,
+) -> Result<Vec<crate::time::compute::WeekRow>, String> {
+    use crate::time::compute::{format_week_range, get_target_hours, get_week_end_sunday, is_past_week, weeks_to_fetch};
+    use chrono::{TimeZone, Utc};
+
+    let company_id = crate::config::TIMEDOCTOR_COMPANY_ID;
+    let start_date = contract_periods
+        .first()
+        .map(|p| p.from)
+        .ok_or_else(|| "No contract periods configured".to_string())?;
+
+    let cookie = crate::time::auth::get_or_refresh_token(&email)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let client = reqwest::Client::new();
+    let mondays = weeks_to_fetch(start_date, skip_current);
+    let mut rows: Vec<crate::time::compute::WeekRow> = Vec::new();
+    let auth_cookie = cookie;
+
+    for monday in mondays {
+        let week_label = format_week_range(monday);
+        let past = is_past_week(monday);
+
+        if past && !no_cache {
+            if let Some(stats) = crate::time::cache::read_week_cache(company_id, monday) {
+                let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
+                let target_hours = get_target_hours(monday, &contract_periods);
+                let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
+                rows.push(crate::time::compute::WeekRow {
+                    monday,
+                    week_label,
+                    worked_secs,
+                    target_hours,
+                    balance_hours,
+                    cumulative_hours: 0.0,
+                    from_cache: true,
+                });
+                continue;
+            }
+        }
+
+        let sunday = get_week_end_sunday(monday);
+        let from_dt = Utc.from_utc_datetime(&monday.and_hms_opt(0, 0, 0).unwrap());
+        let to_dt = Utc.from_utc_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap());
+
+        let stats = crate::time::api::get_week_stats(
+            &client, &auth_cookie, from_dt, to_dt, company_id, &timezone,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+        if past {
+            crate::time::cache::write_week_cache(company_id, monday, &stats);
+        }
+
+        let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
+        let target_hours = get_target_hours(monday, &contract_periods);
+        let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
+
+        rows.push(crate::time::compute::WeekRow {
+            monday,
+            week_label,
+            worked_secs,
+            target_hours,
+            balance_hours,
+            cumulative_hours: 0.0,
+            from_cache: false,
+        });
+
+        // Small delay between API calls to avoid hammering
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    }
+
+    Ok(rows)
+}
+
 fn list_state_at(index: usize) -> ListState {
     let mut s = ListState::default();
     s.select(Some(index));
@@ -455,6 +550,8 @@ pub struct App {
     pub td_general_state: ListState,
     pub td_settings_state: ListState,
     pub cp_list_state: ListState,
+    pub td_report: TdReportState,
+    pub td_report_scroll: usize,
     pub input_mode: InputMode,
     // in-memory settings state
     pub sync_all: bool,
@@ -480,6 +577,8 @@ pub struct App {
     pub sync_state: Option<SyncScreenState>,
     // Auth error message to show on TimeDoctorSettings screen
     pub auth_error: Option<String>,
+    // Channel for receiving TD report results from the background fetch task
+    pub td_report_rx: Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
 }
 
 #[derive(Clone)]
@@ -548,6 +647,8 @@ impl App {
             td_general_state,
             td_settings_state,
             cp_list_state,
+            td_report: TdReportState::Loading,
+            td_report_scroll: 0,
             input_mode: InputMode::Normal,
             sync_all: config.sync.sync_all_by_default,
             use_cache: config.sync.use_cache,
@@ -568,6 +669,7 @@ impl App {
             add_cp_hours_idx: 1, // default 20h
             sync_state: None,
             auth_error: None,
+            td_report_rx: None,
         })
     }
 
@@ -998,6 +1100,67 @@ impl App {
         }
     }
 
+    /// Navigate to the Time Doctor report screen and kick off a background fetch.
+    pub fn launch_td_report(&mut self) {
+        self.screen = Screen::TimeDoctorReport;
+        self.td_report = TdReportState::Loading;
+        self.td_report_scroll = 0;
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.td_report_rx = Some(rx);
+
+        // Capture config values for the async task
+        let email = self.td_email.clone();
+        let skip_current = self.td_skip_current_week;
+        let use_cache = self.td_use_time_cache;
+        let show_cumulative = self.td_show_cumulative;
+        let timezone = TIMEZONES[self.td_timezone_idx].to_string();
+        let contract_periods: Vec<crate::config::ContractPeriod> = self
+            .contract_periods
+            .iter()
+            .map(|p| crate::config::ContractPeriod {
+                from: p.from,
+                weekly_hours: p.weekly_hours,
+            })
+            .collect();
+
+        tokio::spawn(async move {
+            let result = fetch_td_report(email, skip_current, use_cache, show_cumulative, timezone, contract_periods).await;
+            let _ = tx.send(result);
+        });
+    }
+
+    /// Poll for a completed TD report result. Returns true if state changed.
+    pub fn poll_td_report(&mut self) -> bool {
+        let result = match &mut self.td_report_rx {
+            Some(rx) => match rx.try_recv() {
+                Ok(v) => v,
+                Err(tokio::sync::oneshot::error::TryRecvError::Empty) => return false,
+                Err(_) => return false,
+            },
+            None => return false,
+        };
+        self.td_report_rx = None;
+        match result {
+            Ok(mut rows) => {
+                let show_cumulative = self.td_show_cumulative;
+                let reset_from = {
+                    if let Ok(cfg) = crate::config::load() {
+                        cfg.time.reset_cumulative_from_date
+                    } else {
+                        None
+                    }
+                };
+                crate::time::compute::compute_cumulative(&mut rows, reset_from);
+                self.td_report = TdReportState::Ready { rows, show_cumulative };
+            }
+            Err(msg) => {
+                self.td_report = TdReportState::Error(msg);
+            }
+        }
+        true
+    }
+
     /// Save password to keychain and update in-memory flag.
     /// Returns true if the password was saved successfully.
     pub fn set_td_password(&mut self, password: &str) -> bool {
@@ -1006,9 +1169,7 @@ impl App {
         }
         // Delete old session token so a fresh login is triggered with the new password
         let _ = crate::time::auth::delete_token_from_keychain();
-        match keyring::Entry::new("jotmate-timedoctor", "password")
-            .and_then(|e| e.set_password(password))
-        {
+        match crate::time::auth::save_password_to_keychain(password) {
             Ok(()) => {
                 self.td_password_is_set = true;
                 true

@@ -3,6 +3,7 @@ mod draw;
 mod draw_main_menu;
 mod draw_repos;
 mod draw_settings;
+mod draw_td_report;
 mod draw_time;
 mod input;
 mod layout;
@@ -61,62 +62,8 @@ async fn run_tui(initial_screen: Screen) -> Result<()> {
         app.settings_state.select(Some(first));
     }
 
-    loop {
-        let result = event_loop(&mut terminal, &mut app).await;
-        teardown_terminal(&mut terminal);
-
-        // If the user selected Time from the main menu, run it now
-        // (after restoring the terminal so its output is visible)
-        match result {
-            Ok(Some(action)) if action == "time" => {
-                // Pre-flight: redirect to credentials screen if not configured
-                if app.td_email.is_empty() || !app.td_password_is_set {
-                    terminal = setup_terminal()?;
-                    app.screen = Screen::TimeDoctorSettings;
-                    let td_rows = app.td_settings_items();
-                    let first = td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                    app.td_settings_state.select(Some(first));
-                    app.auth_error = Some("Email or password not configured".to_string());
-                    continue;
-                }
-
-                match crate::time::run(Default::default()).await {
-                    Ok(()) => break,
-                    Err(e) => {
-                        // On auth failure, re-enter the TUI on credentials screen
-                        let is_auth_err = e
-                            .downcast_ref::<crate::error::AppError>()
-                            .map(|ae| {
-                                matches!(
-                                    ae,
-                                    crate::error::AppError::AuthFailed(_)
-                                        | crate::error::AppError::TokenExpired
-                                )
-                            })
-                            .unwrap_or(false);
-
-                        if is_auth_err {
-                            // Reload password state (user may have changed it)
-                            app.td_password_is_set =
-                                crate::time::auth::load_password_from_keychain().is_some();
-                            let msg = e.to_string();
-                            terminal = setup_terminal()?;
-                            app.screen = Screen::TimeDoctorSettings;
-                            let td_rows = app.td_settings_items();
-                            let first =
-                                td_rows.iter().position(|r| r.is_interactive()).unwrap_or(0);
-                            app.td_settings_state.select(Some(first));
-                            app.auth_error = Some(msg);
-                            continue;
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                }
-            }
-            _ => break,
-        }
-    }
+    event_loop(&mut terminal, &mut app).await?;
+    teardown_terminal(&mut terminal);
 
     Ok(())
 }
@@ -191,12 +138,29 @@ fn launch_sync(app: &mut App) {
 async fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
-) -> Result<Option<String>> {
+) -> Result<()> {
     loop {
         terminal.draw(|f| draw(f, app))?;
 
+        // When loading the TD report, poll for results
+        if app.screen == Screen::TimeDoctorReport {
+            app.poll_td_report();
+            if event::poll(Duration::from_millis(150))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind != KeyEventKind::Press {
+                        continue;
+                    }
+                    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                        return Ok(());
+                    }
+                    match handle_key(app, key.code) {
+                        Action::Back => return Ok(()),
+                        Action::StartSync | Action::Continue => {}
+                    }
+                }
+            }
         // When on sync screen, use poll-based loop for animation + channel drain
-        if app.screen == Screen::SyncProgress {
+        } else if app.screen == Screen::SyncProgress {
             // Drain pending sync updates
             {
                 let mut updates = Vec::new();
@@ -225,13 +189,11 @@ async fn event_loop(
                                 handle.abort();
                             }
                         }
-                        return Ok(None);
+                        return Ok(());
                     }
                     match handle_key(app, key.code) {
-                        Action::Back => return Ok(None),
-                        Action::Run(cmd) => return Ok(Some(cmd)),
-                        Action::StartSync => {}
-                        Action::Continue => {}
+                        Action::Back => return Ok(()),
+                        Action::StartSync | Action::Continue => {}
                     }
                 }
             } else {
@@ -247,11 +209,10 @@ async fn event_loop(
                     continue;
                 }
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                    return Ok(None);
+                    return Ok(());
                 }
                 match handle_key(app, key.code) {
-                    Action::Back => return Ok(None),
-                    Action::Run(cmd) => return Ok(Some(cmd)),
+                    Action::Back => return Ok(()),
                     Action::StartSync => {
                         launch_sync(app);
                     }

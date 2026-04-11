@@ -14,9 +14,10 @@ use super::widgets::LOGO_SMALL;
 pub(super) use draw_main_menu::draw_main_menu;
 pub(super) use draw_repos::{draw_remove_repos, draw_repo_manager};
 pub(super) use draw_settings::{draw_general_toggles, draw_settings};
+pub(super) use draw_td_report::draw_td_report;
 pub(super) use draw_time::{draw_contract_periods, draw_td_settings};
 
-use super::{draw_main_menu, draw_repos, draw_settings, draw_time};
+use super::{draw_main_menu, draw_repos, draw_settings, draw_td_report, draw_time};
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
@@ -253,6 +254,7 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::TdGeneralSettings => draw_general_toggles(f, app, "Time Doctor", false),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
+        Screen::TimeDoctorReport => draw_td_report(f, app),
         Screen::SyncProgress => super::sync_screen::draw_sync_progress(f, app),
     }
 }
