@@ -523,26 +523,14 @@ fn handle_cp_hours_edit(app: &mut App, code: KeyCode) -> Action {
 }
 
 fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
-    let is_complete = app.sync_is_complete();
     match code {
         KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => {
-            if is_complete {
-                // Clean up and go back to main menu
-                if let Some(state) = app.sync_state.take() {
-                    if let Some(handle) = state.sync_handle {
-                        handle.abort();
-                    }
+            if let Some(state) = app.sync_state.take() {
+                if let Some(handle) = state.sync_handle {
+                    handle.abort();
                 }
-                app.screen = Screen::MainMenu;
-            } else {
-                // Cancel: abort running tasks and go back
-                if let Some(state) = app.sync_state.take() {
-                    if let Some(handle) = state.sync_handle {
-                        handle.abort();
-                    }
-                }
-                app.screen = Screen::MainMenu;
             }
+            app.screen = Screen::MainMenu;
         }
         _ => {}
     }

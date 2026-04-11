@@ -2,6 +2,7 @@ pub(crate) mod app;
 mod draw;
 mod input;
 mod layout;
+mod palette;
 mod sync_screen;
 mod widgets;
 

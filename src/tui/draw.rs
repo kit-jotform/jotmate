@@ -1,7 +1,7 @@
 use chrono::{Local, NaiveDate};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
 };
@@ -15,16 +15,9 @@ use super::app::{
 use super::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::{IconWidget, LOGO, LOGO_SMALL};
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-
-const C_TEXT: Color = Color::Indexed(255);
-const C_PRIMARY: Color = Color::Indexed(199); // medium purple — consistent across terminals
-const C_ACCENT: Color = Color::Indexed(51); // light cyan — consistent across terminals
-const C_SELECT: Color = C_PRIMARY;
-const C_SUCCESS: Color = Color::Indexed(10); // bright green — consistent across terminals
-const C_MUTED: Color = Color::Indexed(8); // dark gray — consistent across terminals
-const C_LOGO: Color = C_TEXT;
-const C_DANGEROUS: Color = Color::Indexed(9); // bright red — consistent across terminals
+use super::palette::{
+    C_ACCENT, C_DANGEROUS, C_LOGO, C_MUTED, C_PRIMARY, C_SELECT, C_SUCCESS, C_TEXT,
+};
 
 fn fmt_date(d: NaiveDate) -> String {
     d.format("%d-%m-%Y").to_string()
@@ -32,6 +25,7 @@ fn fmt_date(d: NaiveDate) -> String {
 
 const NAME_COL_W: u16 = 16; // fixed width for the name column
 const DIVIDER_WIDTH: u16 = 53;
+const HINT_CYCLE_VALUE: &str = "  ↑↓ change  •  ↵ confirm";
 
 // ── Shared hint builders ──────────────────────────────────────────────────────
 
@@ -501,7 +495,7 @@ fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync:
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(format!("< {} >", value), Style::default().fg(C_ACCENT)),
-                            Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
+                            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
                         ]))
                     } else if is_sel {
                         ListItem::new(Line::from(vec![
@@ -892,7 +886,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
-                            Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
+                            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
                         ]))
                     } else if is_sel {
                         ListItem::new(Line::from(vec![
@@ -931,7 +925,7 @@ fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
-                            Span::styled("  ↑↓ change  •  ↵ confirm", Style::default().fg(C_MUTED)),
+                            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
                         ]))
                     } else if is_sel {
                         ListItem::new(Line::from(vec![

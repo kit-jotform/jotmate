@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use crate::config::ContractPeriod;
 use crate::time::compute::get_week_start_monday;
 
-// ── Main menu items ─────────────────��─────────────────────────────────────────
+// ── Main menu items ────────────────────────────────────────────────────────────
 
 pub const MAIN_ITEMS: &[(&str, &str)] = &[
     ("Sync", "Sync RDS to upstream"),
@@ -19,7 +19,7 @@ pub const MAIN_ITEMS: &[(&str, &str)] = &[
     ("Exit", ""),
 ];
 
-// ── Timezone options ───��─────────────────────────────────────────────────────
+// ── Timezone options ──────────────────────────────────────────────────────────
 
 pub const TIMEZONES: &[&str] = &[
     "America/New_York",
@@ -43,7 +43,7 @@ pub const TIMEZONES: &[&str] = &[
 
 pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
 
-// ── Screens ────────────��────────────────────────────────���─────────────────────
+// ── Screens ──────────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Screen {
@@ -220,7 +220,7 @@ pub enum TimeDoctorField {
     Password,
 }
 
-// ── Settings row types ─────────────���────────────────────────────────���─────────
+// ── Settings row types ────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
 pub enum ToggleKind {
@@ -337,7 +337,7 @@ impl TimeSettingRow {
     }
 }
 
-// ── Contract periods row types ──────��────────────────────────────────────────
+// ── Contract periods row types ────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub enum CpListRow {
@@ -367,7 +367,7 @@ impl CpListRow {
     }
 }
 
-// ── Repo manager row types ────────────���───────────────────────────────────────
+// ── Repo manager row types ──────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub enum RepoManagerRow {
@@ -409,7 +409,7 @@ impl RemoveRepoRow {
     }
 }
 
-// ── Contract period entry ─────────────────────────────────────────���──────────
+// ── Contract period entry ──────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub struct ContractPeriodEntry {
@@ -423,6 +423,24 @@ fn list_state_at(index: usize) -> ListState {
     let mut s = ListState::default();
     s.select(Some(index));
     s
+}
+
+fn clamp_to_last_interactive<T>(
+    rows: &[T],
+    state: &mut ListState,
+    is_interactive: impl Fn(&T) -> bool,
+) {
+    let last = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| is_interactive(r))
+        .map(|(i, _)| i)
+        .next_back()
+        .unwrap_or(0);
+    let cur = state.selected().unwrap_or(0);
+    if cur > last {
+        state.select(Some(last));
+    }
 }
 
 // ── App ─────────────────────────────────────────────────────────────────────
@@ -786,19 +804,8 @@ impl App {
         self.repos.retain(|r| r.name != name);
         self.persist_settings();
         self.input_mode = InputMode::Normal;
-        // Clamp cursor to a valid interactive row
         let rows = self.remove_repo_items();
-        let last_interactive = rows
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.is_interactive())
-            .map(|(i, _)| i)
-            .next_back()
-            .unwrap_or(0);
-        let cur = self.remove_repo_state.selected().unwrap_or(0);
-        if cur > last_interactive {
-            self.remove_repo_state.select(Some(last_interactive));
-        }
+        clamp_to_last_interactive(&rows, &mut self.remove_repo_state, RemoveRepoRow::is_interactive);
     }
 
     pub fn confirm_delete_period(&mut self, index: usize) {
@@ -811,19 +818,8 @@ impl App {
             self.persist_td_settings();
         }
         self.input_mode = InputMode::Normal;
-        // Clamp cursor
         let rows = self.cp_list_items();
-        let last_interactive = rows
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.is_interactive())
-            .map(|(i, _)| i)
-            .next_back()
-            .unwrap_or(0);
-        let cur = self.cp_list_state.selected().unwrap_or(0);
-        if cur > last_interactive {
-            self.cp_list_state.select(Some(last_interactive));
-        }
+        clamp_to_last_interactive(&rows, &mut self.cp_list_state, CpListRow::is_interactive);
     }
 
     pub fn save_new_contract_period(&mut self) {

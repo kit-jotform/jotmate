@@ -1,5 +1,5 @@
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
 };
@@ -8,15 +8,11 @@ use super::app::{App, ForkStatus, RdsStatus};
 use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use super::widgets::LOGO_SMALL;
 
-// ── Palette (re-use draw.rs constants) ──────────────────────────────────────
+use ratatui::style::Color;
 
-const C_TEXT: Color = Color::Indexed(255);
-const C_PRIMARY: Color = Color::Indexed(199);
-const C_ACCENT: Color = Color::Indexed(51);
-const C_SUCCESS: Color = Color::Indexed(10);
-const C_MUTED: Color = Color::Indexed(8);
-const C_DANGEROUS: Color = Color::Indexed(9);
-const C_WARN: Color = Color::Indexed(11);
+use super::palette::{
+    C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN,
+};
 
 // ── Spinner frames ──────────────────────────────────────────────────────────
 
