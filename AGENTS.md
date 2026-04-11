@@ -31,26 +31,39 @@ jotmate settings    → Ratatui settings screen
 
 ### TUI (src/tui/)
 
-Three screens managed by an `App` state struct:
+Screens managed by an `App` state struct (defined in `app/screen.rs`):
 
 | Screen | Purpose |
 |--------|---------|
 | **MainMenu** | Navigable list: Sync, Time Doctor, Settings, Exit |
-| **Settings** | Toggle booleans and repo enabled flags; navigate to RepoManager |
-| **RepoManager** | Add/remove upstream repo URLs |
+| **Settings** | Entry point into Sync / Time Doctor settings groups |
+| **SyncGeneralSettings** / **TdGeneralSettings** | Shared toggle-list screen driven by `draw_general_toggles` |
+| **RepoManager** / **RemoveRepos** | Add / toggle / remove upstream repo URLs |
+| **TimeDoctorSettings** / **ContractPeriods** | TimeDoctor credentials, timezone, contract periods |
+| **TimeDoctorReport** | Live report view (auto-refreshes; drops to foreground for re-auth) |
+| **SyncProgress** | In-TUI sync progress screen driven by `sync_state` updates |
 
-- `mod.rs` — terminal setup/teardown, async event loop, `run_interactive()` / `run_settings()` entry points
-- `app.rs` — `App` struct, `Screen` / `InputMode` / `SettingRow` / `RepoManagerRow` enums, in-memory state, config persistence
-- `draw.rs` — frame rendering for all screens + `draw_confirm_delete` overlay
-- `input.rs` — keyboard event handlers (↑↓ navigate, Enter/Space toggle, Esc/Backspace back, Q/Ctrl+C quit)
+- `mod.rs` — terminal setup/teardown, `run_interactive()` / `run_settings()` entry points (thin dispatcher)
+- `event_loop.rs` — async event loop; splits per-screen tick handling (`handle_td_report_tick`, `handle_sync_progress_tick`, `handle_default_tick`)
+- `sync_launcher.rs` — extracts the "load config → read cache → spawn sync task" flow triggered from the main menu
+- `app/` — split `App` module:
+  - `mod.rs` (struct + ctor), `screen.rs` (Screen enum), `navigation.rs` (selection/clamping), `mutations.rs` (toggles, edits), `row_builders.rs` (per-screen row derivations), `persistence.rs` (config save helpers), `sync.rs` (sync_state lifecycle), `td_report.rs` (TimeDoctor report state), `constants.rs` (TIMEZONES, WEEKLY_HOURS_OPTIONS, etc.)
+- `rows.rs` — row enums (`SettingRow`, `RepoManagerRow`, `CpListRow`, `ToggleKind`, …) and `InputMode`
+- `sync_state.rs` — `RepoSyncState`, `ForkStatus`, `RdsStatus`, `SyncUpdate` channel messages
+- `draw/` — per-screen renderers + shared helpers:
+  - `mod.rs` is a dispatcher; each screen has its own file (`main_menu.rs`, `settings.rs`, `repos.rs`, `time.rs`, `td_report.rs`, `sync_screen.rs`)
+  - `common/` holds shared helpers: `hints.rs`, `items.rs` (list-item builders + `FieldState`), `header.rs` (`draw_screen_header`), `dialog.rs` (`draw_confirm_dialog`)
+- `input/` — per-screen keyboard handlers:
+  - `mod.rs` dispatches; `keys.rs` (key classifiers), `helpers.rs` (nav/cycle/text-input helpers), then one file per screen (`main_menu.rs`, `settings.rs`, `repos.rs`, `time.rs`, `contract.rs`, `td_report.rs`, `sync.rs`)
 - `layout.rs` — `ScreenLayout` (named vertical rows), `LayoutEngine` (horizontal placement), `UI_WIDTH` constant
+- `palette.rs` — indexed color constants (`C_TEXT`, `C_PRIMARY`, …)
 - `widgets.rs` — custom pixel-art `IconWidget`, `LOGO` / `LOGO_SMALL` constants
 
-Selecting Sync or Time from the main menu closes the TUI, restores the terminal, then runs the subcommand so its output is visible in the foreground.
+Selecting Sync or Time from the main menu closes the TUI, restores the terminal, then runs the subcommand so its output is visible in the foreground. Sync can alternatively run in-TUI via the `SyncProgress` screen.
 
 ### TUI design system
 
-**Color palette** (all defined as named constants at the top of `draw.rs`):
+**Color palette** (all defined as named constants in `tui/palette.rs`):
 
 | Constant | Color index | Role |
 |----------|-------------|------|
@@ -88,7 +101,7 @@ Inline value selectors (dates, hours, timezone, etc.) must **not** enter editing
 - Title row: screen name left-aligned in `C_ACCENT + BOLD`; hint spans right-aligned on the same row.
 - Full-width `─` divider in `C_MUTED` below the title.
 
-**Confirmation dialog** (`draw_confirm_delete`): centered overlay with `Clear` + `Block` border in `C_DANGEROUS`; rendered on top of the RepoManager list.
+**Confirmation dialog** (`draw_confirm_dialog` in `draw/common/dialog.rs`): centered overlay with `Clear` + `Block` border in `C_DANGEROUS`; rendered on top of the active list.
 
 ### Sync (src/sync/)
 
@@ -118,27 +131,76 @@ jotmate/
 ├── src/
 │   ├── main.rs                  # Entry point — parses CLI args, dispatches to tui/sync/time
 │   ├── cli.rs                   # Clap structs: Cli, Commands, SyncArgs, TimeArgs
-│   ├── config.rs                # Config structs, load/save, ensure_time_credentials prompt
 │   ├── error.rs                 # AppError enum (thiserror) — IO, HTTP, auth, keyring, fd
+│   ├── config/                  # Config module (see ### Config)
+│   │   ├── mod.rs               # Re-exports the public surface: load, save, types, ensure_time_credentials
+│   │   ├── types.rs             # Config, SyncConfig, TimeConfig, UpstreamRepo, ContractPeriod
+│   │   ├── io.rs                # config_path, load, save
+│   │   ├── parse.rs             # parse_contract_periods
+│   │   └── prompt.rs            # ensure_time_credentials (interactive fill-in)
 │   ├── sync/
 │   │   ├── mod.rs               # run() entry: resolves repo paths, calls runner
 │   │   ├── cache.rs             # RepoPathsCache — load/save/invalidate ~/.cache/jotmate/repo_paths.json
 │   │   ├── discover.rs          # fd-based git repo discovery; matches repos to upstream URLs
-│   │   └── runner.rs            # Patches GITHUB_BASE in embedded script, writes tempfile, execs bash
+│   │   ├── runner.rs            # Patches GITHUB_BASE in embedded script, writes tempfile, execs bash
+│   │   └── native/              # Native (non-script) in-TUI sync pipeline
+│   │       ├── mod.rs           # SyncOpts + run_tui coordinator (fork phase → rds phase)
+│   │       ├── git.rs           # git/git_ok/detect_default_branch helpers
+│   │       ├── fork.rs          # fork-sync pipeline (stash/fetch/merge/push)
+│   │       ├── rds.rs           # rds-sync pipeline (./sync runner with skip rules)
+│   │       └── elapsed.rs       # per-repo elapsed-time ticker
 │   ├── time/
 │   │   ├── mod.rs               # run() entry: auth, batch-fetches weeks, computes, displays
 │   │   ├── auth.rs              # Keychain read/write for TimeDoctor session cookie; browser login flow
 │   │   ├── api.rs               # HTTP client: fetches weekly stats from TimeDoctor API
 │   │   ├── cache.rs             # Per-week JSON cache at ~/.cache/jotmate/time/<company_id>/YYYY-MM-DD.json
+│   │   ├── fetch.rs             # High-level weekly fetch + cache orchestration
 │   │   ├── compute.rs           # WeekRow, weeks_to_fetch, cumulative balance, target hours logic
 │   │   └── display.rs           # ANSI terminal table renderer for WeekRow results
 │   └── tui/
-│       ├── mod.rs               # Terminal setup/teardown, async event loop, run_interactive/run_settings
-│       ├── app.rs               # App state, Screen/InputMode/SettingRow/RepoManagerRow enums, MAIN_ITEMS
-│       ├── draw.rs              # Ratatui frame rendering for all three screens + confirm dialog overlay
-│       ├── input.rs             # Keyboard event handlers → Action enum (Continue/Back/Run)
+│       ├── mod.rs               # Terminal setup/teardown, run_interactive/run_settings entry points
+│       ├── event_loop.rs        # Async event loop + per-screen tick handlers
+│       ├── sync_launcher.rs     # Kick off in-TUI sync (load config, read cache, spawn task)
+│       ├── sync_state.rs        # RepoSyncState, ForkStatus, RdsStatus, SyncUpdate messages
+│       ├── rows.rs              # Row enums + InputMode
 │       ├── layout.rs            # ScreenLayout (named rows), LayoutEngine (x placement), UI_WIDTH
-│       └── widgets.rs           # IconWidget (pixel art), LOGO, LOGO_SMALL constants
+│       ├── palette.rs           # Indexed color constants (C_TEXT, C_PRIMARY, ...)
+│       ├── widgets.rs           # IconWidget (pixel art), LOGO, LOGO_SMALL constants
+│       ├── app/                 # Split App state module
+│       │   ├── mod.rs           # App struct + constructor
+│       │   ├── screen.rs        # Screen enum
+│       │   ├── constants.rs     # TIMEZONES, WEEKLY_HOURS_OPTIONS, this_monday helper
+│       │   ├── navigation.rs    # Selection indices, clamping to interactive rows
+│       │   ├── mutations.rs     # Toggles, cycle edits, repo/period CRUD
+│       │   ├── row_builders.rs  # Per-screen row derivation (drives draw + input)
+│       │   ├── persistence.rs   # persist_settings / persist_td_settings (save to config)
+│       │   ├── sync.rs          # sync_state lifecycle (start/update/cancel)
+│       │   └── td_report.rs     # TimeDoctor report state machine
+│       ├── draw/                # Per-frame rendering
+│       │   ├── mod.rs           # Dispatcher on Screen; re-exports common helpers
+│       │   ├── main_menu.rs     # MainMenu renderer
+│       │   ├── settings.rs      # Settings + general-toggle list renderer
+│       │   ├── repos.rs         # RepoManager + RemoveRepos renderers
+│       │   ├── time.rs          # TimeDoctorSettings + ContractPeriods renderers
+│       │   ├── td_report.rs     # TimeDoctorReport renderer
+│       │   ├── sync_screen.rs   # SyncProgress renderer
+│       │   └── common/          # Shared draw helpers
+│       │       ├── mod.rs       # fmt_date, sub_screen_layout, width constants
+│       │       ├── hints.rs     # Hint-span builders (navigate/toggle, select/back, ...)
+│       │       ├── items.rs     # ListItem builders + FieldState (Normal/Selected/Editing)
+│       │       ├── header.rs    # draw_screen_header (logo + title + divider)
+│       │       └── dialog.rs    # draw_confirm_dialog (centered overlay)
+│       └── input/               # Keyboard event handlers
+│           ├── mod.rs           # handle_key dispatcher + Action enum
+│           ├── keys.rs          # Key classifiers (nav_delta, cycle_delta, is_activate, ...)
+│           ├── helpers.rs       # go_to, handle_list_nav, handle_cycle, handle_text_input
+│           ├── main_menu.rs     # handle_main
+│           ├── settings.rs      # handle_settings, handle_general_toggles
+│           ├── repos.rs         # handle_repo_manager, handle_remove_repos
+│           ├── time.rs          # handle_td_settings (field input + auth-error flow)
+│           ├── contract.rs      # handle_contract_periods
+│           ├── td_report.rs     # handle_td_report
+│           └── sync.rs          # handle_sync_progress
 ├── Cargo.toml                   # Package manifest and dependencies
 ├── Cargo.lock                   # Locked dependency versions
 ├── install.sh                   # Curl-based installer for end users
@@ -148,9 +210,9 @@ jotmate/
 
 ## Adding a new tool or settings field
 
-**New tool**: Add a variant to the `Screen` enum and/or menu in `app.rs`, handle it in `input.rs` and `draw.rs`, and add a Rust subcommand in `src/cli.rs` + `src/main.rs` if data access is needed.
+**New tool**: Add a variant to the `Screen` enum in `src/tui/app/screen.rs`, add a new renderer file under `src/tui/draw/` and wire it into `draw/mod.rs`, add a new handler file under `src/tui/input/` and wire it into `input/mod.rs`, and add a Rust subcommand in `src/cli.rs` + `src/main.rs` if CLI access is needed.
 
-**New settings field**: Add to the struct in `src/config.rs` with `#[serde(default)]`, add a row in the settings render in `draw.rs`, and handle the toggle in `input.rs` and `app.rs`.
+**New settings field**: Add the field to the relevant struct in `src/config/types.rs` with `#[serde(default)]`, mirror the field on `App` in `src/tui/app/mod.rs`, extend `persist_settings` / `persist_td_settings` in `src/tui/app/persistence.rs`, add a row via `src/tui/app/row_builders.rs` (and `ToggleKind` in `src/tui/rows.rs` if it's a toggle), and let the existing `draw_general_toggles` + `handle_general_toggles` machinery render/handle it.
 
 ## Coding style
 

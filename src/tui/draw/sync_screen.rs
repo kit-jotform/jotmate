@@ -102,47 +102,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         let items: Vec<ListItem> = state
             .repos
             .iter()
-            .map(|repo| {
-                let (icon, icon_color) = if repo.has_error() {
-                    ("✗", C_DANGEROUS)
-                } else if repo.is_complete() {
-                    if repo.is_skipped() {
-                        ("-", C_WARN)
-                    } else {
-                        ("✓", C_SUCCESS)
-                    }
-                } else {
-                    let ch = SPINNER[tick % SPINNER.len()];
-                    // Return spinner as &str workaround
-                    return repo_line_spinner(ch, repo);
-                };
-
-                let name_color = if repo.is_active() {
-                    C_PRIMARY
-                } else if repo.has_error() {
-                    C_DANGEROUS
-                } else if repo.is_skipped() {
-                    C_MUTED
-                } else {
-                    C_TEXT
-                };
-
-                let fork_color = status_color(&repo.fork_status);
-                let rds_color = rds_status_color(&repo.rds_status);
-
-                let name_padded = format!("{:<width$}", repo.name, width = NAME_W);
-                let fork_padded = format!("{:<width$}", repo.fork_status.label(), width = FORK_W);
-                let rds_padded = format!("{:<width$}", repo.rds_status.label(), width = RDS_W);
-                let elapsed = format!("{:>5.1}s", repo.elapsed_secs);
-
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!("{icon} "), Style::default().fg(icon_color)),
-                    Span::styled(name_padded, Style::default().fg(name_color)),
-                    Span::styled(fork_padded, Style::default().fg(fork_color)),
-                    Span::styled(rds_padded, Style::default().fg(rds_color)),
-                    Span::styled(elapsed, Style::default().fg(C_MUTED)),
-                ]))
-            })
+            .map(|repo| repo_row(repo, tick))
             .collect();
 
         f.render_widget(
@@ -166,7 +126,44 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     );
 }
 
-fn repo_line_spinner(ch: char, repo: &RepoSyncState) -> ListItem<'static> {
+/// Build one row of the repo progress list.
+///
+/// The only per-row variation is the leading icon/spinner and the name style:
+/// in-flight repos get a spinner glyph in `C_ACCENT` and a bold `C_PRIMARY`
+/// name; terminal states pick an icon (`✓ ✗ -`) and plain name color.
+/// Column widths, status labels and elapsed formatting are always the same.
+fn repo_row(repo: &RepoSyncState, tick: usize) -> ListItem<'static> {
+    let (icon, icon_style) = if repo.has_error() {
+        ("✗".to_string(), Style::default().fg(C_DANGEROUS))
+    } else if repo.is_complete() {
+        if repo.is_skipped() {
+            ("-".to_string(), Style::default().fg(C_WARN))
+        } else {
+            ("✓".to_string(), Style::default().fg(C_SUCCESS))
+        }
+    } else {
+        let ch = SPINNER[tick % SPINNER.len()];
+        (ch.to_string(), Style::default().fg(C_ACCENT))
+    };
+
+    // Name color precedence matches the pre-refactor render:
+    //   - in-flight (no error yet) → bold C_PRIMARY alongside spinner
+    //   - in-flight but errored on fork/rds → plain C_PRIMARY (still active)
+    //   - terminal error → C_DANGEROUS
+    //   - terminal skipped → C_MUTED
+    //   - terminal success → C_TEXT
+    let name_style = if repo.is_active() && !repo.has_error() {
+        Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD)
+    } else if repo.is_active() {
+        Style::default().fg(C_PRIMARY)
+    } else if repo.has_error() {
+        Style::default().fg(C_DANGEROUS)
+    } else if repo.is_skipped() {
+        Style::default().fg(C_MUTED)
+    } else {
+        Style::default().fg(C_TEXT)
+    };
+
     let name_padded = format!("{:<width$}", repo.name, width = NAME_W);
     let fork_padded = format!("{:<width$}", repo.fork_status.label(), width = FORK_W);
     let rds_padded = format!("{:<width$}", repo.rds_status.label(), width = RDS_W);
@@ -176,11 +173,8 @@ fn repo_line_spinner(ch: char, repo: &RepoSyncState) -> ListItem<'static> {
     let rds_color = rds_status_color(&repo.rds_status);
 
     ListItem::new(Line::from(vec![
-        Span::styled(format!("{ch} "), Style::default().fg(C_ACCENT)),
-        Span::styled(
-            name_padded,
-            Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(format!("{icon} "), icon_style),
+        Span::styled(name_padded, name_style),
         Span::styled(fork_padded, Style::default().fg(fork_color)),
         Span::styled(rds_padded, Style::default().fg(rds_color)),
         Span::styled(elapsed, Style::default().fg(C_MUTED)),
