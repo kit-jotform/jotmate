@@ -27,6 +27,8 @@ pub(super) fn fmt_date(d: NaiveDate) -> String {
 
 pub(super) const DIVIDER_WIDTH: u16 = 53;
 pub(super) const HINT_CYCLE_VALUE: &str = "  ↑↓ change  •  ↵ confirm";
+/// Visible char width of a settings-screen section separator line (e.g. `"── RDS Sync ───…"`).
+pub(super) const SEPARATOR_WIDTH: usize = 46;
 
 // ── Shared hint builders ──────────────────────────────────────────────────────
 
@@ -74,6 +76,19 @@ pub(super) fn hint_input_confirm() -> Vec<Span<'static>> {
 }
 
 // ── Shared list item helpers ───────────────────────────────────────────────────
+
+/// Build a muted section-separator list item: `"── {label} ────────────"`.
+/// The total visible width of the separator string is `SEPARATOR_WIDTH` chars.
+pub(super) fn separator_item(label: &str) -> ListItem<'static> {
+    // "── " + label + " " = prefix; fill the rest with "─"
+    let prefix_chars = 3 + label.chars().count() + 1;
+    let dashes = "─".repeat(SEPARATOR_WIDTH.saturating_sub(prefix_chars));
+    let text = format!("── {} {}", label, dashes);
+    ListItem::new(Line::from(vec![
+        Span::raw("  "),
+        Span::styled(text, Style::default().fg(C_MUTED)),
+    ]))
+}
 
 pub(super) fn back_item(is_sel: bool) -> ListItem<'static> {
     let style = if is_sel {

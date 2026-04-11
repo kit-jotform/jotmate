@@ -1,16 +1,14 @@
 use ratatui::{
-    style::Style,
-    text::{Line, Span},
+    text::{Line},
     widgets::{List, ListItem},
 };
 
 use super::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use super::draw::{
     back_item, draw_screen_header, hint_navigate_toggle, inline_field_item, link_item,
-    sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W,
+    separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W,
 };
 use super::layout::LayoutEngine;
-use super::palette::C_MUTED;
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -39,22 +37,13 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::Blank => ListItem::new(Line::raw("")),
 
                 SettingRow::Separator => {
-                    let label = {
-                        let rows = app.settings_items();
-                        let sep_count = rows[..i]
-                            .iter()
-                            .filter(|r| matches!(r, SettingRow::Separator))
-                            .count();
-                        if sep_count == 0 {
-                            "── RDS Sync ──────────────────────────────────"
-                        } else {
-                            "── Time Doctor ─────────────────────────────────"
-                        }
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::raw("  "),
-                        Span::styled(label, Style::default().fg(C_MUTED)),
-                    ]))
+                    let rows = app.settings_items();
+                    let sep_count = rows[..i]
+                        .iter()
+                        .filter(|r| matches!(r, SettingRow::Separator))
+                        .count();
+                    let label = if sep_count == 0 { "RDS Sync" } else { "Time Doctor" };
+                    separator_item(label)
                 }
 
                 SettingRow::Back => back_item(is_sel),
