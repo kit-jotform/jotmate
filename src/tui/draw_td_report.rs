@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
@@ -8,7 +8,7 @@ use ratatui::{
 use super::app::{App, TdReportState};
 use super::draw::{draw_screen_header, hint_muted, sub_screen_layout};
 use super::layout::LayoutEngine;
-use super::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
+use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
 use crate::time::compute::format_hours;
 
@@ -33,7 +33,18 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         hint_spans,
     );
 
+    // Split the list area into scrollable content + fixed back footer
     let list_area = layout.get("list");
+    let (content_area, back_area) = split_content_back(list_area);
+
+    // Fixed "← Back" footer, always visible
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+            Span::styled("← Back", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
+        ])),
+        back_area,
+    );
 
     match &app.td_report {
         TdReportState::Loading => {
@@ -42,7 +53,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                     Span::raw("  "),
                     Span::styled("fetching report…", Style::default().fg(C_MUTED)),
                 ])),
-                list_area,
+                content_area,
             );
         }
 
@@ -52,7 +63,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                     Span::raw("  "),
                     Span::styled(format!("✗ {msg}"), Style::default().fg(C_DANGEROUS)),
                 ])),
-                list_area,
+                content_area,
             );
         }
 
@@ -73,7 +84,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             }
 
             let total_lines = lines.len();
-            let visible = list_area.height as usize;
+            let visible = content_area.height as usize;
             let max_scroll = total_lines.saturating_sub(visible);
             let scroll = app.td_report_scroll.min(max_scroll);
 
@@ -82,7 +93,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Min(0), Constraint::Length(1)])
-                    .split(list_area);
+                    .split(content_area);
 
                 f.render_widget(
                     Paragraph::new(lines).scroll((scroll as u16, 0)),
@@ -100,11 +111,20 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             } else {
                 f.render_widget(
                     Paragraph::new(lines).scroll((scroll as u16, 0)),
-                    list_area,
+                    content_area,
                 );
             }
         }
     }
+}
+
+/// Split `area` into (content, back_footer) — footer is 2 rows: blank + Back item.
+fn split_content_back(area: Rect) -> (Rect, Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
+        .split(area);
+    (chunks[0], chunks[1])
 }
 
 fn build_header(show_cumulative: bool) -> Line<'static> {
