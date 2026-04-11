@@ -1,14 +1,15 @@
 use ratatui::{
-    text::{Line},
+    text::Line,
     widgets::{List, ListItem},
 };
 
-use super::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
-use super::draw::{
+use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
+use crate::tui::layout::LayoutEngine;
+
+use super::{
     back_item, draw_screen_header, hint_navigate_toggle, inline_field_item, link_item,
     separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W_TZ,
 };
-use super::layout::LayoutEngine;
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -42,7 +43,11 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                         .iter()
                         .filter(|r| matches!(r, SettingRow::Separator))
                         .count();
-                    let label = if sep_count == 0 { "RDS Sync" } else { "Time Doctor" };
+                    let label = if sep_count == 0 {
+                        "RDS Sync"
+                    } else {
+                        "Time Doctor"
+                    };
                     separator_item(label)
                 }
 

@@ -4,13 +4,14 @@ use ratatui::{
     widgets::{List, ListItem},
 };
 
-use super::app::{App, InputMode, RemoveRepoRow, RepoManagerRow, Screen};
-use super::draw::{
+use crate::tui::app::{App, InputMode, RemoveRepoRow, RepoManagerRow, Screen};
+use crate::tui::layout::LayoutEngine;
+use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_TEXT};
+
+use super::{
     back_item, draw_confirm_dialog, draw_screen_header, hint_confirm_cancel, hint_input_confirm,
     hint_select_back, sub_link_item, sub_screen_layout, toggle_item,
 };
-use super::layout::LayoutEngine;
-use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_TEXT};
 
 pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();

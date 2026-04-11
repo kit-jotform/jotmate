@@ -15,14 +15,17 @@ fn field_state(is_sel: bool, editing: bool) -> FieldState {
     }
 }
 
-use super::app::{App, CpListRow, InputMode, Screen, TimeDoctorField, TimeSettingRow, WEEKLY_HOURS_OPTIONS};
-use super::draw::{
-    back_item, draw_confirm_dialog, draw_screen_header, fmt_date, hint_confirm_cancel,
-    hint_muted, hint_select_back, inline_field_item, link_item, sub_screen_layout, FieldState,
-    DIVIDER_WIDTH, FIELD_LABEL_W,
+use crate::tui::app::{
+    App, CpListRow, InputMode, Screen, TimeDoctorField, TimeSettingRow, WEEKLY_HOURS_OPTIONS,
 };
-use super::layout::LayoutEngine;
-use super::palette::{C_DANGEROUS, C_MUTED, C_TEXT};
+use crate::tui::layout::LayoutEngine;
+use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_TEXT};
+
+use super::{
+    back_item, draw_confirm_dialog, draw_screen_header, fmt_date, hint_confirm_cancel, hint_muted,
+    hint_select_back, inline_field_item, link_item, sub_screen_layout, FieldState, DIVIDER_WIDTH,
+    FIELD_LABEL_W,
+};
 
 pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();

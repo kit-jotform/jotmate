@@ -6,18 +6,23 @@ use ratatui::{
     widgets::{Block, Borders, Clear, ListItem, Paragraph},
 };
 
-use super::app::{App, Screen};
-use super::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
-use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT};
-use super::widgets::LOGO_SMALL;
+use crate::tui::app::{App, Screen};
+use crate::tui::layout::{HAlign, LayoutEngine, RowMap, ScreenLayout, Widget, UI_WIDTH};
+use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT};
+use crate::tui::widgets::LOGO_SMALL;
 
-pub(super) use draw_main_menu::draw_main_menu;
-pub(super) use draw_repos::{draw_remove_repos, draw_repo_manager};
-pub(super) use draw_settings::{draw_general_toggles, draw_settings};
-pub(super) use draw_td_report::draw_td_report;
-pub(super) use draw_time::{draw_contract_periods, draw_td_settings};
+mod main_menu;
+mod repos;
+mod settings;
+mod sync_screen;
+mod td_report;
+mod time;
 
-use super::{draw_main_menu, draw_repos, draw_settings, draw_td_report, draw_time};
+use main_menu::draw_main_menu;
+use repos::{draw_remove_repos, draw_repo_manager};
+use settings::{draw_general_toggles, draw_settings};
+use td_report::draw_td_report;
+use time::{draw_contract_periods, draw_td_settings};
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
@@ -340,6 +345,6 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
         Screen::TimeDoctorReport => draw_td_report(f, app),
-        Screen::SyncProgress => super::sync_screen::draw_sync_progress(f, app),
+        Screen::SyncProgress => sync_screen::draw_sync_progress(f, app),
     }
 }

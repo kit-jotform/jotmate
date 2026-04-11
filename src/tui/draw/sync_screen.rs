@@ -4,13 +4,13 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, ForkStatus, RdsStatus};
-use super::draw::{draw_screen_header, hint_muted};
-use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
-
 use ratatui::style::Color;
 
-use super::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
+use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState};
+use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
+use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
+
+use super::{draw_screen_header, hint_muted};
 
 // ── Spinner frames ──────────────────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     );
 }
 
-fn repo_line_spinner(ch: char, repo: &super::app::RepoSyncState) -> ListItem<'static> {
+fn repo_line_spinner(ch: char, repo: &RepoSyncState) -> ListItem<'static> {
     let name_padded = format!("{:<width$}", repo.name, width = NAME_W);
     let fork_padded = format!("{:<width$}", repo.fork_status.label(), width = FORK_W);
     let rds_padded = format!("{:<width$}", repo.rds_status.label(), width = RDS_W);

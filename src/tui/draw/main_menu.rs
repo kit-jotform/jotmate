@@ -6,11 +6,12 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::app::{App, Screen, MAIN_ITEMS};
-use super::draw::DIVIDER_WIDTH;
-use super::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
-use super::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT};
-use super::widgets::{IconWidget, LOGO};
+use crate::tui::app::{App, Screen, MAIN_ITEMS};
+use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
+use crate::tui::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT};
+use crate::tui::widgets::{IconWidget, LOGO};
+
+use super::DIVIDER_WIDTH;
 
 const NAME_COL_W: u16 = 16;
 
@@ -105,10 +106,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
                 "SELECT TOOL",
                 Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                "  (↓↑ navigate  •  ↵ submit)",
-                Style::default().fg(C_MUTED),
-            ),
+            Span::styled("  (↓↑ navigate  •  ↵ submit)", Style::default().fg(C_MUTED)),
         ])),
         engine.place(&Widget::anon(UI_WIDTH, HAlign::Center), rows.get("sel_hdr")),
     );
