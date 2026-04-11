@@ -19,7 +19,7 @@ pub enum Commands {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct SyncArgs {
-    /// Only sync specific projects (comma-separated: Jotform3,vendors,core,backend,frontend)
+    /// Only sync specific projects (comma-separated: vendors,core,backend,frontend)
     #[arg(long, value_delimiter = ',')]
     pub only: Option<Vec<String>>,
 

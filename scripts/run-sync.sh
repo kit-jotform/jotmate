@@ -86,7 +86,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Supported project names (execution order matters for display)
-PROJECTS=("Jotform3" "vendors" "core" "backend" "frontend")
+PROJECTS=("vendors" "core" "backend" "frontend")
 VALID_PROJECTS=("${PROJECTS[@]}")
 
 # Function to check if a project should be included

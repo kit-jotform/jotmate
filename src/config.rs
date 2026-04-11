@@ -35,7 +35,6 @@ fn default_upstream_repos() -> Vec<UpstreamRepo> {
         UpstreamRepo::new("https://github.com/jotform/frontend.git", "frontend"),
         UpstreamRepo::new("https://github.com/jotform/vendors.git", "vendors"),
         UpstreamRepo::new("https://github.com/jotform/backend.git", "backend"),
-        UpstreamRepo::new("https://github.com/jotform/Jotform3.git", "Jotform3"),
         UpstreamRepo::new("https://github.com/jotform/core.git", "core"),
     ]
 }
