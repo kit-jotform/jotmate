@@ -50,23 +50,34 @@ async fn handle_td_report_tick(
 ) -> Result<bool> {
     app.poll_td_report();
 
-    // Session expired — teardown TUI, re-auth in foreground, restart fetch
+    // Session expired — re-auth and restart the fetch. If the password is in
+    // the keychain we can re-auth silently in place; otherwise we have to drop
+    // to the foreground so the user can type their password at a prompt.
     if matches!(app.td_report, app::TdReportState::NeedsReauth) {
-        teardown_terminal(terminal);
         let email = app.td_email.clone();
-        match crate::time::auth::reauth(&email).await {
-            Ok(_) => {
-                eprintln!("Re-authenticated. Reloading report...");
-                std::thread::sleep(std::time::Duration::from_millis(800));
+        if crate::time::auth::load_password_from_keychain().is_some() {
+            match crate::time::auth::reauth(&email).await {
+                Ok(_) => {
+                    app.td_report = app::TdReportState::Loading;
+                    app.launch_td_report();
+                }
+                Err(e) => {
+                    app.td_report = app::TdReportState::Error(format!("Re-auth failed: {e}"));
+                }
             }
-            Err(e) => {
-                eprintln!("Re-authentication failed: {e}");
-                std::thread::sleep(std::time::Duration::from_secs(2));
+        } else {
+            teardown_terminal(terminal);
+            match crate::time::auth::reauth(&email).await {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Re-authentication failed: {e}");
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
             }
+            *terminal = setup_terminal()?;
+            app.td_report = app::TdReportState::Loading;
+            app.launch_td_report();
         }
-        *terminal = setup_terminal()?;
-        app.td_report = app::TdReportState::Loading;
-        app.launch_td_report();
     }
 
     if event::poll(Duration::from_millis(150))? {
