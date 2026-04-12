@@ -32,13 +32,19 @@ impl Widget {
 pub struct LayoutEngine {
     ui_width: u16,
     base_x: u16,
+    frame_right: u16,
 }
 
 impl LayoutEngine {
-    pub fn new(base_x: u16) -> Self {
+    /// `frame` is the full `f.area()` — used to clip any computed Rect so
+    /// widgets can never index past the terminal buffer even when the
+    /// canonical `UI_WIDTH` is wider than the terminal. Narrow terminals
+    /// just see the right side of the UI clipped.
+    pub fn new(frame: Rect) -> Self {
         Self {
             ui_width: UI_WIDTH,
-            base_x,
+            base_x: frame.x,
+            frame_right: frame.x + frame.width,
         }
     }
 
@@ -47,18 +53,20 @@ impl LayoutEngine {
             HAlign::Left => self.base_x,
             HAlign::Center => self.base_x + self.ui_width.saturating_sub(w.width) / 2,
         };
-        Rect {
-            x,
-            width: self.ui_width.min(w.width),
-            ..row
-        }
+        self.clip(x, self.ui_width.min(w.width), row)
     }
 
     pub fn center(&self, width: u16, row: Rect) -> Rect {
         let x = self.base_x + self.ui_width.saturating_sub(width) / 2;
+        self.clip(x, self.ui_width.min(width), row)
+    }
+
+    fn clip(&self, x: u16, width: u16, row: Rect) -> Rect {
+        let x = x.min(self.frame_right);
+        let right = (x + width).min(self.frame_right);
         Rect {
             x,
-            width: self.ui_width.min(width),
+            width: right - x,
             ..row
         }
     }

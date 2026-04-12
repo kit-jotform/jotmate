@@ -17,7 +17,7 @@ use super::{
 pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let layout = sub_screen_layout(area);
-    let engine = LayoutEngine::new(area.x);
+    let engine = LayoutEngine::new(area);
 
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDeletePeriod(_) => hint_confirm_cancel(),

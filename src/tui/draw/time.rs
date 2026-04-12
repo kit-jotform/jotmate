@@ -17,7 +17,7 @@ use super::{
 pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let layout = sub_screen_layout(area);
-    let engine = LayoutEngine::new(area.x);
+    let engine = LayoutEngine::new(area);
 
     let hint_spans = if matches!(&app.input_mode, InputMode::EditingField { .. }) {
         hint_muted(&["↵", " save  •  ", "Esc", " cancel"])

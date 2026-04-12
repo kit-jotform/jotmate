@@ -33,7 +33,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .margin(1)
         .split(area);
 
-    let engine = LayoutEngine::new(area.x);
+    let engine = LayoutEngine::new(area);
 
     // Header row: icon | gap | logo
     let header_cols = Layout::default()

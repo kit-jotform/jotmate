@@ -39,7 +39,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .margin(1)
         .split(area);
 
-    let engine = LayoutEngine::new(area.x);
+    let engine = LayoutEngine::new(area);
 
     let is_complete = app.sync_is_complete();
     let (title, hint_spans) = if is_complete {
