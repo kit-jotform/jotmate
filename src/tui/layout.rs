@@ -36,15 +36,26 @@ pub struct LayoutEngine {
 }
 
 impl LayoutEngine {
-    /// `frame` is the full `f.area()` — used to clip any computed Rect so
-    /// widgets can never index past the terminal buffer even when the
-    /// canonical `UI_WIDTH` is wider than the terminal. Narrow terminals
-    /// just see the right side of the UI clipped.
+    /// `frame` is the full `f.area()`. The UI is left-aligned and capped at
+    /// `UI_WIDTH`. On narrow terminals the UI shrinks to fit and the right
+    /// side is still clipped safely.
     pub fn new(frame: Rect) -> Self {
+        let ui_width = UI_WIDTH.min(frame.width);
         Self {
-            ui_width: UI_WIDTH,
+            ui_width,
             base_x: frame.x,
             frame_right: frame.x + frame.width,
+        }
+    }
+
+    /// Clamp an input area (typically `f.area()`) to the left-aligned UI band
+    /// so `ScreenLayout::split` produces rows capped at `UI_WIDTH` instead of
+    /// spanning the full terminal width.
+    pub fn clamp_area(&self, area: Rect) -> Rect {
+        Rect {
+            x: self.base_x,
+            width: self.ui_width,
+            ..area
         }
     }
 

@@ -14,8 +14,8 @@ use super::{draw_screen_header, hint_muted, sub_screen_layout};
 
 pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area);
+    let layout = sub_screen_layout(engine.clamp_area(area));
 
     let hint_spans = match &app.td_report {
         TdReportState::Loading | TdReportState::NeedsReauth => hint_muted(&["loading…"]),

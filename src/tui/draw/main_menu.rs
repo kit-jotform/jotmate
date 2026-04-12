@@ -17,6 +17,9 @@ const NAME_COL_W: u16 = 16;
 
 pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
+    let engine = LayoutEngine::new(area);
+    // Drop the icon on narrow terminals so the logo stays intact.
+    let show_icon = area.width >= UI_WIDTH;
 
     let rows = ScreenLayout::new()
         .row("header", 7)
@@ -31,28 +34,30 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .row("blank3", 1)
         .row("hint", 1)
         .margin(1)
-        .split(area);
+        .split(engine.clamp_area(area));
 
-    let engine = LayoutEngine::new(area);
-
-    // Header row: icon | gap | logo
-    let header_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(14),
-            Constraint::Length(2),
-            Constraint::Min(0),
-        ])
-        .split(rows.get("header"));
-
-    // ── Icon ──
-    f.render_widget(IconWidget, header_cols[0]);
+    // Header row: [icon | gap |] logo
+    let header_row = rows.get("header");
+    let logo_col = if show_icon {
+        let header_cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(14),
+                Constraint::Length(2),
+                Constraint::Min(0),
+            ])
+            .split(header_row);
+        f.render_widget(IconWidget, header_cols[0]);
+        header_cols[2]
+    } else {
+        header_row
+    };
 
     // ── Logo (vertically centred in 7-row area) ──
     let logo_area = Rect {
-        y: header_cols[2].y + 1,
+        y: logo_col.y + 1,
         height: 6,
-        ..header_cols[2]
+        ..logo_col
     };
     let logo_lines: Vec<Line> = LOGO
         .iter()

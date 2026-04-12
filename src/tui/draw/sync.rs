@@ -24,6 +24,7 @@ const RDS_W: usize = 18;
 
 pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
+    let engine = LayoutEngine::new(area);
 
     let rows = ScreenLayout::new()
         .row("logo", 3)
@@ -37,9 +38,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .row("blank4", 1)
         .row("hint", 1)
         .margin(1)
-        .split(area);
-
-    let engine = LayoutEngine::new(area);
+        .split(engine.clamp_area(area));
 
     let is_complete = app.sync_is_complete();
     let (title, hint_spans) = if is_complete {

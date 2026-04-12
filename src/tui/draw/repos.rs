@@ -15,8 +15,8 @@ use super::{
 
 pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area);
+    let layout = sub_screen_layout(engine.clamp_area(area));
 
     let hint_spans = match &app.input_mode {
         InputMode::AddingRepo(_) => hint_input_confirm(),
@@ -74,8 +74,8 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
 
 pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area);
+    let layout = sub_screen_layout(engine.clamp_area(area));
 
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDelete(_) => hint_confirm_cancel(),

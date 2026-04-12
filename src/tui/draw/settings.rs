@@ -13,8 +13,8 @@ use super::{
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
-    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area);
+    let layout = sub_screen_layout(engine.clamp_area(area));
 
     draw_screen_header(
         f,
@@ -70,8 +70,8 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
 pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync: bool) {
     let area = f.area();
-    let layout = sub_screen_layout(area);
     let engine = LayoutEngine::new(area);
+    let layout = sub_screen_layout(engine.clamp_area(area));
 
     draw_screen_header(
         f,
