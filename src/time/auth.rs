@@ -49,6 +49,8 @@ fn keychain_set(account: &str, password: &str) -> Result<()> {
             "-w", password,
             "-U", // update if already exists
         ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status()
         .context("security CLI not found")?;
 
@@ -66,6 +68,7 @@ fn keychain_delete(account: &str) -> Result<()> {
             "-s", KEYCHAIN_SERVICE,
             "-a", account,
         ])
+        .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .context("security CLI not found")?;
