@@ -46,8 +46,9 @@ fn build_flag_args(args: &SyncArgs) -> Vec<String> {
     if args.skip_fetch {
         flags.push("--skip-fetch".to_string());
     }
-    if args.skip_dirty_sync {
-        flags.push("--skip-dirty-sync".to_string());
+    // no_smart_sync means always run RDS — pass --sync-all to the script to bypass its skip logic
+    if args.no_smart_sync {
+        flags.push("--sync-all".to_string());
     }
     flags
 }

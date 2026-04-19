@@ -29,8 +29,7 @@ pub struct SyncOpts {
     pub skip_git_fetch: bool,
     pub skip_rebase: bool,
     pub skip_rds_sync: bool,
-    pub skip_dirty_sync: bool,
-    pub force_sync_all: bool,
+    pub smart_sync: bool,
 }
 
 pub async fn run_tui(
@@ -43,8 +42,7 @@ pub async fn run_tui(
         skip_git_fetch,
         skip_rebase,
         skip_rds_sync,
-        skip_dirty_sync,
-        force_sync_all,
+        smart_sync,
     } = opts;
 
     // Phase 1: Fork sync — all repos in parallel
@@ -92,8 +90,7 @@ pub async fn run_tui(
         rds_handles.push(tokio::spawn(async move {
             let opts = RdsOpts {
                 skip_rds_sync,
-                skip_dirty_sync,
-                force_sync_all,
+                smart_sync,
             };
             sync_rds(idx, &path, &fake_result, &tx, &opts).await;
         }));

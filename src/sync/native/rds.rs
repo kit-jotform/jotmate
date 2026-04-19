@@ -9,8 +9,7 @@ use super::git::{git, git_ok};
 
 pub(super) struct RdsOpts {
     pub skip_rds_sync: bool,
-    pub skip_dirty_sync: bool,
-    pub force_sync_all: bool,
+    pub smart_sync: bool,
 }
 
 pub(super) async fn sync_rds(
@@ -31,8 +30,8 @@ pub(super) async fn sync_rds(
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Preparing));
 
     // Decide whether to skip (mirrors prepare_project_sync from bash).
-    if !opts.force_sync_all && matches!(fork_result, ForkResult::Unchanged) {
-        match skip_reason(repo, tx, idx, opts.skip_dirty_sync).await {
+    if opts.smart_sync && matches!(fork_result, ForkResult::Unchanged) {
+        match skip_reason(repo, tx, idx).await {
             SkipDecision::Skip(reason) => {
                 let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Skipped(reason)));
                 return;
@@ -79,21 +78,17 @@ enum SkipDecision {
     AlreadyReported,
 }
 
-/// When the fork was unchanged, decide whether the RDS sync should be skipped entirely.
-/// May send `Pulling`/`Error` updates as a side effect when the clean repo is behind origin.
+/// When the fork was unchanged and smart sync is on, decide whether RDS sync can be skipped.
+/// Dirty repos always proceed. May send `Pulling`/`Error` updates as a side effect.
 async fn skip_reason(
     repo: &Path,
     tx: &mpsc::UnboundedSender<SyncUpdate>,
     idx: usize,
-    skip_dirty: bool,
 ) -> SkipDecision {
     let porcelain = git(repo, &["status", "--porcelain"]).await.unwrap_or_default();
 
     if !porcelain.is_empty() {
-        if skip_dirty {
-            return SkipDecision::Skip("dirty + skip-dirty".into());
-        }
-        return SkipDecision::Proceed; // dirty but not skipping → run sync
+        return SkipDecision::Proceed; // dirty → always run sync
     }
 
     // Clean repo, fork unchanged — check if behind origin

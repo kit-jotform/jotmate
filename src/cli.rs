@@ -19,13 +19,17 @@ pub enum Commands {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct SyncArgs {
-    /// Only sync specific projects (comma-separated: vendors,core,backend,frontend)
+    /// Only sync specific repos (comma-separated names, forces even if disabled in config)
     #[arg(long, value_delimiter = ',')]
     pub only: Option<Vec<String>>,
 
-    /// Force sync all repos regardless of upstream diff
+    /// Sync all repos including disabled ones, bypass smart sync
     #[arg(long)]
     pub sync_all: bool,
+
+    /// Skip fork sync entirely; run only RDS sync
+    #[arg(long)]
+    pub rds_only: bool,
 
     /// Skip fork sync (fetch upstream + merge + push)
     #[arg(long)]
@@ -39,12 +43,20 @@ pub struct SyncArgs {
     #[arg(long)]
     pub skip_rds_sync: bool,
 
-    /// Skip git fetch upstream
+    /// Disable smart sync: run RDS sync unconditionally (short: -S)
+    #[arg(long, short = 'S')]
+    pub no_smart_sync: bool,
+
+    /// Ignore the repo path discovery cache for this run
+    #[arg(long)]
+    pub no_cache: bool,
+
+    /// Skip git fetch upstream (use already-fetched upstream refs)
     #[arg(long)]
     pub skip_fetch: bool,
 
-    /// Skip RDS sync when repo has uncommitted changes
-    #[arg(long)]
+    /// Deprecated: has no effect
+    #[arg(long, hide = true)]
     pub skip_dirty_sync: bool,
 }
 

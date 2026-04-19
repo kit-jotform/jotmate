@@ -52,11 +52,10 @@ pub(super) fn launch_sync(app: &mut App) {
 
     let opts = crate::sync::native::SyncOpts {
         skip_fork_sync: app.skip_fork_sync,
-        skip_git_fetch: app.skip_git_fetch,
+        skip_git_fetch: false,
         skip_rebase: app.skip_rebase,
         skip_rds_sync: app.skip_rds_sync,
-        skip_dirty_sync: app.skip_dirty_sync,
-        force_sync_all: app.sync_all,
+        smart_sync: app.smart_sync,
     };
 
     let handle = tokio::spawn(async move {

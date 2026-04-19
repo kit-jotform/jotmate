@@ -4,13 +4,11 @@ use super::App;
 impl App {
     pub fn persist_settings(&self) {
         self.mutate_and_save(|cfg| {
-            cfg.sync.sync_all_by_default = self.sync_all;
             cfg.sync.use_cache = self.use_cache;
             cfg.sync.skip_fork_sync = self.skip_fork_sync;
             cfg.sync.skip_rebase = self.skip_rebase;
             cfg.sync.skip_rds_sync = self.skip_rds_sync;
-            cfg.sync.skip_git_fetch = self.skip_git_fetch;
-            cfg.sync.skip_dirty_sync = self.skip_dirty_sync;
+            cfg.sync.smart_sync = self.smart_sync;
             cfg.sync.upstream_repos = self.repos.clone();
         });
     }

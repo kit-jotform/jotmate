@@ -41,43 +41,32 @@ pub struct SyncConfig {
     /// Upstream repositories to sync (URL + name + enabled flag)
     #[serde(default = "default_upstream_repos")]
     pub upstream_repos: Vec<UpstreamRepo>,
-    /// Default projects to sync when --only is not passed
-    pub default_only: Option<Vec<String>>,
-    /// If true, run with --sync-all by default
-    #[serde(default)]
-    pub sync_all_by_default: bool,
     /// If true, use the repo path cache; if false, always rediscover
     #[serde(default = "default_true")]
     pub use_cache: bool,
     /// Skip the fork sync step (git fetch upstream + merge + push)
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub skip_fork_sync: bool,
     /// Skip rebasing the current branch onto the default branch after fork sync
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub skip_rebase: bool,
     /// Skip running ./sync in each repo directory
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub skip_rds_sync: bool,
-    /// Skip git fetch upstream (useful for offline work)
+    /// When true, skip RDS sync for repos with no upstream changes, clean tree, and nothing ahead/behind origin
     #[serde(default = "default_true")]
-    pub skip_git_fetch: bool,
-    /// Skip RDS sync when repo has uncommitted changes
-    #[serde(default = "default_true")]
-    pub skip_dirty_sync: bool,
+    pub smart_sync: bool,
 }
 
 impl Default for SyncConfig {
     fn default() -> Self {
         Self {
             upstream_repos: default_upstream_repos(),
-            default_only: None,
-            sync_all_by_default: false,
             use_cache: true,
-            skip_fork_sync: true,
-            skip_rebase: true,
-            skip_rds_sync: true,
-            skip_git_fetch: true,
-            skip_dirty_sync: true,
+            skip_fork_sync: false,
+            skip_rebase: false,
+            skip_rds_sync: false,
+            smart_sync: true,
         }
     }
 }

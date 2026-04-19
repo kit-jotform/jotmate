@@ -33,8 +33,7 @@ pub enum ToggleKind {
     SkipForkSync,
     SkipRebase,
     SkipRdsSync,
-    SkipGitFetch,
-    SkipDirtySync,
+    SmartSync,
     SkipCurrentWeek,
     UseTimeCache,
     ShowCumulative,
@@ -48,8 +47,7 @@ impl ToggleKind {
                 | ToggleKind::SkipForkSync
                 | ToggleKind::SkipRebase
                 | ToggleKind::SkipRdsSync
-                | ToggleKind::SkipGitFetch
-                | ToggleKind::SkipDirtySync
+                | ToggleKind::SmartSync
         )
     }
 }
