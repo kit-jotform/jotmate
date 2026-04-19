@@ -26,6 +26,12 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
 
+    let repo_count = app
+        .sync_state
+        .as_ref()
+        .map(|s| s.repos.len() as u16)
+        .unwrap_or(0);
+
     let rows = ScreenLayout::new()
         .row("logo", 3)
         .row("blank1", 1)
@@ -34,7 +40,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .row("blank2", 1)
         .row("summary", 1)
         .row("blank3", 1)
-        .row("list", 0)
+        .row("list", repo_count)
         .row("blank4", 1)
         .row("hint", 1)
         .margin(1)
@@ -42,9 +48,9 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
 
     let is_complete = app.sync_is_complete();
     let (title, hint_spans) = if is_complete {
-        ("Sync Complete", hint_muted(&["↵/Esc", " dismiss"]))
+        ("Sync Complete", hint_muted(&["↵", " back"]))
     } else {
-        ("Syncing Repos", hint_muted(&["q/Esc", " cancel"]))
+        ("Syncing Repos", hint_muted(&["⌫/Esc", " cancel"]))
     };
     draw_screen_header(
         f,
@@ -110,18 +116,18 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         );
     }
 
-    // ── Bottom hint ──
+    // ── Hint ──
     let hint_text = if is_complete {
-        "Press Enter or Esc to return to the main menu"
+        "Press Enter to return to the main menu"
     } else {
-        "Sync is running…"
+        "⌫/Esc to cancel"
     };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             hint_text,
             Style::default().fg(C_MUTED),
         ))),
-        rows.get("hint"),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("hint")),
     );
 }
 

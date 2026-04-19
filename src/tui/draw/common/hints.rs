@@ -11,20 +11,6 @@ pub(in crate::tui::draw) fn hint_muted(parts: &[&str]) -> Vec<Span<'static>> {
         .collect()
 }
 
-pub(in crate::tui::draw) fn hint_navigate_toggle() -> Vec<Span<'static>> {
-    hint_muted(&[
-        "↑↓",
-        " navigate  •  ",
-        "↵",
-        " toggle  •  ",
-        "⌫/Esc",
-        " back",
-    ])
-}
-
-pub(in crate::tui::draw) fn hint_select_back() -> Vec<Span<'static>> {
-    hint_muted(&["↵", " select  •  ", "⌫/Esc", " back"])
-}
 
 pub(in crate::tui::draw) fn hint_confirm_cancel() -> Vec<Span<'static>> {
     hint_muted(&["↵/y", " confirm  •  ", "Esc/n", " cancel"])

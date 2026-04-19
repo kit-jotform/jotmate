@@ -10,7 +10,7 @@ use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_TEXT};
 
 use super::{
     back_item, draw_confirm_dialog, draw_screen_header, hint_confirm_cancel, hint_input_confirm,
-    hint_select_back, sub_link_item, sub_screen_layout, toggle_item,
+    hint_muted, sub_link_item, sub_screen_layout, toggle_item,
 };
 
 pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
@@ -20,7 +20,7 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
 
     let hint_spans = match &app.input_mode {
         InputMode::AddingRepo(_) => hint_input_confirm(),
-        _ => hint_select_back(),
+        _ => hint_muted(&["↑↓", " navigate  •  ", "↵", " select  •  ", "⌫/Esc", " back"]),
     };
     draw_screen_header(
         f,
@@ -79,7 +79,7 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
 
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDelete(_) => hint_confirm_cancel(),
-        _ => hint_select_back(),
+        _ => hint_muted(&["↑↓", " navigate  •  ", "↵", " select  •  ", "⌫/Esc", " back"]),
     };
     draw_screen_header(
         f,

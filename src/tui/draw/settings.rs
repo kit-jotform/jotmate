@@ -7,7 +7,7 @@ use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use crate::tui::layout::LayoutEngine;
 
 use super::{
-    back_item, draw_screen_header, hint_navigate_toggle, inline_field_item, link_item,
+    back_item, draw_screen_header, hint_muted, inline_field_item, link_item,
     separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W_TZ,
 };
 
@@ -23,7 +23,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         layout.get("title"),
         layout.get("divider"),
         "Settings",
-        hint_navigate_toggle(),
+        hint_muted(&["↑↓", " navigate  •  ", "↵", " enter   •  ", "⌫/Esc", " back"]),
     );
 
     let setting_rows = app.settings_items();
@@ -80,7 +80,7 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
         layout.get("title"),
         layout.get("divider"),
         title,
-        hint_navigate_toggle(),
+        hint_muted(&["↑↓", " navigate  •  ", "↵", " toggle  •  ", "⌫/Esc", " back"]),
     );
 
     let screen = if is_sync {

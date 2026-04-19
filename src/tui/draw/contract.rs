@@ -10,7 +10,7 @@ use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_TEXT};
 
 use super::{
     back_item, draw_confirm_dialog, draw_screen_header, field_state, fmt_date,
-    hint_confirm_cancel, hint_select_back, inline_field_item, link_item, sub_screen_layout,
+    hint_confirm_cancel, hint_muted, inline_field_item, link_item, sub_screen_layout,
     DIVIDER_WIDTH, FIELD_LABEL_W,
 };
 
@@ -21,7 +21,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
 
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDeletePeriod(_) => hint_confirm_cancel(),
-        _ => hint_select_back(),
+        _ => hint_muted(&["↑↓", " navigate  •  ", "↵", " select  •  ", "⌫/Esc", " back"]),
     };
 
     draw_screen_header(

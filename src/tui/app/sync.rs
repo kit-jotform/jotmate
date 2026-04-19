@@ -58,7 +58,9 @@ impl App {
                 }
                 SyncUpdate::Elapsed(idx, secs) => {
                     if let Some(repo) = state.repos.get_mut(idx) {
-                        repo.elapsed_secs = secs;
+                        if !repo.is_complete() {
+                            repo.elapsed_secs = secs;
+                        }
                     }
                 }
             }

@@ -22,7 +22,7 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     let hint_spans = if matches!(&app.input_mode, InputMode::EditingField { .. }) {
         hint_muted(&["↵", " save  •  ", "Esc", " cancel"])
     } else {
-        hint_muted(&["↵", " edit  •  ", "⌫/Esc", " back"])
+        hint_muted(&["↑↓", " navigate  •  ", "↵", " edit  •  ", "⌫/Esc", " back"])
     };
 
     draw_screen_header(

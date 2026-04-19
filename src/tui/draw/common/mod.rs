@@ -13,7 +13,7 @@ mod items;
 pub(in crate::tui::draw) use dialog::draw_confirm_dialog;
 pub(in crate::tui::draw) use header::draw_screen_header;
 pub(in crate::tui::draw) use hints::{
-    hint_confirm_cancel, hint_input_confirm, hint_muted, hint_navigate_toggle, hint_select_back,
+    hint_confirm_cancel, hint_input_confirm, hint_muted,
     HINT_CYCLE_VALUE,
 };
 pub(in crate::tui::draw) use items::{
