@@ -138,6 +138,9 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
     let mut tick: usize = 0;
     let mut sync_done = false;
 
+    print!("\x1b[?25l"); // hide cursor
+    let _ = std::io::stdout().flush();
+
     loop {
         tokio::select! {
             _ = &mut sync_task, if !sync_done => { sync_done = true; }
@@ -152,6 +155,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
 
         if sync_done || states.iter().all(|r| r.is_complete()) {
             print_line(&states, n, tick, true);
+            print!("\x1b[?25h"); // restore cursor
             println!();
             print_errors(&states);
             break;

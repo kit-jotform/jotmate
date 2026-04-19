@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/kit-jotform/Jotmate/main/install.sh
 
 Runs `cargo build --release` and copies the binary from `target/release/`. Same `--prefix` option applies.
 
-The installer always creates a `jf` symlink alongside the `jotmate` binary so both names work.
+The installer always creates a `jf` symlink alongside the `jotmate` binary so both names work. If you still have a legacy `jt` symlink in the install directory, re-running the installer removes it so only `jf` remains on your `PATH`.
 
 ## Usage
 
