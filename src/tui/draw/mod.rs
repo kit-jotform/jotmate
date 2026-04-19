@@ -20,7 +20,7 @@ pub(in crate::tui::draw) use common::{
     back_item, draw_confirm_dialog, draw_screen_header, field_state, fmt_date,
     hint_confirm_cancel, hint_input_confirm, hint_muted,
     inline_field_item, link_item, separator_item, sub_link_item, sub_screen_layout, toggle_item,
-    FieldState, DIVIDER_WIDTH, FIELD_LABEL_W, FIELD_LABEL_W_TZ,
+    FieldState, DIVIDER_WIDTH, FIELD_LABEL_W, FIELD_LABEL_W_TZ, SEPARATOR_WIDTH,
 };
 
 use contract::draw_contract_periods;

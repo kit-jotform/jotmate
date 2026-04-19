@@ -57,6 +57,7 @@ impl ToggleKind {
 #[derive(Clone)]
 pub enum SettingRow {
     Separator,
+    Divider,
     Blank,
     SyncGeneralLink,
     ManageRepos,
@@ -96,6 +97,7 @@ pub enum GeneralToggleRow {
         value: String,
     },
     Blank,
+    Separator,
     Back,
 }
 
@@ -126,6 +128,7 @@ pub enum TimeSettingRow {
         is_set: bool,
     },
     Blank,
+    Separator,
     Back,
 }
 
@@ -175,6 +178,7 @@ impl CpListRow {
 #[derive(Clone)]
 pub enum RepoManagerRow {
     Blank,
+    Separator,
     RepoToggle {
         name: String,
         url: String,
@@ -202,6 +206,7 @@ impl RepoManagerRow {
 #[derive(Clone)]
 pub enum RemoveRepoRow {
     Blank,
+    Separator,
     RepoDelete { name: String, url: String },
     Back,
 }

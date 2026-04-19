@@ -1,17 +1,17 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Style,
-    text::Line,
+    text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
 };
 
 use crate::tui::app::{App, InputMode, Screen, TimeDoctorField, TimeSettingRow};
 use crate::tui::layout::LayoutEngine;
-use crate::tui::palette::C_DANGEROUS;
+use crate::tui::palette::{C_DANGEROUS, C_MUTED};
 
 use super::{
     back_item, draw_screen_header, field_state, hint_muted, inline_field_item, sub_screen_layout,
-    FIELD_LABEL_W,
+    FIELD_LABEL_W, SEPARATOR_WIDTH,
 };
 
 pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
@@ -48,6 +48,14 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
             let is_sel = td_selected == i;
             match row {
                 TimeSettingRow::Blank => ListItem::new(Line::raw("")),
+
+                TimeSettingRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "─".repeat(SEPARATOR_WIDTH),
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
 
                 TimeSettingRow::Back => back_item(is_sel),
 

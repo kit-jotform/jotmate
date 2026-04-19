@@ -1,14 +1,16 @@
 use ratatui::{
-    text::Line,
+    style::Style,
+    text::{Line, Span},
     widgets::{List, ListItem},
 };
 
 use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use crate::tui::layout::LayoutEngine;
+use crate::tui::palette::C_MUTED;
 
 use super::{
     back_item, draw_screen_header, hint_muted, inline_field_item, link_item,
-    separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W_TZ,
+    separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W_TZ, SEPARATOR_WIDTH,
 };
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
@@ -37,6 +39,14 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
             let is_sel = selected == i;
             match row {
                 SettingRow::Blank => ListItem::new(Line::raw("")),
+
+                SettingRow::Divider => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "─".repeat(SEPARATOR_WIDTH),
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
 
                 SettingRow::Separator => {
                     let rows = app.settings_items();
@@ -108,6 +118,13 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
             let is_sel = selected == i;
             match row {
                 GeneralToggleRow::Blank => ListItem::new(Line::raw("")),
+                GeneralToggleRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "─".repeat(SEPARATOR_WIDTH),
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
                 GeneralToggleRow::Back => back_item(is_sel),
                 GeneralToggleRow::Toggle {
                     label,

@@ -10,7 +10,7 @@ use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_TEXT};
 
 use super::{
     back_item, draw_confirm_dialog, draw_screen_header, hint_confirm_cancel, hint_input_confirm,
-    hint_muted, sub_link_item, sub_screen_layout, toggle_item,
+    hint_muted, sub_link_item, sub_screen_layout, toggle_item, SEPARATOR_WIDTH,
 };
 
 pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
@@ -50,6 +50,14 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
             let is_sel = selected == i;
             match row {
                 RepoManagerRow::Blank => ListItem::new(Line::raw("")),
+
+                RepoManagerRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "─".repeat(SEPARATOR_WIDTH),
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
 
                 RepoManagerRow::Back => back_item(is_sel),
 
@@ -114,6 +122,13 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
             let is_sel = rr_selected == i;
             match row {
                 RemoveRepoRow::Blank => ListItem::new(Line::raw("")),
+                RemoveRepoRow::Separator => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "─".repeat(SEPARATOR_WIDTH),
+                        Style::default().fg(C_MUTED),
+                    ),
+                ])),
                 RemoveRepoRow::Back => back_item(is_sel),
                 RemoveRepoRow::RepoDelete { name, url } => {
                     let detail = format!("  {name}  <{url}>");

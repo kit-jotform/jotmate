@@ -11,7 +11,7 @@ use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_TEXT};
 use super::{
     back_item, draw_confirm_dialog, draw_screen_header, field_state, fmt_date,
     hint_confirm_cancel, hint_muted, inline_field_item, link_item, sub_screen_layout,
-    DIVIDER_WIDTH, FIELD_LABEL_W,
+    FIELD_LABEL_W, SEPARATOR_WIDTH,
 };
 
 pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
@@ -55,7 +55,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 CpListRow::Separator => ListItem::new(Line::from(vec![
                     Span::raw("  "),
                     Span::styled(
-                        "─".repeat(DIVIDER_WIDTH as usize),
+                        "─".repeat(SEPARATOR_WIDTH),
                         Style::default().fg(C_MUTED),
                     ),
                 ])),

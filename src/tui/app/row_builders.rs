@@ -20,6 +20,7 @@ impl App {
             SettingRow::TimeDoctorSettings,
             SettingRow::ContractPeriodsLink,
             SettingRow::Blank,
+            SettingRow::Divider,
             SettingRow::Back,
         ]
     }
@@ -69,6 +70,7 @@ impl App {
                 disabled: self.skip_rds_sync,
             },
             GeneralToggleRow::Blank,
+            GeneralToggleRow::Separator,
             GeneralToggleRow::Back,
         ]
     }
@@ -104,6 +106,7 @@ impl App {
                 value: TIMEZONES[self.td_timezone_idx].to_string(),
             },
             GeneralToggleRow::Blank,
+            GeneralToggleRow::Separator,
             GeneralToggleRow::Back,
         ]
     }
@@ -120,6 +123,7 @@ impl App {
                 is_set: self.td_password_is_set,
             },
             TimeSettingRow::Blank,
+            TimeSettingRow::Separator,
             TimeSettingRow::Back,
         ]
     }
@@ -161,6 +165,7 @@ impl App {
         rows.push(RepoManagerRow::Blank);
         rows.push(RepoManagerRow::RemoveReposLink);
         rows.push(RepoManagerRow::Blank);
+        rows.push(RepoManagerRow::Separator);
         rows.push(RepoManagerRow::Back);
         rows
     }
@@ -174,6 +179,7 @@ impl App {
             });
         }
         rows.push(RemoveRepoRow::Blank);
+        rows.push(RemoveRepoRow::Separator);
         rows.push(RemoveRepoRow::Back);
         rows
     }
