@@ -4,67 +4,122 @@ Jotform developer productivity CLI — syncs forks with upstream and tracks Time
 
 ## Installation
 
-```sh
-./install.sh --prefix /usr/local
-```
-
-Or build from source:
+**From a release (recommended):**
 
 ```sh
-cargo build --release
-sudo cp target/release/jotmate /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/kit-jotform/Jotmate/main/install.sh | sh
 ```
 
-Or without sudo (user-only):
+Installs to `~/.local/bin/` by default. Use `--prefix` to change:
 
 ```sh
-cargo build --release
-cp target/release/jotmate ~/.local/bin/
+curl -fsSL https://raw.githubusercontent.com/kit-jotform/Jotmate/main/install.sh | sh -s -- --prefix /usr/local
 ```
+
+**From a local build:**
+
+```sh
+./install.sh --local
+```
+
+Runs `cargo build --release` and copies the binary from `target/release/`. Same `--prefix` option applies.
+
+The installer always creates a `jt` symlink alongside the `jotmate` binary so both names work.
 
 ## Usage
 
 ```
-jotmate            # interactive TUI
-jotmate sync       # sync all forks with upstream
-jotmate time       # show TimeDoctor work hours
-jotmate settings   # edit configuration
+jotmate          # open interactive TUI
+jt               # same (short alias)
 ```
 
-### sync options
+### Headless commands
 
-```
-jotmate sync --only frontend,backend   # sync specific repos
-jotmate sync --sync-all                # force run ./sync for all repos
-```
+All subcommands work without opening the TUI — useful in scripts or for a quick one-shot run.
 
-### time options
-
-```
-jotmate time --no-cache         # bypass week cache
-jotmate time --skip-current-week
+```sh
+jt sync          # sync enabled forks with upstream
+jt time          # show TimeDoctor work hours
+jt settings      # open the settings screen
 ```
 
-## Configuration
+### `jt sync` options
 
-Config file: `~/.config/jotmate/config.toml`
+```sh
+jt sync --only frontend,backend    # sync specific repos (bypasses enabled/disabled)
+jt sync --sync-all                 # sync all repos including disabled ones, bypass smart sync
+jt sync --rds-only                 # skip fork sync, run only RDS (./sync) in each repo
+jt sync -S                         # --no-smart-sync: run RDS unconditionally, don't skip
+jt sync --no-cache                 # ignore repo path cache, rediscover with fd
+jt sync --skip-fork-sync           # skip fork sync for this run
+jt sync --skip-rebase              # skip rebasing current branch after fork sync
+jt sync --skip-rds-sync            # skip RDS sync for this run
+jt sync --skip-fetch               # skip git fetch upstream (use already-fetched refs)
+```
 
-Edit interactively with `jotmate settings`, or set manually:
+Flags can be combined. `--sync-all` and `--only` are mutually exclusive. `--rds-only` and `--skip-rds-sync` are mutually exclusive.
+
+### `jt time` options
+
+```sh
+jt time --no-cache            # bypass week cache, re-fetch from TimeDoctor API
+jt time --skip-current-week   # exclude the current incomplete week
+```
+
+## Settings
+
+Open the interactive settings screen:
+
+```sh
+jt settings
+# or launch the full TUI and navigate to Settings
+jt
+```
+
+### Sync settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Use repo path cache | ON | Cache discovered repo paths; skip `fd` scan on subsequent runs |
+| Fork sync | ON | Fetch upstream, merge into default branch, push to origin |
+| → Rebase | ON | After fork sync, rebase current branch onto default branch |
+| RDS sync | ON | Run `./sync` in each repo to sync files to the Remote Dev Server |
+| → Smart sync | ON | Skip RDS sync for repos with no upstream changes, clean working tree, and nothing ahead/behind origin |
+
+**Smart sync detail:** when ON, RDS sync is skipped for a repo only if all of the following are true: fork was unchanged, working tree is clean, and local branch is not ahead/behind `origin/<branch>`. Dirty repos always run RDS sync. Turn smart sync OFF (or use `-S`) to always run `./sync` regardless.
+
+Repos to sync are managed under **Manage Repos** — toggle individual repos on/off, add new upstream URLs, or remove repos.
+
+### Time Doctor settings
+
+Configure your email, password (stored in the system keychain), timezone, and contract periods (weekly hour targets) from the TUI settings screen.
+
+## Configuration file
+
+`~/.config/jotmate/config.toml` — edited automatically by the settings screen. Manual edits are also fine.
 
 ```toml
+[sync]
+use_cache = true
+skip_fork_sync = false
+skip_rebase = false
+skip_rds_sync = false
+smart_sync = true
+
+[[sync.upstream_repos]]
+url = "https://github.com/jotform/frontend.git"
+name = "frontend"
+enabled = true
+
 [time]
 email = "you@jotform.com"
-company_id = "12345"
 timezone = "Europe/Istanbul"
-start_date = "2025-11-17"
-contract_periods = "2025-11-17:20,2026-02-02:28"
 skip_current_week = true
-
-[sync]
-github_base = "/Users/you/Documents/Github"
+use_time_cache = true
+show_cumulative = true
 ```
 
-TimeDoctor credentials are stored in the system keychain (macOS Keychain / Linux secret-service).
+TimeDoctor credentials (password / session cookie) are stored in the system keychain, never in the config file.
 
 ## Project structure
 
@@ -87,7 +142,7 @@ jotmate/
 │   │   ├── runner.rs          # runs embedded run-sync.sh
 │   │   └── native/            # in-TUI sync pipeline
 │   │       ├── fork.rs        # fetch/merge/push upstream
-│   │       ├── rds.rs         # ./sync runner
+│   │       ├── rds.rs         # ./sync runner + smart sync skip logic
 │   │       ├── git.rs         # git helpers
 │   │       └── elapsed.rs     # per-repo elapsed timer
 │   ├── time/                  # TimeDoctor tracking
@@ -142,7 +197,7 @@ jotmate/
 │           ├── td_report.rs
 │           └── sync.rs        #   SyncProgress
 ├── Cargo.toml
-├── install.sh                 # curl-based installer
+├── install.sh                 # release + local installer (--local for source builds)
 └── AGENTS.md                  # detailed guidance for AI-assisted development
 ```
 
