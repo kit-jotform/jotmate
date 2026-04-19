@@ -58,11 +58,11 @@ if [ "$LOCAL" = "1" ]; then
 
     cp "$SRC" "$INSTALL_DIR/${BINARY}"
     chmod +x "$INSTALL_DIR/${BINARY}"
-    ln -sf "$INSTALL_DIR/${BINARY}" "$INSTALL_DIR/jt"
+    ln -sf "$INSTALL_DIR/${BINARY}" "$INSTALL_DIR/jf"
 
     echo ""
     echo "✓ jotmate (local build) installed to ${INSTALL_DIR}/${BINARY}"
-    echo "✓ jt symlink created at ${INSTALL_DIR}/jt"
+    echo "✓ jf symlink created at ${INSTALL_DIR}/jf"
 else
     # Detect OS and architecture
     OS=$(uname -s)
@@ -130,11 +130,11 @@ else
 
     mv "$TMPDIR/${BINARY}" "$INSTALL_DIR/${BINARY}"
     chmod +x "$INSTALL_DIR/${BINARY}"
-    ln -sf "$INSTALL_DIR/${BINARY}" "$INSTALL_DIR/jt"
+    ln -sf "$INSTALL_DIR/${BINARY}" "$INSTALL_DIR/jf"
 
     echo ""
     echo "✓ jotmate ${LATEST} installed to ${INSTALL_DIR}/${BINARY}"
-    echo "✓ jt symlink created at ${INSTALL_DIR}/jt"
+    echo "✓ jf symlink created at ${INSTALL_DIR}/jf"
 fi
 
 # Check if install dir is on PATH

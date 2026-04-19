@@ -24,13 +24,13 @@ curl -fsSL https://raw.githubusercontent.com/kit-jotform/Jotmate/main/install.sh
 
 Runs `cargo build --release` and copies the binary from `target/release/`. Same `--prefix` option applies.
 
-The installer always creates a `jt` symlink alongside the `jotmate` binary so both names work.
+The installer always creates a `jf` symlink alongside the `jotmate` binary so both names work.
 
 ## Usage
 
 ```
 jotmate          # open interactive TUI
-jt               # same (short alias)
+jf               # same (short alias)
 ```
 
 ### Headless commands
@@ -38,32 +38,32 @@ jt               # same (short alias)
 All subcommands work without opening the TUI — useful in scripts or for a quick one-shot run.
 
 ```sh
-jt sync          # sync enabled forks with upstream
-jt time          # show TimeDoctor work hours
-jt settings      # open the settings screen
+jf sync          # sync enabled forks with upstream
+jf time          # show TimeDoctor work hours
+jf settings      # open the settings screen
 ```
 
-### `jt sync` options
+### `jf sync` options
 
 ```sh
-jt sync --only frontend,backend    # sync specific repos (bypasses enabled/disabled)
-jt sync --sync-all                 # sync all repos including disabled ones, bypass smart sync
-jt sync --rds-only                 # skip fork sync, run only RDS (./sync) in each repo
-jt sync -S                         # --no-smart-sync: run RDS unconditionally, don't skip
-jt sync --no-cache                 # ignore repo path cache, rediscover with fd
-jt sync --skip-fork-sync           # skip fork sync for this run
-jt sync --skip-rebase              # skip rebasing current branch after fork sync
-jt sync --skip-rds-sync            # skip RDS sync for this run
-jt sync --skip-fetch               # skip git fetch upstream (use already-fetched refs)
+jf sync --only frontend,backend    # sync specific repos (bypasses enabled/disabled)
+jf sync --sync-all                 # sync all repos including disabled ones, bypass smart sync
+jf sync --rds-only                 # skip fork sync, run only RDS (./sync) in each repo
+jf sync -S                         # --no-smart-sync: run RDS unconditionally, don't skip
+jf sync --no-cache                 # ignore repo path cache, rediscover with fd
+jf sync --skip-fork-sync           # skip fork sync for this run
+jf sync --skip-rebase              # skip rebasing current branch after fork sync
+jf sync --skip-rds-sync            # skip RDS sync for this run
+jf sync --skip-fetch               # skip git fetch upstream (use already-fetched refs)
 ```
 
 Flags can be combined. `--sync-all` and `--only` are mutually exclusive. `--rds-only` and `--skip-rds-sync` are mutually exclusive.
 
-### `jt time` options
+### `jf time` options
 
 ```sh
-jt time --no-cache            # bypass week cache, re-fetch from TimeDoctor API
-jt time --skip-current-week   # exclude the current incomplete week
+jf time --no-cache            # bypass week cache, re-fetch from TimeDoctor API
+jf time --skip-current-week   # exclude the current incomplete week
 ```
 
 ## Settings
@@ -71,9 +71,9 @@ jt time --skip-current-week   # exclude the current incomplete week
 Open the interactive settings screen:
 
 ```sh
-jt settings
+jf settings
 # or launch the full TUI and navigate to Settings
-jt
+jf
 ```
 
 ### Sync settings
