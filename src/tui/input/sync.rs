@@ -5,7 +5,9 @@ use crate::tui::app::{App, Screen};
 use super::Action;
 
 pub(super) fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
+    let is_running = !app.sync_is_complete();
     match code {
+        KeyCode::Enter if is_running => {}
         KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace => {
             if let Some(state) = app.sync_state.take() {
                 if let Some(handle) = state.sync_handle {

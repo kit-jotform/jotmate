@@ -47,11 +47,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .split(engine.clamp_area(area));
 
     let is_complete = app.sync_is_complete();
-    let (title, hint_spans) = if is_complete {
-        ("Sync Complete", hint_muted(&["↵", " back"]))
-    } else {
-        ("Syncing Repos", hint_muted(&["⌫/Esc", " cancel"]))
-    };
+    let title = if is_complete { "Sync Complete" } else { "Syncing Repos" };
     draw_screen_header(
         f,
         &engine,
@@ -59,7 +55,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         rows.get("title"),
         rows.get("divider"),
         title,
-        hint_spans,
+        hint_muted(&["⌫/Esc", " cancel"]),
     );
 
     // ── Summary line ──
@@ -120,7 +116,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     let hint_text = if is_complete {
         "Press Enter to return to the main menu"
     } else {
-        "⌫/Esc to cancel"
+        "Syncing..."
     };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
