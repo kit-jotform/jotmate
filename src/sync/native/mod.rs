@@ -153,6 +153,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
         if sync_done || states.iter().all(|r| r.is_complete()) {
             print_line(&states, n, tick, true);
             println!();
+            print_errors(&states);
             break;
         }
 
@@ -218,4 +219,20 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool) {
 
     print!("\r\x1b[2K{line}");
     let _ = std::io::stdout().flush();
+}
+
+fn print_errors(states: &[RepoSyncState]) {
+    for repo in states.iter().filter(|r| r.has_error()) {
+        let msg = match &repo.fork_status {
+            ForkStatus::Error(m) => m.as_str(),
+            _ => match &repo.rds_status {
+                RdsStatus::Error(m) => m.as_str(),
+                _ => "",
+            },
+        };
+        println!(
+            "  {ANSI_DANGER}{}{ANSI_RESET}  {ANSI_MUTED}{msg}{ANSI_RESET}",
+            repo.name
+        );
+    }
 }

@@ -26,11 +26,16 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
 
-    let repo_count = app
+    let (repo_count, error_count) = app
         .sync_state
         .as_ref()
-        .map(|s| s.repos.len() as u16)
-        .unwrap_or(0);
+        .map(|s| {
+            (
+                s.repos.len() as u16,
+                s.repos.iter().filter(|r| r.has_error()).count() as u16,
+            )
+        })
+        .unwrap_or((0, 0));
 
     let rows = ScreenLayout::new()
         .row("logo", 3)
@@ -41,6 +46,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .row("summary", 1)
         .row("blank3", 1)
         .row("list", repo_count)
+        .row("errors", error_count)
         .row("blank4", 1)
         .row("hint", 1)
         .margin(1)
@@ -101,6 +107,26 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             List::new(items),
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
         );
+
+        // ── Error details ──
+        if error_count > 0 {
+            let error_items: Vec<ListItem> = state
+                .repos
+                .iter()
+                .filter(|r| r.has_error())
+                .map(|r| {
+                    let msg = error_message(r);
+                    ListItem::new(Line::from(vec![
+                        Span::styled(format!("  {} ", r.name), Style::default().fg(C_DANGEROUS)),
+                        Span::styled(msg, Style::default().fg(C_MUTED)),
+                    ]))
+                })
+                .collect();
+            f.render_widget(
+                List::new(error_items),
+                engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("errors")),
+            );
+        }
     }
 
     // ── Hint ──
@@ -191,5 +217,16 @@ fn rds_status_color(status: &RdsStatus) -> Color {
         RdsStatus::Skipped(_) => C_WARN,
         RdsStatus::Error(_) => C_DANGEROUS,
         _ => C_ACCENT,
+    }
+}
+
+fn error_message(repo: &RepoSyncState) -> String {
+    match &repo.fork_status {
+        ForkStatus::Error(msg) => return msg.clone(),
+        _ => {}
+    }
+    match &repo.rds_status {
+        RdsStatus::Error(msg) => msg.clone(),
+        _ => String::new(),
     }
 }
