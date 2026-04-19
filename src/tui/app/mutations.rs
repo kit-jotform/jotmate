@@ -11,7 +11,6 @@ impl App {
 
     pub fn toggle_by_kind(&mut self, kind: ToggleKind) {
         let flag = match kind {
-            ToggleKind::SyncAll => &mut self.sync_all,
             ToggleKind::UseCache => &mut self.use_cache,
             ToggleKind::SkipForkSync => &mut self.skip_fork_sync,
             ToggleKind::SkipRebase => &mut self.skip_rebase,

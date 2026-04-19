@@ -29,7 +29,6 @@ pub enum TimeDoctorField {
 
 #[derive(Clone, Copy)]
 pub enum ToggleKind {
-    SyncAll,
     UseCache,
     SkipForkSync,
     SkipRebase,
@@ -45,8 +44,7 @@ impl ToggleKind {
     pub fn is_sync(self) -> bool {
         matches!(
             self,
-            ToggleKind::SyncAll
-                | ToggleKind::UseCache
+            ToggleKind::UseCache
                 | ToggleKind::SkipForkSync
                 | ToggleKind::SkipRebase
                 | ToggleKind::SkipRdsSync

@@ -27,14 +27,6 @@ impl App {
     pub fn sync_general_items(&self) -> Vec<GeneralToggleRow> {
         vec![
             GeneralToggleRow::Toggle {
-                kind: ToggleKind::SyncAll,
-                label: "Sync all by default",
-                hint: "--sync-all",
-                on: self.sync_all,
-                indent: false,
-                disabled: false,
-            },
-            GeneralToggleRow::Toggle {
                 kind: ToggleKind::UseCache,
                 label: "Use repo path cache",
                 hint: "",
