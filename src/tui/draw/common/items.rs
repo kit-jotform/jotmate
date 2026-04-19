@@ -52,7 +52,7 @@ pub(in crate::tui::draw) fn toggle_item(
     disabled: bool,
 ) -> ListItem<'static> {
     let prefix = if indent { "    " } else { "" };
-    let badge = if on { "[ON ] " } else { "[OFF] " };
+    let badge = if on { "[ON ]  " } else { "[OFF]  " };
     if disabled {
         let arrow = if is_sel { "▸ " } else { "  " };
         ListItem::new(Line::from(vec![
