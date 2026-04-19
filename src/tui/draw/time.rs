@@ -19,10 +19,16 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
+    let td_rows = app.td_settings_items();
+    let td_selected = app.selected_index(Screen::TimeDoctorSettings);
     let hint_spans = if matches!(&app.input_mode, InputMode::EditingField { .. }) {
         hint_muted(&["↵", " save  •  ", "Esc", " cancel"])
     } else {
-        hint_muted(&["↑↓", " navigate  •  ", "↵", " edit  •  ", "⌫/Esc", " back"])
+        let action = match td_rows.get(td_selected) {
+            Some(TimeSettingRow::Back) => "enter",
+            _ => "edit",
+        };
+        hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"])
     };
 
     draw_screen_header(
@@ -35,14 +41,11 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
         hint_spans,
     );
 
-    let td_rows = app.td_settings_items();
-    let selected = app.selected_index(Screen::TimeDoctorSettings);
-
     let items: Vec<ListItem> = td_rows
         .iter()
         .enumerate()
         .map(|(i, row)| {
-            let is_sel = selected == i;
+            let is_sel = td_selected == i;
             match row {
                 TimeSettingRow::Blank => ListItem::new(Line::raw("")),
 

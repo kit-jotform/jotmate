@@ -16,6 +16,10 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
+    let setting_rows = app.settings_items();
+    let selected = app.selected_index(Screen::Settings);
+
+    let action = "enter";
     draw_screen_header(
         f,
         &engine,
@@ -23,11 +27,8 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         layout.get("title"),
         layout.get("divider"),
         "Settings",
-        hint_muted(&["↑↓", " navigate  •  ", "↵", " enter   •  ", "⌫/Esc", " back"]),
+        hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"]),
     );
-
-    let setting_rows = app.settings_items();
-    let selected = app.selected_index(Screen::Settings);
 
     let items: Vec<ListItem> = setting_rows
         .iter()
@@ -73,16 +74,6 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
-    draw_screen_header(
-        f,
-        &engine,
-        layout.get("logo"),
-        layout.get("title"),
-        layout.get("divider"),
-        title,
-        hint_muted(&["↑↓", " navigate  •  ", "↵", " toggle  •  ", "⌫/Esc", " back"]),
-    );
-
     let screen = if is_sync {
         Screen::SyncGeneralSettings
     } else {
@@ -94,6 +85,21 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
         app.td_general_items()
     };
     let selected = app.selected_index(screen);
+
+    let action = match rows.get(selected) {
+        Some(GeneralToggleRow::Toggle { .. }) => "toggle",
+        Some(GeneralToggleRow::TimezoneSelector { .. }) => "change",
+        _ => "enter",
+    };
+    draw_screen_header(
+        f,
+        &engine,
+        layout.get("logo"),
+        layout.get("title"),
+        layout.get("divider"),
+        title,
+        hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"]),
+    );
 
     let items: Vec<ListItem> = rows
         .iter()

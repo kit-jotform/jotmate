@@ -19,9 +19,20 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
+    let cp_rows = app.cp_list_items();
+    let selected = app.selected_index(Screen::ContractPeriods);
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDeletePeriod(_) => hint_confirm_cancel(),
-        _ => hint_muted(&["↑↓", " navigate  •  ", "↵", " select  •  ", "⌫/Esc", " back"]),
+        _ => {
+            let action = match cp_rows.get(selected) {
+                Some(CpListRow::Period { .. }) => "delete",
+                Some(CpListRow::SavePeriod) => "save",
+                Some(CpListRow::MondayField) | Some(CpListRow::HoursField) => "change",
+                Some(CpListRow::Back) => "enter",
+                _ => "select",
+            };
+            hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"])
+        }
     };
 
     draw_screen_header(
@@ -33,9 +44,6 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
         "Contract Periods",
         hint_spans,
     );
-
-    let cp_rows = app.cp_list_items();
-    let selected = app.selected_index(Screen::ContractPeriods);
 
     let items: Vec<ListItem> = cp_rows
         .iter()

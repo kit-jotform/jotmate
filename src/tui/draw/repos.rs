@@ -18,9 +18,20 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
+    let rm_rows = app.repo_manager_items();
+    let selected = app.selected_index(Screen::RepoManager);
+
     let hint_spans = match &app.input_mode {
         InputMode::AddingRepo(_) => hint_input_confirm(),
-        _ => hint_muted(&["↑↓", " navigate  •  ", "↵", " select  •  ", "⌫/Esc", " back"]),
+        _ => {
+            let action = match rm_rows.get(selected) {
+                Some(RepoManagerRow::RepoToggle { .. }) => "toggle",
+                Some(RepoManagerRow::RemoveReposLink) => "enter",
+                Some(RepoManagerRow::AddUrl) => "select",
+                _ => "enter",
+            };
+            hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"])
+        }
     };
     draw_screen_header(
         f,
@@ -31,9 +42,6 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
         "Manage Repos",
         hint_spans,
     );
-
-    let rm_rows = app.repo_manager_items();
-    let selected = app.selected_index(Screen::RepoManager);
 
     let items: Vec<ListItem> = rm_rows
         .iter()
@@ -77,9 +85,17 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
+    let rr_rows = app.remove_repo_items();
+    let rr_selected = app.selected_index(Screen::RemoveRepos);
     let hint_spans = match &app.input_mode {
         InputMode::ConfirmDelete(_) => hint_confirm_cancel(),
-        _ => hint_muted(&["↑↓", " navigate  •  ", "↵", " select  •  ", "⌫/Esc", " back"]),
+        _ => {
+            let action = match rr_rows.get(rr_selected) {
+                Some(RemoveRepoRow::RepoDelete { .. }) => "delete",
+                _ => "enter",
+            };
+            hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"])
+        }
     };
     draw_screen_header(
         f,
@@ -91,14 +107,11 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
         hint_spans,
     );
 
-    let rows = app.remove_repo_items();
-    let selected = app.selected_index(Screen::RemoveRepos);
-
-    let items: Vec<ListItem> = rows
+    let items: Vec<ListItem> = rr_rows
         .iter()
         .enumerate()
         .map(|(i, row)| {
-            let is_sel = selected == i;
+            let is_sel = rr_selected == i;
             match row {
                 RemoveRepoRow::Blank => ListItem::new(Line::raw("")),
                 RemoveRepoRow::Back => back_item(is_sel),
