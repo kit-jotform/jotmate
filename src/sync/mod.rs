@@ -1,7 +1,6 @@
 pub mod cache;
 pub mod discover;
 pub mod native;
-pub mod runner;
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -9,7 +8,6 @@ use std::path::PathBuf;
 
 use crate::cli::SyncArgs;
 use crate::config::UpstreamRepo;
-use cache::compute_github_base;
 
 pub async fn run(mut args: SyncArgs) -> Result<()> {
     // Deprecated flag warnings
@@ -72,14 +70,20 @@ pub async fn run(mut args: SyncArgs) -> Result<()> {
 
     let use_cache = config.sync.use_cache && !args.no_cache;
     let paths = resolve_repo_paths(repos_to_sync.as_slice(), use_cache)?;
-    let github_base = compute_github_base(&paths).ok_or_else(|| {
-        anyhow::anyhow!(
-            "Repositories do not share a common parent directory. \
-             Please ensure all repos are cloned under the same directory."
-        )
-    })?;
 
-    runner::run_cli(&args, &github_base)
+    let repo_list: Vec<(String, PathBuf)> = repos_to_sync
+        .iter()
+        .filter_map(|r| paths.get(&r.name).map(|p| (r.name.clone(), p.clone())))
+        .collect();
+    let opts = native::SyncOpts {
+        skip_fork_sync: args.skip_fork_sync,
+        skip_git_fetch: args.skip_fetch,
+        skip_rebase: args.skip_rebase,
+        skip_rds_sync: args.skip_rds_sync,
+        smart_sync: !args.no_smart_sync,
+    };
+    native::run_headless(repo_list, opts).await;
+    Ok(())
 }
 
 fn resolve_repo_paths(

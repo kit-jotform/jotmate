@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const CACHE_VERSION: u32 = 1;
 
@@ -60,20 +60,3 @@ pub fn invalidate() {
     let _ = std::fs::remove_file(cache_path());
 }
 
-pub fn compute_github_base(paths: &HashMap<String, PathBuf>) -> Option<PathBuf> {
-    // Find common parent: all paths must be <parent>/<project_name>
-    let mut candidate: Option<PathBuf> = None;
-    for (project, path) in paths {
-        let parent = path.parent()?;
-        let filename = path.file_name()?;
-        if filename != Path::new(project).as_os_str() {
-            return None;
-        }
-        match &candidate {
-            None => candidate = Some(parent.to_path_buf()),
-            Some(c) if c != parent => return None,
-            _ => {}
-        }
-    }
-    candidate
-}

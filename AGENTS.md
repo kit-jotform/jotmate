@@ -105,7 +105,9 @@ Inline value selectors (dates, hours, timezone, etc.) must **not** enter editing
 
 ### Sync (src/sync/)
 
-`scripts/run-sync.sh` is embedded via `include_str!()` in `sync/runner.rs` and the `GITHUB_BASE` line is patched at runtime before execution. Repos are discovered via `fd -H -t d "^\.git$" ~` matched against upstream URLs, with results cached at `~/.cache/jotmate/repo_paths.json`.
+`jotmate sync` runs entirely in native Rust — no shell scripts are used. Repos are discovered via `fd -H -t d "^\.git$" ~` matched against upstream URLs, with results cached at `~/.cache/jotmate/repo_paths.json`. The sync engine (`native/`) runs all repos in parallel through two phases (fork sync → RDS sync) and streams progress updates over an unbounded channel. The CLI entry point (`run_headless`) renders a single overwriting status line to stdout (e.g. `⠧ 3/4 complete  •  2 skipped`) and finalises with a `✓` or `✗` icon.
+
+The `scripts/` folder contains reference examples only and is not used by the binary.
 
 ### Time tracking (src/time/)
 
@@ -126,8 +128,8 @@ jotmate/
 │   ├── icon.txt                 # Source art for the pixel icon in the TUI header
 │   └── logos.txt                # Source art for LOGO / LOGO_SMALL constants
 ├── scripts/
-│   ├── run-sync.sh              # Sync script — embedded in the binary via include_str!()
-│   └── time-checker-node.js     # Original Node.js time checker (reference only, not used)
+│   ├── run-sync.sh              # Reference example only — not used by the binary
+│   └── time-checker-node.js     # Reference example only — not used by the binary
 ├── src/
 │   ├── main.rs                  # Entry point — parses CLI args, dispatches to tui/sync/time
 │   ├── cli.rs                   # Clap structs: Cli, Commands, SyncArgs, TimeArgs
@@ -139,12 +141,11 @@ jotmate/
 │   │   ├── parse.rs             # parse_contract_periods
 │   │   └── prompt.rs            # ensure_time_credentials (interactive fill-in)
 │   ├── sync/
-│   │   ├── mod.rs               # run() entry: resolves repo paths, calls runner
+│   │   ├── mod.rs               # run() entry: resolves repo paths, runs headless sync
 │   │   ├── cache.rs             # RepoPathsCache — load/save/invalidate ~/.cache/jotmate/repo_paths.json
 │   │   ├── discover.rs          # fd-based git repo discovery; matches repos to upstream URLs
-│   │   ├── runner.rs            # Patches GITHUB_BASE in embedded script, writes tempfile, execs bash
-│   │   └── native/              # Native (non-script) in-TUI sync pipeline
-│   │       ├── mod.rs           # SyncOpts + run_tui coordinator (fork phase → rds phase)
+│   │   └── native/              # Native Rust sync engine (used by both CLI and TUI)
+│   │       ├── mod.rs           # SyncOpts + run_tui + run_headless entry points
 │   │       ├── git.rs           # git/git_ok/detect_default_branch helpers
 │   │       ├── fork.rs          # fork-sync pipeline (stash/fetch/merge/push)
 │   │       ├── rds.rs           # rds-sync pipeline (./sync runner with skip rules)
@@ -230,4 +231,4 @@ These principles reinforce each other: one responsibility per unit, one canonica
 ## Key constraints
 
 - The `ansi-to-tui` crate is incompatible with ratatui 0.29 (requires <0.27) — don't add it.
-- `scripts/run-sync.sh` is the only script still in active use — it is embedded in the binary.
+- The `scripts/` folder contains reference examples only. The binary does not use any shell scripts — all sync logic is native Rust in `src/sync/native/`.

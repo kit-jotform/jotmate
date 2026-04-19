@@ -66,14 +66,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         let skipped = state.repos.iter().filter(|r| r.is_skipped()).count();
 
         let mut parts: Vec<Span> = vec![
-            Span::styled(
-                format!("{complete}/{total}"),
-                Style::default().fg(if complete == total {
-                    C_SUCCESS
-                } else {
-                    C_ACCENT
-                }),
-            ),
+            Span::styled(format!("{complete}/{total}"), Style::default().fg(C_ACCENT)),
             Span::styled(" complete", Style::default().fg(C_TEXT)),
         ];
         if errors > 0 {
@@ -84,14 +77,12 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             ));
             parts.push(Span::styled(" error", Style::default().fg(C_TEXT)));
         }
-        if skipped > 0 {
-            parts.push(Span::styled("  •  ", Style::default().fg(C_MUTED)));
-            parts.push(Span::styled(
-                format!("{skipped}"),
-                Style::default().fg(C_WARN),
-            ));
-            parts.push(Span::styled(" skipped", Style::default().fg(C_TEXT)));
-        }
+        parts.push(Span::styled("  •  ", Style::default().fg(C_MUTED)));
+        parts.push(Span::styled(
+            format!("{skipped}"),
+            Style::default().fg(C_WARN),
+        ));
+        parts.push(Span::styled(" skipped", Style::default().fg(C_TEXT)));
 
         f.render_widget(
             Paragraph::new(Line::from(parts)),
