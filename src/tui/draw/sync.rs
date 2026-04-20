@@ -46,9 +46,9 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .row("summary", 1)
         .row("blank3", 1)
         .row("list", repo_count)
-        .row("errors", error_count)
         .row("blank4", 1)
         .row("hint", 1)
+        .row("errors", error_count)
         .margin(1)
         .split(engine.clamp_area(area));
 
@@ -108,6 +108,20 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
         );
 
+        // ── Hint ──
+        let hint_text = if is_complete {
+            "Press Enter to return to the main menu"
+        } else {
+            "Syncing..."
+        };
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                hint_text,
+                Style::default().fg(C_MUTED),
+            ))),
+            engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("hint")),
+        );
+
         // ── Error details ──
         if error_count > 0 {
             let error_items: Vec<ListItem> = state
@@ -128,20 +142,6 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             );
         }
     }
-
-    // ── Hint ──
-    let hint_text = if is_complete {
-        "Press Enter to return to the main menu"
-    } else {
-        "Syncing..."
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            hint_text,
-            Style::default().fg(C_MUTED),
-        ))),
-        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("hint")),
-    );
 }
 
 /// Build one row of the repo progress list.
