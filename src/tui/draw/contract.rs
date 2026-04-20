@@ -6,11 +6,11 @@ use ratatui::{
 
 use crate::tui::app::{App, CpListRow, InputMode, Screen, WEEKLY_HOURS_OPTIONS};
 use crate::tui::layout::LayoutEngine;
-use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_TEXT};
+use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_TEXT, C_WARN};
 
 use super::{
     back_item, draw_confirm_dialog, draw_screen_header, field_state, fmt_date,
-    hint_confirm_cancel, hint_muted, inline_field_item, link_item, sub_screen_layout,
+    hint_confirm_cancel, hint_muted, inline_field_item, sub_screen_layout,
     FIELD_LABEL_W, SEPARATOR_WIDTH,
 };
 
@@ -51,6 +51,10 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
         .map(|(i, row)| {
             let is_sel = selected == i;
             match row {
+                CpListRow::SectionTitle(title) => ListItem::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(*title, Style::default().fg(C_MUTED)),
+                ])),
                 CpListRow::Blank => ListItem::new(Line::raw("")),
                 CpListRow::Separator => ListItem::new(Line::from(vec![
                     Span::raw("  "),
@@ -60,7 +64,22 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     ),
                 ])),
                 CpListRow::Back => back_item(is_sel),
-                CpListRow::SavePeriod => link_item(is_sel, "Save period"),
+                CpListRow::SavePeriod => {
+                    if is_sel {
+                        ListItem::new(Line::from(vec![
+                            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+                            Span::styled(
+                                "Save period",
+                                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                            ),
+                        ]))
+                    } else {
+                        ListItem::new(Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled("Save period", Style::default().fg(C_WARN)),
+                        ]))
+                    }
+                }
                 CpListRow::MondayField => {
                     let value = fmt_date(app.add_cp_monday);
                     let editing = matches!(app.input_mode, InputMode::EditingCpMonday(_));

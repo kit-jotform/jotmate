@@ -144,9 +144,7 @@ pub async fn login(email: &str, password: &str) -> Result<String> {
     }
 
     if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(AppError::AuthFailed(format!("HTTP {status}: {text}")).into());
+        return Err(AppError::Http(resp.error_for_status().unwrap_err()).into());
     }
 
     let cookie_string = extract_cookies(&resp)?;

@@ -152,6 +152,7 @@ pub enum CpListRow {
         from: NaiveDate,
         weekly_hours: f64,
     },
+    SectionTitle(&'static str),
     Blank,
     Separator,
     MondayField,

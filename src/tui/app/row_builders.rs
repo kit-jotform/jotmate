@@ -129,16 +129,17 @@ impl App {
     }
 
     pub fn cp_list_items(&self) -> Vec<CpListRow> {
-        let mut rows: Vec<CpListRow> = self
-            .contract_periods
-            .iter()
-            .enumerate()
-            .map(|(i, p)| CpListRow::Period {
-                index: i,
-                from: p.from,
-                weekly_hours: p.weekly_hours,
-            })
-            .collect();
+        let mut rows: Vec<CpListRow> = vec![CpListRow::SectionTitle("Contract Periods"), CpListRow::Blank];
+        rows.extend(
+            self.contract_periods
+                .iter()
+                .enumerate()
+                .map(|(i, p)| CpListRow::Period {
+                    index: i,
+                    from: p.from,
+                    weekly_hours: p.weekly_hours,
+                }),
+        );
         rows.push(CpListRow::Blank);
         rows.push(CpListRow::Separator);
         rows.push(CpListRow::MondayField);
