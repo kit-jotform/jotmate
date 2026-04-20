@@ -18,8 +18,11 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let layout = sub_screen_layout(engine.clamp_area(area));
 
     let hint_spans = match &app.td_report {
-        TdReportState::Loading | TdReportState::NeedsReauth => hint_muted(&["loading…"]),
+        TdReportState::Loading => hint_muted(&["loading…"]),
         TdReportState::Error(_) => hint_muted(&["⌫/Esc", " back"]),
+        TdReportState::NoCredentials(_) | TdReportState::NoPeriods => {
+            hint_muted(&["↵", " configure  •  ", "⌫/Esc", " back"])
+        }
         TdReportState::Ready { .. } => hint_muted(&["↑↓", " scroll  •  ", "⌫/Esc", " back"]),
     };
 
@@ -53,7 +56,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     );
 
     match &app.td_report {
-        TdReportState::Loading | TdReportState::NeedsReauth => {
+        TdReportState::Loading => {
             f.render_widget(
                 Paragraph::new(Line::from(vec![
                     Span::raw("  "),
@@ -71,6 +74,43 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                 ])),
                 content_area,
             );
+        }
+
+        TdReportState::NoCredentials(msg) => {
+            let lines = vec![
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(msg.clone(), Style::default().fg(C_TEXT)),
+                ]),
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "Press ↵ to update credentials.",
+                        Style::default().fg(C_MUTED),
+                    ),
+                ]),
+            ];
+            f.render_widget(Paragraph::new(lines), content_area);
+        }
+
+        TdReportState::NoPeriods => {
+            let lines = vec![
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "No contract periods configured.",
+                        Style::default().fg(C_TEXT),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "Press ↵ to set up contract periods.",
+                        Style::default().fg(C_MUTED),
+                    ),
+                ]),
+            ];
+            f.render_widget(Paragraph::new(lines), content_area);
         }
 
         TdReportState::Ready {

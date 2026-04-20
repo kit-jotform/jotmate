@@ -15,6 +15,11 @@ pub(super) fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
                 app.td_report_scroll = (app.td_report_scroll + 1).min(max_scroll);
             }
         }
+        KeyCode::Enter => match app.td_report {
+            TdReportState::NoPeriods => app.screen = Screen::ContractPeriods,
+            TdReportState::NoCredentials(_) => app.screen = Screen::TimeDoctorSettings,
+            _ => {}
+        },
         KeyCode::Esc | KeyCode::Backspace => app.screen = Screen::MainMenu,
         KeyCode::Char('q') => return Action::Back,
         _ => {}

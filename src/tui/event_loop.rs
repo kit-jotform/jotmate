@@ -8,11 +8,10 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
 use std::time::Duration;
 
-use crate::tui::app::{self, App, Screen};
+use crate::tui::app::{App, Screen};
 use crate::tui::draw::draw;
 use crate::tui::input::{handle_key, Action};
 use crate::tui::sync_launcher::launch_sync;
-use crate::tui::{setup_terminal, teardown_terminal};
 
 pub(super) async fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
@@ -42,43 +41,12 @@ pub(super) async fn event_loop(
 }
 
 /// One tick of the TD-report screen. Polls for the background fetch result and
-/// for key events, and drops into foreground re-auth when the session expires.
 /// Returns `true` if the event loop should exit.
 async fn handle_td_report_tick(
-    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
 ) -> Result<bool> {
     app.poll_td_report();
-
-    // Session expired — re-auth and restart the fetch. If the password is in
-    // the keychain we can re-auth silently in place; otherwise we have to drop
-    // to the foreground so the user can type their password at a prompt.
-    if matches!(app.td_report, app::TdReportState::NeedsReauth) {
-        let email = app.td_email.clone();
-        if crate::time::auth::load_password_from_keychain().is_some() {
-            match crate::time::auth::reauth(&email).await {
-                Ok(_) => {
-                    app.td_report = app::TdReportState::Loading;
-                    app.launch_td_report();
-                }
-                Err(e) => {
-                    app.td_report = app::TdReportState::Error(format!("Re-auth failed: {e}"));
-                }
-            }
-        } else {
-            teardown_terminal(terminal);
-            match crate::time::auth::reauth(&email).await {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Re-authentication failed: {e}");
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                }
-            }
-            *terminal = setup_terminal()?;
-            app.td_report = app::TdReportState::Loading;
-            app.launch_td_report();
-        }
-    }
 
     if event::poll(Duration::from_millis(150))? {
         if let Event::Key(key) = event::read()? {

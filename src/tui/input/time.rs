@@ -54,8 +54,13 @@ pub(super) fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
             app.input_mode = InputMode::Normal;
             match field {
                 TimeDoctorField::Email => {
-                    app.td_email = buf;
-                    app.persist_td_settings();
+                    if !is_valid_email(&buf) {
+                        app.auth_error = Some("Invalid email address.".to_string());
+                    } else {
+                        let _ = crate::time::auth::delete_token_from_keychain();
+                        app.td_email = buf;
+                        app.persist_td_settings();
+                    }
                 }
                 TimeDoctorField::Password => {
                     if !app.set_td_password(&buf) {
@@ -68,4 +73,9 @@ pub(super) fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
         _ => {}
     }
     Action::Continue
+}
+
+fn is_valid_email(s: &str) -> bool {
+    let s = s.trim();
+    matches!(s.find('@'), Some(at) if at > 0 && s[at + 1..].contains('.'))
 }

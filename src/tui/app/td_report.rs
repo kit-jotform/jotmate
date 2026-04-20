@@ -11,25 +11,25 @@ pub enum TdReportState {
         show_cumulative: bool,
     },
     Error(String),
-    NeedsReauth,
+    NoCredentials(String),
+    NoPeriods,
 }
 
-/// Run a Time Doctor report fetch and map `TokenExpired` to the `TOKEN_EXPIRED` sentinel
-/// consumed by `poll_td_report`, so the TUI can drop into foreground re-auth.
 async fn fetch_report_result(
     email: &str,
     opts: crate::time::FetchOpts,
 ) -> std::result::Result<Vec<crate::time::compute::WeekRow>, String> {
     crate::time::fetch_report(email, opts).await.map_err(|e| {
-        let is_expired = e
-            .downcast_ref::<crate::error::AppError>()
-            .map(|ae| matches!(ae, crate::error::AppError::TokenExpired))
-            .unwrap_or(false);
-        if is_expired {
-            let _ = crate::time::auth::delete_token_from_keychain();
-            "TOKEN_EXPIRED".to_string()
-        } else {
-            e.to_string()
+        match e.downcast_ref::<crate::error::AppError>() {
+            Some(crate::error::AppError::TokenExpired) => {
+                let _ = crate::time::auth::delete_token_from_keychain();
+                "AUTH_FAILED:Session expired — please re-enter your password.".to_string()
+            }
+            Some(crate::error::AppError::AuthFailed(msg)) => {
+                let _ = crate::time::auth::delete_token_from_keychain();
+                format!("AUTH_FAILED:{msg}")
+            }
+            _ => e.to_string(),
         }
     })
 }
@@ -42,8 +42,15 @@ impl App {
         self.td_report_scroll = 0;
         self.td_report_rx = None;
 
+        if self.td_email.is_empty() || !self.td_password_is_set {
+            self.td_report = TdReportState::NoCredentials(
+                "Email or password not configured.".to_string(),
+            );
+            return;
+        }
+
         let Some(start_date) = self.contract_periods.first().map(|p| p.from) else {
-            self.td_report = TdReportState::Error("No contract periods configured".to_string());
+            self.td_report = TdReportState::NoPeriods;
             return;
         };
         let opts = crate::time::FetchOpts {
@@ -86,8 +93,9 @@ impl App {
                     show_cumulative: self.td_show_cumulative,
                 };
             }
-            Err(msg) if msg == "TOKEN_EXPIRED" => {
-                self.td_report = TdReportState::NeedsReauth;
+            Err(msg) if msg.starts_with("AUTH_FAILED:") => {
+                let reason = msg.trim_start_matches("AUTH_FAILED:").to_string();
+                self.td_report = TdReportState::NoCredentials(reason);
             }
             Err(msg) => {
                 self.td_report = TdReportState::Error(msg);

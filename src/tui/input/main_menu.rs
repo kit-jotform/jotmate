@@ -28,12 +28,5 @@ pub(super) fn handle_main(app: &mut App, code: KeyCode) -> Action {
 }
 
 fn enter_time_doctor(app: &mut App) {
-    if app.td_email.is_empty() || !app.td_password_is_set {
-        go_to(app, Screen::TimeDoctorSettings);
-        app.auth_error = Some("Email or password not configured".to_string());
-    } else if app.contract_periods.is_empty() {
-        go_to(app, Screen::ContractPeriods);
-    } else {
-        app.launch_td_report();
-    }
+    app.launch_td_report();
 }
