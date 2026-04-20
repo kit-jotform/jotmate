@@ -202,11 +202,14 @@ fn repo_row(repo: &RepoSyncState, tick: usize) -> ListItem<'static> {
 fn status_color(status: &ForkStatus) -> Color {
     match status {
         ForkStatus::Pending => C_MUTED,
-        ForkStatus::Done => C_SUCCESS,
-        ForkStatus::UpToDate => C_SUCCESS,
+        ForkStatus::Done | ForkStatus::UpToDate => C_SUCCESS,
         ForkStatus::Skipped(_) => C_WARN,
         ForkStatus::Error(_) => C_DANGEROUS,
-        _ => C_ACCENT, // active states
+        ForkStatus::Stashing
+        | ForkStatus::Merging
+        | ForkStatus::Rebasing
+        | ForkStatus::Unstashing => C_WARN,
+        _ => C_ACCENT,
     }
 }
 
