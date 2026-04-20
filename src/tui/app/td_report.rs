@@ -29,7 +29,7 @@ async fn fetch_report_result(
                 let _ = crate::time::auth::delete_token_from_keychain();
                 format!("AUTH_FAILED:{msg}")
             }
-            _ => e.to_string(),
+            _ => "Could not connect to TimeDoctor. Check your internet connection and try again.".to_string(),
         }
     })
 }
