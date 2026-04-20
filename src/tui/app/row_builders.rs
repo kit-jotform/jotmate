@@ -78,18 +78,18 @@ impl App {
     pub fn td_general_items(&self) -> Vec<GeneralToggleRow> {
         vec![
             GeneralToggleRow::Toggle {
-                kind: ToggleKind::SkipCurrentWeek,
-                label: "Include current week",
-                hint: "show incomplete week",
-                on: !self.td_skip_current_week,
-                indent: false,
-                disabled: false,
-            },
-            GeneralToggleRow::Toggle {
                 kind: ToggleKind::UseTimeCache,
                 label: "Use time cache",
                 hint: "",
                 on: self.td_use_time_cache,
+                indent: false,
+                disabled: false,
+            },
+            GeneralToggleRow::Toggle {
+                kind: ToggleKind::SkipCurrentWeek,
+                label: "Include current week",
+                hint: "show incomplete week",
+                on: !self.td_skip_current_week,
                 indent: false,
                 disabled: false,
             },
