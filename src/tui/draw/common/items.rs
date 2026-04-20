@@ -10,6 +10,22 @@ use crate::tui::palette::{C_ACCENT, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT};
 
 use super::{HINT_CYCLE_VALUE, SEPARATOR_WIDTH};
 
+/// Empty row — used as vertical spacing between sections.
+pub(in crate::tui::draw) fn blank_item() -> ListItem<'static> {
+    ListItem::new(Line::raw(""))
+}
+
+/// Unlabelled muted divider line spanning `SEPARATOR_WIDTH` characters.
+pub(in crate::tui::draw) fn divider_item() -> ListItem<'static> {
+    ListItem::new(Line::from(vec![
+        Span::raw("  "),
+        Span::styled(
+            "─".repeat(SEPARATOR_WIDTH),
+            Style::default().fg(C_MUTED),
+        ),
+    ]))
+}
+
 pub(in crate::tui::draw) const FIELD_LABEL_W: usize = 18;
 
 /// Narrower label column for the timezone selector — the inline editing hint

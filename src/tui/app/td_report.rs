@@ -42,28 +42,28 @@ impl App {
         self.td_report_scroll = 0;
         self.td_report_rx = None;
 
-        if self.td_email.is_empty() || !self.td_password_is_set {
+        if self.td.email.is_empty() || !self.td.password_is_set {
             self.td_report = TdReportState::NoCredentials(
                 "Email or password not configured.".to_string(),
             );
             return;
         }
 
-        let Some(start_date) = self.contract_periods.first().map(|p| p.from) else {
+        let Some(start_date) = self.td.contract_periods.first().map(|p| p.from) else {
             self.td_report = TdReportState::NoPeriods;
             return;
         };
         let opts = crate::time::FetchOpts {
-            timezone: TIMEZONES[self.td_timezone_idx].to_string(),
-            contract_periods: self.contract_periods.clone(),
+            timezone: TIMEZONES[self.td.timezone_idx].to_string(),
+            contract_periods: self.td.contract_periods.clone(),
             start_date,
-            skip_current: self.td_skip_current_week,
-            no_cache: !self.td_use_time_cache,
+            skip_current: self.td.skip_current_week,
+            no_cache: !self.td.use_time_cache,
         };
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.td_report_rx = Some(rx);
-        let email = self.td_email.clone();
+        let email = self.td.email.clone();
         tokio::spawn(async move {
             let _ = tx.send(fetch_report_result(&email, opts).await);
         });
@@ -90,7 +90,7 @@ impl App {
                 self.td_report_scroll = rows.len().saturating_sub(6);
                 self.td_report = TdReportState::Ready {
                     rows,
-                    show_cumulative: self.td_show_cumulative,
+                    show_cumulative: self.td.show_cumulative,
                 };
             }
             Err(msg) if msg.starts_with("AUTH_FAILED:") => {
@@ -114,7 +114,7 @@ impl App {
         let _ = crate::time::auth::delete_token_from_keychain();
         match crate::time::auth::save_password_to_keychain(password) {
             Ok(()) => {
-                self.td_password_is_set = true;
+                self.td.password_is_set = true;
                 true
             }
             Err(_) => false,

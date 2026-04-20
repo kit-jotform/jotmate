@@ -9,9 +9,9 @@ use crate::tui::layout::LayoutEngine;
 use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_TEXT, C_WARN};
 
 use super::{
-    back_item, draw_confirm_dialog, draw_screen_header, field_state, fmt_date,
-    hint_confirm_cancel, hint_muted, inline_field_item, sub_screen_layout,
-    FIELD_LABEL_W, SEPARATOR_WIDTH,
+    back_item, blank_item, divider_item, draw_confirm_dialog, draw_screen_header, field_state,
+    fmt_date, hint_confirm_cancel, hint_navigate_action, inline_field_item, sub_screen_layout,
+    FIELD_LABEL_W,
 };
 
 pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
@@ -31,7 +31,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 Some(CpListRow::Back) => "enter",
                 _ => "select",
             };
-            hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"])
+            hint_navigate_action(action)
         }
     };
 
@@ -55,14 +55,8 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     Span::raw("  "),
                     Span::styled(*title, Style::default().fg(C_MUTED)),
                 ])),
-                CpListRow::Blank => ListItem::new(Line::raw("")),
-                CpListRow::Separator => ListItem::new(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "─".repeat(SEPARATOR_WIDTH),
-                        Style::default().fg(C_MUTED),
-                    ),
-                ])),
+                CpListRow::Blank => blank_item(),
+                CpListRow::Separator => divider_item(),
                 CpListRow::Back => back_item(is_sel),
                 CpListRow::SavePeriod => {
                     if is_sel {
@@ -81,7 +75,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     }
                 }
                 CpListRow::MondayField => {
-                    let value = fmt_date(app.add_cp_monday);
+                    let value = fmt_date(app.add_cp.monday);
                     let editing = matches!(app.input_mode, InputMode::EditingCpMonday(_));
                     inline_field_item(
                         "From Monday",
@@ -91,7 +85,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     )
                 }
                 CpListRow::HoursField => {
-                    let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp_hours_idx];
+                    let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp.hours_idx];
                     let value = if hours_val.fract() == 0.0 {
                         format!("{}h", hours_val as u32)
                     } else {
@@ -144,7 +138,7 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
     );
 
     if let InputMode::ConfirmDeletePeriod(idx) = &app.input_mode {
-        if let Some(p) = app.contract_periods.get(*idx) {
+        if let Some(p) = app.td.contract_periods.get(*idx) {
             draw_confirm_dialog(f, area, &format!("Delete period {}?", fmt_date(p.from)));
         }
     }

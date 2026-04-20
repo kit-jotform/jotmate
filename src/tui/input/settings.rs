@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
+use crate::tui::app::{App, CycleTarget, GeneralToggleRow, InputMode, Screen, SettingRow};
 
 use super::helpers::{go_to, handle_cycle, handle_list_nav};
 use super::keys::is_activate;
@@ -28,7 +28,7 @@ pub(super) fn handle_settings(app: &mut App, code: KeyCode) -> Action {
 
 pub(super) fn handle_general_toggles(app: &mut App, code: KeyCode) -> Action {
     if matches!(app.input_mode, InputMode::SelectingTimezone(_)) {
-        return handle_cycle(app, code, App::cycle_timezone);
+        return handle_cycle(app, code, CycleTarget::Timezone);
     }
     if let Some(a) = handle_list_nav(app, code, Screen::Settings) {
         return a;
@@ -49,7 +49,7 @@ pub(super) fn handle_general_toggles(app: &mut App, code: KeyCode) -> Action {
             }
         }
         Some(GeneralToggleRow::TimezoneSelector { .. }) => {
-            app.input_mode = InputMode::SelectingTimezone(app.td_timezone_idx);
+            app.enter_cycle(CycleTarget::Timezone);
         }
         _ => {}
     }

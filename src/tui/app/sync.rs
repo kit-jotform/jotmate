@@ -16,6 +16,7 @@ impl App {
         update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
     ) {
         let repos: Vec<RepoSyncState> = self
+            .sync
             .repos
             .iter()
             .filter(|r| r.enabled)

@@ -31,7 +31,7 @@ impl App {
                 kind: ToggleKind::UseCache,
                 label: "Use repo path cache",
                 hint: "",
-                on: self.use_cache,
+                on: self.sync.use_cache,
                 indent: false,
                 disabled: false,
             },
@@ -40,7 +40,7 @@ impl App {
                 kind: ToggleKind::SkipForkSync,
                 label: "Fork sync",
                 hint: "fetch+merge+push upstream",
-                on: !self.skip_fork_sync,
+                on: !self.sync.skip_fork_sync,
                 indent: false,
                 disabled: false,
             },
@@ -48,16 +48,16 @@ impl App {
                 kind: ToggleKind::SkipRebase,
                 label: "Rebase",
                 hint: "rebase branch after merge",
-                on: !self.skip_rebase,
+                on: !self.sync.skip_rebase,
                 indent: true,
-                disabled: self.skip_fork_sync,
+                disabled: self.sync.skip_fork_sync,
             },
             GeneralToggleRow::Blank,
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipRdsSync,
                 label: "RDS sync",
                 hint: "./sync in each repo",
-                on: !self.skip_rds_sync,
+                on: !self.sync.skip_rds_sync,
                 indent: false,
                 disabled: false,
             },
@@ -65,9 +65,9 @@ impl App {
                 kind: ToggleKind::SmartSync,
                 label: "Smart sync",
                 hint: "skip if no changes",
-                on: self.smart_sync,
+                on: self.sync.smart_sync,
                 indent: true,
-                disabled: self.skip_rds_sync,
+                disabled: self.sync.skip_rds_sync,
             },
             GeneralToggleRow::Blank,
             GeneralToggleRow::Separator,
@@ -81,7 +81,7 @@ impl App {
                 kind: ToggleKind::UseTimeCache,
                 label: "Use time cache",
                 hint: "",
-                on: self.td_use_time_cache,
+                on: self.td.use_time_cache,
                 indent: false,
                 disabled: false,
             },
@@ -89,7 +89,7 @@ impl App {
                 kind: ToggleKind::SkipCurrentWeek,
                 label: "Include current week",
                 hint: "show incomplete week",
-                on: !self.td_skip_current_week,
+                on: !self.td.skip_current_week,
                 indent: false,
                 disabled: false,
             },
@@ -97,13 +97,13 @@ impl App {
                 kind: ToggleKind::ShowCumulative,
                 label: "Show cumulative balance",
                 hint: "running hour balance",
-                on: self.td_show_cumulative,
+                on: self.td.show_cumulative,
                 indent: false,
                 disabled: false,
             },
             GeneralToggleRow::Blank,
             GeneralToggleRow::TimezoneSelector {
-                value: TIMEZONES[self.td_timezone_idx].to_string(),
+                value: TIMEZONES[self.td.timezone_idx].to_string(),
             },
             GeneralToggleRow::Blank,
             GeneralToggleRow::Separator,
@@ -116,11 +116,11 @@ impl App {
             TimeSettingRow::EditField {
                 field: TimeDoctorField::Email,
                 label: "Email",
-                value: self.td_email.clone(),
+                value: self.td.email.clone(),
                 masked: false,
             },
             TimeSettingRow::Password {
-                is_set: self.td_password_is_set,
+                is_set: self.td.password_is_set,
             },
             TimeSettingRow::Blank,
             TimeSettingRow::Separator,
@@ -131,7 +131,8 @@ impl App {
     pub fn cp_list_items(&self) -> Vec<CpListRow> {
         let mut rows: Vec<CpListRow> = vec![CpListRow::SectionTitle("Contract Periods"), CpListRow::Blank];
         rows.extend(
-            self.contract_periods
+            self.td
+                .contract_periods
                 .iter()
                 .enumerate()
                 .map(|(i, p)| CpListRow::Period {
@@ -154,7 +155,7 @@ impl App {
 
     pub fn repo_manager_items(&self) -> Vec<RepoManagerRow> {
         let mut rows: Vec<RepoManagerRow> = vec![];
-        for r in &self.repos {
+        for r in &self.sync.repos {
             rows.push(RepoManagerRow::RepoToggle {
                 name: r.name.clone(),
                 url: r.url.clone(),
@@ -173,7 +174,7 @@ impl App {
 
     pub fn remove_repo_items(&self) -> Vec<RemoveRepoRow> {
         let mut rows: Vec<RemoveRepoRow> = vec![];
-        for r in &self.repos {
+        for r in &self.sync.repos {
             rows.push(RemoveRepoRow::RepoDelete {
                 name: r.name.clone(),
                 url: r.url.clone(),

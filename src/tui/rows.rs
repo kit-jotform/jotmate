@@ -25,6 +25,15 @@ pub enum TimeDoctorField {
     Password,
 }
 
+/// Which inline-value selector is currently active. Each variant corresponds
+/// 1:1 with a field on `App` that can be cycled (↑↓) while editing.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum CycleTarget {
+    Timezone,
+    CpMonday,
+    CpHours,
+}
+
 // ── Toggle kind ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]

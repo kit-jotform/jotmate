@@ -4,7 +4,7 @@ use std::io::{self, Write};
 
 use super::io::{config_path, save};
 use super::parse::parse_contract_periods;
-use super::types::Config;
+use super::types::{Config, DEFAULT_TIMEZONE};
 
 /// Prompts for any missing TimeConfig fields interactively. Saves config before returning.
 pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
@@ -17,7 +17,7 @@ pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
     }
 
     if config.time.timezone.is_none() {
-        let tz = prompt("Timezone", Some("Europe/Istanbul"))?;
+        let tz = prompt("Timezone", Some(DEFAULT_TIMEZONE))?;
         config.time.timezone = Some(tz);
         changed = true;
     }

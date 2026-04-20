@@ -224,9 +224,8 @@ fn rds_status_color(status: &RdsStatus) -> Color {
 }
 
 fn error_message(repo: &RepoSyncState) -> String {
-    match &repo.fork_status {
-        ForkStatus::Error(msg) => return msg.clone(),
-        _ => {}
+    if let ForkStatus::Error(msg) = &repo.fork_status {
+        return msg.clone();
     }
     match &repo.rds_status {
         RdsStatus::Error(msg) => msg.clone(),

@@ -10,15 +10,18 @@ use crate::error::AppError;
 
 pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
     let home = dirs::home_dir().context("Cannot determine home directory")?;
+    let home_str = home
+        .to_str()
+        .context("Home directory path contains non-UTF-8 characters")?;
 
     // Check fd is available
-    let check = Command::new("fd").arg("--version").output();
-    if check.is_err() || !check.unwrap().status.success() {
-        return Err(AppError::FdNotFound.into());
+    match Command::new("fd").arg("--version").output() {
+        Ok(out) if out.status.success() => {}
+        _ => return Err(AppError::FdNotFound.into()),
     }
 
     let output = Command::new("fd")
-        .args(["-H", "-t", "d", "^.git$", home.to_str().unwrap()])
+        .args(["-H", "-t", "d", "^.git$", home_str])
         .output()
         .context("Failed to run fd")?;
 

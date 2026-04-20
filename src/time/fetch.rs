@@ -40,15 +40,21 @@ pub async fn fetch_week(
 
     let sunday = get_week_end_sunday(monday);
     let tz: Tz = opts.timezone.parse().unwrap_or(chrono_tz::UTC);
+    let monday_midnight = monday
+        .and_hms_opt(0, 0, 0)
+        .ok_or_else(|| anyhow::anyhow!("Invalid midnight for {monday}"))?;
+    let sunday_eod = sunday
+        .and_hms_opt(23, 59, 59)
+        .ok_or_else(|| anyhow::anyhow!("Invalid end-of-day for {sunday}"))?;
     let from_dt = tz
-        .from_local_datetime(&monday.and_hms_opt(0, 0, 0).unwrap())
+        .from_local_datetime(&monday_midnight)
         .earliest()
         .map(|dt| dt.with_timezone(&Utc))
         .ok_or_else(|| {
             anyhow::anyhow!("Could not convert {} to timezone {}", monday, opts.timezone)
         })?;
     let to_dt = tz
-        .from_local_datetime(&sunday.and_hms_opt(23, 59, 59).unwrap())
+        .from_local_datetime(&sunday_eod)
         .latest()
         .map(|dt| dt.with_timezone(&Utc))
         .ok_or_else(|| {

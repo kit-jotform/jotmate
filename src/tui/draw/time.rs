@@ -1,17 +1,16 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Style,
-    text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
 };
 
 use crate::tui::app::{App, InputMode, Screen, TimeDoctorField, TimeSettingRow};
 use crate::tui::layout::LayoutEngine;
-use crate::tui::palette::{C_DANGEROUS, C_MUTED};
+use crate::tui::palette::C_DANGEROUS;
 
 use super::{
-    back_item, draw_screen_header, field_state, hint_muted, inline_field_item, sub_screen_layout,
-    FIELD_LABEL_W, SEPARATOR_WIDTH,
+    back_item, blank_item, divider_item, draw_screen_header, field_state, hint_muted,
+    hint_navigate_action, inline_field_item, sub_screen_layout, FIELD_LABEL_W,
 };
 
 pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
@@ -28,7 +27,7 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
             Some(TimeSettingRow::Back) => "enter",
             _ => "edit",
         };
-        hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"])
+        hint_navigate_action(action)
     };
 
     draw_screen_header(
@@ -47,15 +46,9 @@ pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
         .map(|(i, row)| {
             let is_sel = td_selected == i;
             match row {
-                TimeSettingRow::Blank => ListItem::new(Line::raw("")),
+                TimeSettingRow::Blank => blank_item(),
 
-                TimeSettingRow::Separator => ListItem::new(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "─".repeat(SEPARATOR_WIDTH),
-                        Style::default().fg(C_MUTED),
-                    ),
-                ])),
+                TimeSettingRow::Separator => divider_item(),
 
                 TimeSettingRow::Back => back_item(is_sel),
 

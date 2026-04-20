@@ -1,16 +1,12 @@
-use ratatui::{
-    style::Style,
-    text::{Line, Span},
-    widgets::{List, ListItem},
-};
+use ratatui::widgets::{List, ListItem};
 
 use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 use crate::tui::layout::LayoutEngine;
-use crate::tui::palette::C_MUTED;
 
 use super::{
-    back_item, draw_screen_header, hint_muted, inline_field_item, link_item,
-    separator_item, sub_screen_layout, toggle_item, FieldState, FIELD_LABEL_W_TZ, SEPARATOR_WIDTH,
+    back_item, blank_item, divider_item, draw_screen_header, hint_navigate_action,
+    inline_field_item, link_item, separator_item, sub_screen_layout, toggle_item, FieldState,
+    FIELD_LABEL_W_TZ,
 };
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
@@ -21,7 +17,6 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
     let setting_rows = app.settings_items();
     let selected = app.selected_index(Screen::Settings);
 
-    let action = "enter";
     draw_screen_header(
         f,
         &engine,
@@ -29,7 +24,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         layout.get("title"),
         layout.get("divider"),
         "Settings",
-        hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"]),
+        hint_navigate_action("enter"),
     );
 
     let items: Vec<ListItem> = setting_rows
@@ -38,15 +33,9 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         .map(|(i, row)| {
             let is_sel = selected == i;
             match row {
-                SettingRow::Blank => ListItem::new(Line::raw("")),
+                SettingRow::Blank => blank_item(),
 
-                SettingRow::Divider => ListItem::new(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "─".repeat(SEPARATOR_WIDTH),
-                        Style::default().fg(C_MUTED),
-                    ),
-                ])),
+                SettingRow::Divider => divider_item(),
 
                 SettingRow::Separator => {
                     let rows = app.settings_items();
@@ -108,7 +97,7 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
         layout.get("title"),
         layout.get("divider"),
         title,
-        hint_muted(&["↑↓", " navigate  •  ", "↵", &format!(" {action:<6}  •  "), "⌫/Esc", " back"]),
+        hint_navigate_action(action),
     );
 
     let items: Vec<ListItem> = rows
@@ -117,14 +106,8 @@ pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_s
         .map(|(i, row)| {
             let is_sel = selected == i;
             match row {
-                GeneralToggleRow::Blank => ListItem::new(Line::raw("")),
-                GeneralToggleRow::Separator => ListItem::new(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "─".repeat(SEPARATOR_WIDTH),
-                        Style::default().fg(C_MUTED),
-                    ),
-                ])),
+                GeneralToggleRow::Blank => blank_item(),
+                GeneralToggleRow::Separator => divider_item(),
                 GeneralToggleRow::Back => back_item(is_sel),
                 GeneralToggleRow::Toggle {
                     label,

@@ -4,7 +4,7 @@
 
 use crossterm::event::KeyCode;
 
-use super::app::{App, InputMode, Screen};
+use super::app::{App, CycleTarget, InputMode, Screen};
 
 mod contract;
 mod helpers;
@@ -50,8 +50,8 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
         },
         Screen::ContractPeriods => match &app.input_mode {
             InputMode::ConfirmDeletePeriod(_) => handle_yes_no(app, code, execute_pending_period_delete),
-            InputMode::EditingCpMonday(_) => handle_cycle(app, code, App::cycle_add_cp_monday),
-            InputMode::EditingCpHours(_) => handle_cycle(app, code, App::cycle_add_cp_hours),
+            InputMode::EditingCpMonday(_) => handle_cycle(app, code, CycleTarget::CpMonday),
+            InputMode::EditingCpHours(_) => handle_cycle(app, code, CycleTarget::CpHours),
             _ => handle_contract_periods(app, code),
         },
         Screen::SyncProgress => handle_sync_progress(app, code),
