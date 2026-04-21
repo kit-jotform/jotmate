@@ -61,9 +61,9 @@ fn format_hours_with(decimal_hours: f64, positive_sign: &str) -> String {
     } else {
         positive_sign
     };
-    let abs = decimal_hours.abs();
-    let h = abs.floor() as u64;
-    let m = ((abs - abs.floor()) * 60.0).round() as u64;
+    let total_mins = (decimal_hours.abs() * 60.0).round() as u64;
+    let h = total_mins / 60;
+    let m = total_mins % 60;
     if m == 0 {
         format!("{sign}{h}h")
     } else {

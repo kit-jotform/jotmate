@@ -7,8 +7,20 @@ use crate::time::keychain::{
     save_token_to_keychain,
 };
 
+/// Run a blocking `security` CLI call on the blocking pool so it doesn't
+/// stall the async runtime thread.
+async fn blocking_keychain<F, T>(f: F) -> T
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .expect("keychain blocking task panicked")
+}
+
 pub async fn login(email: &str, password: &str) -> Result<String> {
-    let client = reqwest::Client::new();
+    let client = crate::time::api::shared_client();
 
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -75,25 +87,26 @@ pub async fn prompt_password(email: &str) -> Result<String> {
 }
 
 pub async fn get_or_refresh_token(email: &str) -> Result<String> {
-    if let Some(token) = load_token_from_keychain() {
+    if let Some(token) = blocking_keychain(load_token_from_keychain).await {
         return Ok(token);
     }
     do_login(email).await
 }
 
 pub async fn reauth(email: &str) -> Result<String> {
-    let _ = delete_token_from_keychain();
+    let _ = blocking_keychain(delete_token_from_keychain).await;
     do_login(email).await
 }
 
 async fn do_login(email: &str) -> Result<String> {
-    let password = if let Some(pw) = load_password_from_keychain() {
+    let password = if let Some(pw) = blocking_keychain(load_password_from_keychain).await {
         pw
     } else {
         prompt_password(email).await?
     };
 
     let cookie = login(email, &password).await?;
-    save_token_to_keychain(&cookie)?;
+    let cookie_for_keychain = cookie.clone();
+    blocking_keychain(move || save_token_to_keychain(&cookie_for_keychain)).await?;
     Ok(cookie)
 }

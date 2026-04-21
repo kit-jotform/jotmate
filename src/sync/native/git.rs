@@ -21,25 +21,25 @@ pub(super) async fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
     }
 }
 
-pub(super) async fn git_ok(repo: &Path, args: &[&str]) -> bool {
-    Command::new("git")
-        .args(["-C", &repo.to_string_lossy()])
-        .args(args)
-        .output()
-        .await
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
 pub(super) async fn detect_default_branch(repo: &Path) -> Option<String> {
-    if git_ok(repo, &["rev-parse", "--verify", "upstream/main"]).await {
-        return Some("main".to_string());
+    if let Ok(s) = git(repo, &["symbolic-ref", "refs/remotes/upstream/HEAD"]).await {
+        return Some(s.replace("refs/remotes/upstream/", ""));
     }
-    if git_ok(repo, &["rev-parse", "--verify", "upstream/master"]).await {
-        return Some("master".to_string());
+    let out = git(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/remotes/upstream/main",
+            "refs/remotes/upstream/master",
+        ],
+    )
+    .await
+    .ok()?;
+    for line in out.lines() {
+        if let Some(name) = line.strip_prefix("upstream/") {
+            return Some(name.to_string());
+        }
     }
-    git(repo, &["symbolic-ref", "refs/remotes/upstream/HEAD"])
-        .await
-        .ok()
-        .map(|s| s.replace("refs/remotes/upstream/", ""))
+    None
 }

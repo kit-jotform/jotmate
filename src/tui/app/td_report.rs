@@ -70,8 +70,10 @@ impl App {
         self.td_report = TdReportState::Loading;
         self.td_report_scroll = 0;
         self.td_report_rx = None;
+        self.td_report_started_at = Some(std::time::Instant::now());
+        self.td_report_elapsed_secs = None;
 
-        if self.td.email.is_empty() || !self.td.password_is_set {
+        if self.td.email.is_empty() || !self.password_is_set() {
             self.td_report =
                 TdReportState::NoCredentials("Email or password not configured.".to_string());
             return;
@@ -113,7 +115,6 @@ impl App {
         }
 
         if uncached_mondays.is_empty() {
-            // Nothing to fetch — finalize immediately from whatever we have.
             let (rows, show_cumulative) = match &self.td_report {
                 TdReportState::PartialReady {
                     rows,
@@ -127,6 +128,7 @@ impl App {
                 rows,
                 show_cumulative,
             };
+            self.td_report_started_at = None;
             return;
         }
 
@@ -171,7 +173,6 @@ impl App {
 
         match result {
             Ok(new_rows) => {
-                // Merge with any cached rows already in PartialReady.
                 let mut rows = match &self.td_report {
                     TdReportState::PartialReady { rows, .. } => rows.clone(),
                     _ => vec![],
@@ -184,14 +185,15 @@ impl App {
                     rows,
                     show_cumulative: true,
                 };
+                self.freeze_elapsed();
             }
             Err(msg) if msg.starts_with("AUTH_FAILED:") => {
                 self.td_report = TdReportState::NoCredentials(
                     msg.trim_start_matches("AUTH_FAILED:").to_string(),
                 );
+                self.td_report_started_at = None;
             }
             Err(msg) => {
-                // On error: if we have cached rows, show them as Ready rather than Error.
                 if let TdReportState::PartialReady {
                     rows,
                     show_cumulative,
@@ -210,7 +212,14 @@ impl App {
                 } else {
                     self.td_report = TdReportState::Error(msg);
                 }
+                self.freeze_elapsed();
             }
+        }
+    }
+
+    fn freeze_elapsed(&mut self) {
+        if let Some(started) = self.td_report_started_at.take() {
+            self.td_report_elapsed_secs = Some(started.elapsed().as_secs_f64());
         }
     }
 
@@ -224,7 +233,8 @@ impl App {
         let _ = crate::time::keychain::delete_token_from_keychain();
         match crate::time::keychain::save_password_to_keychain(password) {
             Ok(()) => {
-                self.td.password_is_set = true;
+                self.td.password_is_set.take();
+                let _ = self.td.password_is_set.set(true);
                 true
             }
             Err(_) => false,

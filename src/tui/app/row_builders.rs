@@ -112,7 +112,7 @@ impl App {
                 masked: false,
             },
             TimeSettingRow::Password {
-                is_set: self.td.password_is_set,
+                is_set: self.password_is_set(),
             },
             TimeSettingRow::Blank,
             TimeSettingRow::Separator,

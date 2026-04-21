@@ -4,7 +4,7 @@ use crate::tui::palette::{
     ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, SPINNER,
 };
 
-const VALUE_WIDTH: usize = 8;
+const VALUE_WIDTH: usize = 9;
 
 pub fn hide_cursor() {
     print!("\x1b[?25l");
@@ -38,10 +38,8 @@ pub fn print_final(weekly: f64, cumulative: f64, elapsed_secs: f64) {
     };
     let weekly_val = super::compute::format_hours_signed(weekly);
     let cum_val = super::compute::format_hours_signed(cumulative);
-    let weekly_pad = " ".repeat(VALUE_WIDTH.saturating_sub(weekly_val.chars().count()));
-    let cum_pad = " ".repeat(VALUE_WIDTH.saturating_sub(cum_val.chars().count()));
     println!(
-        "\r     {ANSI_MUTED}This Week:{ANSI_RESET} {weekly_color}{weekly_val}{ANSI_RESET}{weekly_pad}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}Cumulative:{ANSI_RESET} {cum_color}{cum_val}{ANSI_RESET}{cum_pad}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}{elapsed_secs:.1}s{ANSI_RESET}  "
+        "\r     {ANSI_MUTED}This Week:{ANSI_RESET} {weekly_color}{weekly_val}{ANSI_RESET}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}Cumulative:{ANSI_RESET} {cum_color}{cum_val}{ANSI_RESET}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}{elapsed_secs:.1}s{ANSI_RESET}\x1b[K"
     );
     println!();
 }

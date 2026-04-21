@@ -124,12 +124,12 @@ pub async fn fetch_weeks_parallel(
     }
 
     let mut auth_cookie = auth::get_or_refresh_token(email).await?;
-    let client = reqwest::Client::new();
+    let client = api::shared_client();
 
     let results = futures::future::join_all(
         mondays
             .iter()
-            .map(|&m| fetch_week(&client, &auth_cookie, m, &opts)),
+            .map(|&m| fetch_week(client, &auth_cookie, m, &opts)),
     )
     .await;
 
@@ -155,7 +155,7 @@ pub async fn fetch_weeks_parallel(
         let retry_results = futures::future::join_all(
             retry_mondays
                 .iter()
-                .map(|&m| fetch_week(&client, &auth_cookie, m, &opts)),
+                .map(|&m| fetch_week(client, &auth_cookie, m, &opts)),
         )
         .await;
         for result in retry_results {

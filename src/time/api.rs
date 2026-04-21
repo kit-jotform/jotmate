@@ -2,8 +2,15 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 use crate::error::AppError;
+
+/// Building a `reqwest::Client` pays TLS init (~50–100ms); reuse one process-wide.
+pub fn shared_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatsResponse {

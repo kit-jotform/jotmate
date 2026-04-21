@@ -17,6 +17,7 @@
 use anyhow::Result;
 use chrono::NaiveDate;
 use ratatui::widgets::ListState;
+use std::cell::OnceCell;
 use std::collections::HashMap;
 
 use crate::config::{ContractPeriod, UpstreamRepo, DEFAULT_TIMEZONE};
@@ -60,7 +61,9 @@ pub struct TimeSettings {
     pub skip_current_week: bool,
     pub use_time_cache: bool,
     pub show_cumulative: bool,
-    pub password_is_set: bool,
+    /// Lazily populated — a keychain lookup spawns a `security` CLI subprocess
+    /// (~100–300ms) and must not block TUI startup.
+    pub password_is_set: OnceCell<bool>,
     pub contract_periods: Vec<ContractPeriod>,
 }
 
@@ -85,9 +88,18 @@ pub struct App {
     pub auth_error: Option<String>,
     pub td_report_rx:
         Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
+    pub td_report_started_at: Option<std::time::Instant>,
+    pub td_report_elapsed_secs: Option<f64>,
 }
 
 impl App {
+    pub fn password_is_set(&self) -> bool {
+        *self
+            .td
+            .password_is_set
+            .get_or_init(|| crate::time::keychain::load_password_from_keychain().is_some())
+    }
+
     pub fn new() -> Result<Self> {
         let config = crate::config::load()?;
         let list_states: HashMap<Screen, ListState> = [
@@ -131,7 +143,7 @@ impl App {
                 skip_current_week: config.time.skip_current_week,
                 use_time_cache: config.time.use_time_cache,
                 show_cumulative: config.time.show_cumulative,
-                password_is_set: crate::time::keychain::load_password_from_keychain().is_some(),
+                password_is_set: OnceCell::new(),
                 contract_periods,
             },
             add_cp: AddCpForm {
@@ -141,6 +153,8 @@ impl App {
             sync_state: None,
             auth_error: None,
             td_report_rx: None,
+            td_report_started_at: None,
+            td_report_elapsed_secs: None,
         })
     }
 }

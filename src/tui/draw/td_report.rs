@@ -54,26 +54,42 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     // Inset content 3 chars on each side
     let content_area = inset_rect(content_area, 3);
 
-    // Total balance row
     let total_area = inset_rect(total_area, 3);
     let total_line = match &app.td_report {
         TdReportState::PartialReady { tick, .. } => {
             let spinner_ch = SPINNER[(*tick as usize) % SPINNER.len()];
+            let elapsed = app
+                .td_report_started_at
+                .map(|t| t.elapsed().as_secs_f64())
+                .unwrap_or(0.0);
+            let spinner_padded = format!("{:<width$}", spinner_ch, width = BALANCE_COL_W);
             Line::from(vec![
                 Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
-                Span::styled(spinner_ch.to_string(), Style::default().fg(C_ACCENT)),
+                Span::styled(spinner_padded, Style::default().fg(C_ACCENT)),
+                Span::styled(" •  ", Style::default().fg(C_MUTED)),
+                Span::styled(format!("{elapsed:.1}s"), Style::default().fg(C_MUTED)),
             ])
         }
         TdReportState::Ready { rows, .. } => {
             let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
             let balance_color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
-            Line::from(vec![
+            let total_str = format!(
+                "{:<width$}",
+                format_hours_signed(total),
+                width = BALANCE_COL_W
+            );
+            let mut spans = vec![
                 Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
-                Span::styled(
-                    format_hours_signed(total),
-                    Style::default().fg(balance_color),
-                ),
-            ])
+                Span::styled(total_str, Style::default().fg(balance_color)),
+            ];
+            if let Some(elapsed) = app.td_report_elapsed_secs {
+                spans.push(Span::styled(" •  ", Style::default().fg(C_MUTED)));
+                spans.push(Span::styled(
+                    format!("{elapsed:.1}s"),
+                    Style::default().fg(C_MUTED),
+                ));
+            }
+            Line::from(spans)
         }
         _ => Line::default(),
     };
@@ -220,6 +236,11 @@ fn live_spinner_row(spinner_ch: char, index: usize) -> Line<'static> {
         Span::styled(placeholder, Style::default().fg(C_MUTED)),
     ])
 }
+
+/// Reserved width for the Total Weekly value so the spinner (narrow) and the
+/// final balance string (e.g. `-999h 59m`) occupy the same column — no shift
+/// when the spinner is replaced by the real value.
+const BALANCE_COL_W: usize = 9;
 
 fn clamp_to_ui_width(area: Rect, base_x: u16) -> Rect {
     Rect {
