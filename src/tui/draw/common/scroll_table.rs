@@ -12,14 +12,6 @@ use ratatui::{
 
 use crate::tui::palette::C_MUTED;
 
-/// Render a scrollable table into `area`.
-///
-/// - `header` is rendered on the first row, followed by a muted `─` divider
-///   spanning the content width.
-/// - Data rows are rendered below, scrolled by `scroll_pos` rows and clamped
-///   so you can never scroll past the last page.
-/// - When `data_lines.len()` exceeds the visible rows, a thin scrollbar track
-///   + thumb is drawn in the right-most column.
 pub(in crate::tui::draw) fn draw_scroll_table(
     f: &mut ratatui::Frame,
     area: Rect,

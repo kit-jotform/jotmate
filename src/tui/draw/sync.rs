@@ -185,7 +185,6 @@ fn build_header() -> Line<'static> {
     ])
 }
 
-/// Build one row of the repo progress list.
 fn repo_row(repo: &RepoSyncState, tick: usize) -> Line<'static> {
     let (icon, icon_style) = if repo.has_error() {
         ("✗".to_string(), Style::default().fg(C_DANGEROUS))

@@ -31,7 +31,6 @@ pub(super) async fn git_ok(repo: &Path, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-/// Detect upstream default branch (main, master, or from symbolic ref).
 pub(super) async fn detect_default_branch(repo: &Path) -> Option<String> {
     if git_ok(repo, &["rev-parse", "--verify", "upstream/main"]).await {
         return Some("main".to_string());

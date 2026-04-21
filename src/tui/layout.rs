@@ -28,9 +28,6 @@ pub struct LayoutEngine {
 }
 
 impl LayoutEngine {
-    /// `frame` is the full `f.area()`. The UI is left-aligned and capped at
-    /// `UI_WIDTH`. On narrow terminals the UI shrinks to fit and the right
-    /// side is still clipped safely.
     pub fn new(frame: Rect) -> Self {
         let ui_width = UI_WIDTH.min(frame.width);
         Self {
@@ -40,9 +37,6 @@ impl LayoutEngine {
         }
     }
 
-    /// Clamp an input area (typically `f.area()`) to the left-aligned UI band
-    /// so `ScreenLayout::split` produces rows capped at `UI_WIDTH` instead of
-    /// spanning the full terminal width.
     pub fn clamp_area(&self, area: Rect) -> Rect {
         Rect {
             x: self.base_x,

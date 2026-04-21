@@ -1,10 +1,11 @@
 use chrono::Local;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::tui::app::{App, Screen, MAIN_ITEMS};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
@@ -14,6 +15,49 @@ use crate::tui::widgets::{IconWidget, LOGO};
 use super::DIVIDER_WIDTH;
 
 const NAME_COL_W: u16 = 16;
+
+const TAGLINES: &[&str] = &[
+    "One command, rules all repos.",
+    "Keep your RDS always in sync!",
+    "How many hours are you behind?",
+];
+const TAGLINE_CYCLE_MS: u64 = 6000;
+const TAGLINE_FADE_MS: u64 = 600;
+// Palette index 243 ≈ rgb(118, 118, 118); fade towards black.
+const TAGLINE_RGB: (u8, u8, u8) = (118, 118, 118);
+
+fn current_tagline() -> (&'static str, Color) {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    let phase = now_ms % TAGLINE_CYCLE_MS;
+    let idx = ((now_ms / TAGLINE_CYCLE_MS) as usize) % TAGLINES.len();
+
+    // First half of FADE window → current line fading out.
+    // Second half → next line fading in.
+    let (line_idx, alpha) = if phase < TAGLINE_FADE_MS / 2 {
+        let out = phase as f32 / (TAGLINE_FADE_MS as f32 / 2.0);
+        (
+            (idx + TAGLINES.len() - 1) % TAGLINES.len(),
+            (1.0 - out).max(0.0),
+        )
+    } else if phase < TAGLINE_FADE_MS {
+        let inp = (phase - TAGLINE_FADE_MS / 2) as f32 / (TAGLINE_FADE_MS as f32 / 2.0);
+        (idx, inp.min(1.0))
+    } else {
+        (idx, 1.0)
+    };
+
+    let (r, g, b) = TAGLINE_RGB;
+    let faded = Color::Rgb(
+        (r as f32 * alpha) as u8,
+        (g as f32 * alpha) as u8,
+        (b as f32 * alpha) as u8,
+    );
+    (TAGLINES[line_idx], faded)
+}
 
 pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -81,11 +125,13 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     );
 
     // ── Tagline ──
-    let tagline = "The lazy engineer's Swiss Army knife";
+    let (tagline, tagline_color) = current_tagline();
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             tagline,
-            Style::default().fg(C_MUTED).add_modifier(Modifier::ITALIC),
+            Style::default()
+                .fg(tagline_color)
+                .add_modifier(Modifier::ITALIC),
         ))),
         engine.center(tagline.chars().count() as u16, rows.get("tagline")),
     );

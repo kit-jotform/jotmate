@@ -164,7 +164,6 @@ impl App {
     }
 }
 
-/// Advance `idx` by `delta` (±1) within `[0, len)`, wrapping at both ends.
 fn cycle_idx(idx: usize, delta: i32, len: usize) -> usize {
     if len == 0 {
         return 0;

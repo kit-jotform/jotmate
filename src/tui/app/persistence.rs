@@ -27,8 +27,6 @@ impl App {
         });
     }
 
-    /// Load the config, apply `mutate`, and save — ignoring errors at either end.
-    /// This is the single place where in-memory state is flushed back to disk.
     fn mutate_and_save(&self, mutate: impl FnOnce(&mut crate::config::Config)) {
         if let Ok(mut config) = crate::config::load() {
             mutate(&mut config);

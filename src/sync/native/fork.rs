@@ -11,7 +11,6 @@ pub(super) struct ForkOpts {
     pub skip_rebase: bool,
 }
 
-/// Result of fork sync: Updated, Unchanged (exit 10 in bash), or Error.
 #[allow(dead_code)]
 pub(super) enum ForkResult {
     Updated,

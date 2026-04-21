@@ -25,8 +25,6 @@ pub(in crate::tui::draw) const FIELD_LABEL_W: usize = 18;
 /// (↑↓ change • ↵ confirm • ⌫ cancel) needs the extra room to fit in UI_WIDTH.
 pub(in crate::tui::draw) const FIELD_LABEL_W_TZ: usize = 13;
 
-/// Build a muted section-separator list item: `"── {label} ────────────"`.
-/// The total visible width is `SEPARATOR_WIDTH` chars.
 pub(in crate::tui::draw) fn separator_item(label: &str) -> ListItem<'static> {
     // "── " + label + " " = prefix; fill the rest with "─"
     let prefix_chars = 3 + label.chars().count() + 1;
@@ -99,13 +97,6 @@ pub(in crate::tui::draw) fn toggle_item(
     }
 }
 
-/// Visual state for an inline label+value row (timezone selector, date field,
-/// password, etc.).
-///
-/// - `Normal`   — not focused: label muted/text, value muted/text.
-/// - `Selected` — focused but not editing: bold in C_ACCENT with `▸` prefix.
-/// - `Editing`  — focused and editing: same as Selected, but the value renders
-///   as `< value >` followed by the "↑↓ change • ↵ confirm" hint.
 pub(in crate::tui::draw) enum FieldState {
     Normal,
     Selected,

@@ -67,19 +67,14 @@ pub(super) async fn sync_rds(
     }
 }
 
-/// Outcome of `skip_reason` — tells the caller whether to proceed, skip with a
-/// reason, or bail because a terminal status was already sent on the channel.
 enum SkipDecision {
     Proceed,
     Skip(String),
     AlreadyReported,
 }
 
-/// When the fork was unchanged and smart sync is on, decide whether RDS sync can be skipped.
-/// Dirty repos always proceed. May send `Pulling`/`Error` updates as a side effect.
-///
-/// Uses `git status --porcelain=v2 --branch` to get dirty state, branch name, and
-/// ahead/behind counts in a single command instead of 4-6 sequential git calls.
+// Uses `git status --porcelain=v2 --branch` to get dirty state, branch name, and
+// ahead/behind counts in a single command instead of 4-6 sequential git calls.
 async fn skip_reason(
     repo: &Path,
     tx: &mpsc::UnboundedSender<SyncUpdate>,

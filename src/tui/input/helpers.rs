@@ -12,9 +12,6 @@ pub(super) fn go_to(app: &mut App, screen: Screen) {
     app.select_first_interactive(screen);
 }
 
-/// Handle the common nav/back/quit keys shared by every list screen.
-/// Returns `Some(action)` when consumed, `None` if the caller should handle
-/// the key (typically an activate).
 pub(super) fn handle_list_nav(app: &mut App, code: KeyCode, parent: Screen) -> Option<Action> {
     if let Some(delta) = nav_delta(code) {
         app.navigate_current(delta);
@@ -30,11 +27,6 @@ pub(super) fn handle_list_nav(app: &mut App, code: KeyCode, parent: Screen) -> O
     None
 }
 
-/// Handle nav + activate for a list screen. Returns the selected row on Enter,
-/// or an `Action` the caller should return directly.
-///
-/// Callers pass a `rows` getter (instead of the `Vec` itself) to avoid building
-/// the list when the keystroke is just navigation.
 pub(super) fn list_activate_row<R: Clone>(
     app: &mut App,
     code: KeyCode,
@@ -61,8 +53,6 @@ pub(super) fn handle_yes_no(app: &mut App, code: KeyCode, on_yes: fn(&mut App)) 
     Action::Continue
 }
 
-/// Handle the ↑↓ cycle / Enter-Esc-Backspace confirm/cancel pattern for inline value editors.
-/// Enter confirms (keeps the cycled value). Esc/Backspace cancels (restores the snapshot).
 pub(super) fn handle_cycle(app: &mut App, code: KeyCode, target: CycleTarget) -> Action {
     if let Some(delta) = cycle_delta(code) {
         app.cycle(target, delta);

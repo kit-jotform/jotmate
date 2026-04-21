@@ -45,7 +45,6 @@ use navigation::list_state_at;
 
 // ── Grouped in-memory state ──────────────────────────────────────────────────
 
-/// Mirrors `config.sync` in memory. Flushed back via `App::persist_settings`.
 pub struct SyncSettings {
     pub use_cache: bool,
     pub skip_fork_sync: bool,
@@ -55,8 +54,6 @@ pub struct SyncSettings {
     pub repos: Vec<UpstreamRepo>,
 }
 
-/// Mirrors `config.time` in memory (plus password-set flag read from keychain).
-/// Flushed back via `App::persist_td_settings`.
 pub struct TimeSettings {
     pub email: String,
     pub timezone_idx: usize,

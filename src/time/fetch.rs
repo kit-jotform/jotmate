@@ -79,13 +79,7 @@ pub async fn fetch_week(
     ))
 }
 
-/// Partition `mondays` into (cached WeekRows, still-uncached mondays) by
-/// reading the per-week cache for every past week. When `no_cache` is true,
-/// nothing is read from cache and every monday ends up in the uncached list.
-///
-/// This is the cache-split step shared by `time::run` (CLI) and
-/// `App::launch_td_report` (TUI); keeping it in one place prevents the two
-/// code paths from drifting.
+// Shared by time::run (CLI) and App::launch_td_report (TUI) to prevent the two paths from drifting.
 pub fn split_cached_weeks(
     mondays: &[NaiveDate],
     contract_periods: &[ContractPeriod],

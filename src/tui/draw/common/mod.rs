@@ -33,11 +33,8 @@ pub(in crate::tui::draw) fn fmt_date(d: NaiveDate) -> String {
 }
 
 pub(in crate::tui::draw) const DIVIDER_WIDTH: u16 = 53;
-/// Visible char width of a settings-screen section separator line.
 pub(in crate::tui::draw) const SEPARATOR_WIDTH: usize = 46;
 
-/// Standard sub-screen layout: small logo, title bar, divider, then a fill
-/// area for lists. Used by every screen except MainMenu and SyncProgress.
 pub(in crate::tui::draw) fn sub_screen_layout(area: Rect) -> RowMap {
     ScreenLayout::new()
         .row("logo", 3)
@@ -50,8 +47,6 @@ pub(in crate::tui::draw) fn sub_screen_layout(area: Rect) -> RowMap {
         .split(area)
 }
 
-/// Boilerplate used by every sub-screen renderer: grab the frame area, build a
-/// layout engine, and split the clamped area with `sub_screen_layout`.
 pub(in crate::tui::draw) fn sub_screen_setup(f: &ratatui::Frame) -> (Rect, LayoutEngine, RowMap) {
     let area = f.area();
     let engine = LayoutEngine::new(area);

@@ -81,7 +81,6 @@ pub async fn get_or_refresh_token(email: &str) -> Result<String> {
     do_login(email).await
 }
 
-/// Delete the stale session token and re-authenticate from scratch.
 pub async fn reauth(email: &str) -> Result<String> {
     let _ = delete_token_from_keychain();
     do_login(email).await

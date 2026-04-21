@@ -199,7 +199,6 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     }
 }
 
-/// Build the spinner row shown while the live week is still loading.
 fn live_spinner_row(spinner_ch: char, index: usize) -> Line<'static> {
     let (week_w, _) = col_widths(true); // use widest layout to align with header
     let idx_w = index.to_string().len() + 2;
@@ -230,8 +229,6 @@ fn inset_horizontal(area: Rect, margin: u16) -> Rect {
     }
 }
 
-/// Split `area` into (content, total, hint) with content sized to `content_height`
-/// and a blank row between content and total.
 fn split_content_total_hint(area: Rect, content_height: u16) -> (Rect, Rect, Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
