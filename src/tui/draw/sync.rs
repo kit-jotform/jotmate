@@ -107,7 +107,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
 
         let summary_area = inset_h(
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("summary")),
-            LIST_H_INSET + 3,
+            LIST_H_INSET + 1,
         );
         f.render_widget(Paragraph::new(Line::from(parts)), summary_area);
 
