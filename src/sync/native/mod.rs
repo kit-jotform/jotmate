@@ -13,6 +13,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Instant;
 use tokio::sync::mpsc;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::terminal;
 
 use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
 
@@ -107,12 +109,14 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
         .map(|(i, (_, p))| (i, p))
         .collect();
 
+    let start = Instant::now();
     let sync_task = tokio::spawn(run_tui(indexed, tx, opts));
     tokio::pin!(sync_task);
 
     let mut tick: usize = 0;
     let mut sync_done = false;
 
+    let _ = terminal::enable_raw_mode();
     print!("\x1b[?25l"); // hide cursor
     let _ = std::io::stdout().flush();
 
@@ -122,22 +126,42 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
             _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
         }
 
+        // Check for 'q' keypress without blocking
+        while event::poll(std::time::Duration::ZERO).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                    sync_task.abort();
+                    let _ = terminal::disable_raw_mode();
+                    print!("\x1b[?25h"); // restore cursor
+                    println!();
+                    return;
+                }
+            }
+        }
+
         while let Ok(msg) = rx.try_recv() {
             apply_update(&mut states, msg);
         }
 
         tick += 1;
 
+        let elapsed = start.elapsed().as_secs_f64();
+
         if sync_done || states.iter().all(|r| r.is_complete()) {
-            print_line(&states, n, tick, true);
+            print_line(&states, n, tick, true, elapsed);
+            let _ = terminal::disable_raw_mode();
             print!("\x1b[?25h"); // restore cursor
             println!();
             print_errors(&states);
             break;
         }
 
-        print_line(&states, n, tick, false);
+        print_line(&states, n, tick, false, elapsed);
     }
+}
+
+fn fmt_elapsed(secs: f64) -> String {
+    format!("{secs:.1}s")
 }
 
 fn apply_update(states: &mut [RepoSyncState], msg: SyncUpdate) {
@@ -169,7 +193,7 @@ const ANSI_MUTED: &str = "\x1b[38;5;243m";   // C_MUTED   — separator •
 const ANSI_TEXT: &str = "\x1b[38;5;255m";    // C_TEXT    — labels
 const ANSI_RESET: &str = "\x1b[0m";
 
-fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool) {
+fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, elapsed: f64) {
     let complete = states.iter().filter(|r| r.is_complete()).count();
     let errors = states.iter().filter(|r| r.has_error()).count();
     let skipped = states.iter().filter(|r| r.is_skipped()).count();
@@ -194,6 +218,11 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool) {
 
     line.push_str(&format!(
         "  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_WARN}{skipped}{ANSI_RESET}{ANSI_TEXT} skipped{ANSI_RESET}"
+    ));
+
+    line.push_str(&format!(
+        "  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}{}{ANSI_RESET}",
+        fmt_elapsed(elapsed)
     ));
 
     print!("\r\x1b[2K{line}");
