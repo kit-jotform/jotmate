@@ -48,19 +48,19 @@ pub fn get_target_hours(monday: NaiveDate, periods: &[ContractPeriod]) -> f64 {
 }
 
 pub fn format_hours(decimal_hours: f64) -> String {
-    let sign = if decimal_hours < 0.0 { "-" } else { "" };
-    let abs = decimal_hours.abs();
-    let h = abs.floor() as u64;
-    let m = ((abs - abs.floor()) * 60.0).round() as u64;
-    if m == 0 {
-        format!("{sign}{h}h")
-    } else {
-        format!("{sign}{h}h {m}m")
-    }
+    format_hours_with(decimal_hours, "")
 }
 
 pub fn format_hours_signed(decimal_hours: f64) -> String {
-    let sign = if decimal_hours < 0.0 { "-" } else { "+" };
+    format_hours_with(decimal_hours, "+")
+}
+
+fn format_hours_with(decimal_hours: f64, positive_sign: &str) -> String {
+    let sign = if decimal_hours < 0.0 {
+        "-"
+    } else {
+        positive_sign
+    };
     let abs = decimal_hours.abs();
     let h = abs.floor() as u64;
     let m = ((abs - abs.floor()) * 60.0).round() as u64;

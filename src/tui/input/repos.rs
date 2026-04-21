@@ -1,25 +1,22 @@
+use std::ops::ControlFlow;
+
 use crossterm::event::KeyCode;
 
 use crate::tui::app::{App, InputMode, RemoveRepoRow, RepoManagerRow, Screen};
 
-use super::helpers::{go_to, handle_list_nav};
-use super::keys::is_activate;
+use super::helpers::{go_to, list_activate_row};
 use super::Action;
 
 pub(super) fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
-    if let Some(a) = handle_list_nav(app, code, Screen::Settings) {
-        return a;
-    }
-    if !is_activate(code) {
-        return Action::Continue;
-    }
-    let rows = app.repo_manager_items();
-    match rows.get(app.selected_index(Screen::RepoManager)) {
+    let row = match list_activate_row(app, code, Screen::Settings, Screen::RepoManager, |a| {
+        a.repo_manager_items()
+    }) {
+        ControlFlow::Break(a) => return a,
+        ControlFlow::Continue(r) => r,
+    };
+    match row {
         Some(RepoManagerRow::Back) => app.screen = Screen::Settings,
-        Some(RepoManagerRow::RepoToggle { name, .. }) => {
-            let name = name.clone();
-            app.toggle_repo(&name);
-        }
+        Some(RepoManagerRow::RepoToggle { name, .. }) => app.toggle_repo(&name),
         Some(RepoManagerRow::AddUrl) => app.input_mode = InputMode::AddingRepo(String::new()),
         Some(RepoManagerRow::RemoveReposLink) => go_to(app, Screen::RemoveRepos),
         _ => {}
@@ -28,19 +25,15 @@ pub(super) fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
 }
 
 pub(super) fn handle_remove_repos(app: &mut App, code: KeyCode) -> Action {
-    if let Some(a) = handle_list_nav(app, code, Screen::RepoManager) {
-        return a;
-    }
-    if !is_activate(code) {
-        return Action::Continue;
-    }
-    let rows = app.remove_repo_items();
-    match rows.get(app.selected_index(Screen::RemoveRepos)) {
+    let row = match list_activate_row(app, code, Screen::RepoManager, Screen::RemoveRepos, |a| {
+        a.remove_repo_items()
+    }) {
+        ControlFlow::Break(a) => return a,
+        ControlFlow::Continue(r) => r,
+    };
+    match row {
         Some(RemoveRepoRow::Back) => app.screen = Screen::RepoManager,
-        Some(RemoveRepoRow::RepoDelete { name, .. }) => {
-            let name = name.clone();
-            app.confirm_delete_repo(name);
-        }
+        Some(RemoveRepoRow::RepoDelete { name, .. }) => app.confirm_delete_repo(name),
         _ => {}
     }
     Action::Continue

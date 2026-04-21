@@ -76,4 +76,15 @@ impl App {
             .map(|s| s.repos.iter().all(|r| r.is_complete()))
             .unwrap_or(true)
     }
+
+    /// Drop the active sync state and abort the spawned task (if any). Called
+    /// from both the sync-progress key handler (Esc/Enter after completion)
+    /// and the event-loop Ctrl-C path.
+    pub fn cancel_sync(&mut self) {
+        if let Some(state) = self.sync_state.take() {
+            if let Some(handle) = state.sync_handle {
+                handle.abort();
+            }
+        }
+    }
 }

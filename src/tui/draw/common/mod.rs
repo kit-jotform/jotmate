@@ -9,6 +9,7 @@ mod dialog;
 mod header;
 mod hints;
 mod items;
+mod scroll_table;
 
 pub(in crate::tui::draw) use dialog::draw_confirm_dialog;
 pub(in crate::tui::draw) use header::draw_screen_header;
@@ -17,14 +18,15 @@ pub(in crate::tui::draw) use hints::{
     HINT_RETURN_TO_MENU,
 };
 pub(in crate::tui::draw) use items::{
-    back_item, blank_item, divider_item, field_state, inline_field_item, link_item, separator_item,
-    sub_link_item, toggle_item, FieldState, FIELD_LABEL_W, FIELD_LABEL_W_TZ,
+    back_item, blank_item, del_item, divider_item, field_state, inline_field_item, link_item,
+    separator_item, sub_link_item, toggle_item, FieldState, FIELD_LABEL_W, FIELD_LABEL_W_TZ,
 };
+pub(in crate::tui::draw) use scroll_table::draw_scroll_table;
 
 use chrono::NaiveDate;
 use ratatui::layout::Rect;
 
-use crate::tui::layout::{RowMap, ScreenLayout};
+use crate::tui::layout::{LayoutEngine, RowMap, ScreenLayout};
 
 pub(in crate::tui::draw) fn fmt_date(d: NaiveDate) -> String {
     d.format("%d-%m-%Y").to_string()
@@ -46,4 +48,13 @@ pub(in crate::tui::draw) fn sub_screen_layout(area: Rect) -> RowMap {
         .row("list", 0)
         .margin(1)
         .split(area)
+}
+
+/// Boilerplate used by every sub-screen renderer: grab the frame area, build a
+/// layout engine, and split the clamped area with `sub_screen_layout`.
+pub(in crate::tui::draw) fn sub_screen_setup(f: &ratatui::Frame) -> (Rect, LayoutEngine, RowMap) {
+    let area = f.area();
+    let engine = LayoutEngine::new(area);
+    let layout = sub_screen_layout(engine.clamp_area(area));
+    (area, engine, layout)
 }

@@ -1,10 +1,7 @@
 use chrono::NaiveDate;
 
-use crate::config::TIMEDOCTOR_COMPANY_ID;
-use crate::time::cache;
-use crate::time::compute::{
-    build_week_row_from_cache, compute_cumulative, get_week_start_monday, weeks_to_fetch,
-};
+use crate::time::compute::{compute_cumulative, weeks_to_fetch};
+use crate::time::split_cached_weeks;
 
 use super::constants::TIMEZONES;
 use super::screen::Screen;
@@ -92,31 +89,11 @@ impl App {
         };
 
         let all_mondays = weeks_to_fetch(start_date, self.td.skip_current_week);
-        let today = chrono::Local::now().date_naive();
-        let current_monday = get_week_start_monday(today);
-
-        // Split mondays into cached (show now) and uncached (fetch in background).
-        let mut cached_rows: Vec<crate::time::compute::WeekRow> = Vec::new();
-        let mut uncached_mondays: Vec<NaiveDate> = Vec::new();
-
-        if self.td.use_time_cache {
-            for &monday in &all_mondays {
-                let is_past = monday < current_monday;
-                if is_past {
-                    if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, monday) {
-                        cached_rows.push(build_week_row_from_cache(
-                            monday,
-                            &stats,
-                            &opts.contract_periods,
-                        ));
-                        continue;
-                    }
-                }
-                uncached_mondays.push(monday);
-            }
-        } else {
-            uncached_mondays = all_mondays;
-        }
+        let (mut cached_rows, uncached_mondays) = split_cached_weeks(
+            &all_mondays,
+            &opts.contract_periods,
+            !self.td.use_time_cache,
+        );
 
         // If we have cached rows to show immediately, go to PartialReady.
         if !cached_rows.is_empty() {

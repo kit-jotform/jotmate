@@ -5,18 +5,15 @@ use ratatui::{
 };
 
 use crate::tui::app::{App, InputMode, Screen, TimeDoctorField, TimeSettingRow};
-use crate::tui::layout::LayoutEngine;
 use crate::tui::palette::C_DANGEROUS;
 
 use super::{
     back_item, blank_item, divider_item, draw_screen_header, field_state, hint_muted,
-    hint_navigate_action, inline_field_item, sub_screen_layout, FIELD_LABEL_W,
+    hint_navigate_action, inline_field_item, sub_screen_setup, FIELD_LABEL_W,
 };
 
 pub fn draw_td_settings(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (_area, engine, layout) = sub_screen_setup(f);
 
     let td_rows = app.td_settings_items();
     let td_selected = app.selected_index(Screen::TimeDoctorSettings);

@@ -5,19 +5,16 @@ use ratatui::{
 };
 
 use crate::tui::app::{App, CpListRow, InputMode, Screen, WEEKLY_HOURS_OPTIONS};
-use crate::tui::layout::LayoutEngine;
-use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_TEXT, C_WARN};
+use crate::tui::palette::{C_ACCENT, C_MUTED, C_PRIMARY, C_WARN};
 
 use super::{
-    back_item, blank_item, divider_item, draw_confirm_dialog, draw_screen_header, field_state,
-    fmt_date, hint_confirm_cancel, hint_navigate_action, inline_field_item, sub_screen_layout,
-    FIELD_LABEL_W,
+    back_item, blank_item, del_item, divider_item, draw_confirm_dialog, draw_screen_header,
+    field_state, fmt_date, hint_confirm_cancel, hint_navigate_action, inline_field_item,
+    sub_screen_setup, FIELD_LABEL_W,
 };
 
 pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (area, engine, layout) = sub_screen_setup(f);
 
     let cp_rows = app.cp_list_items();
     let selected = app.selected_index(Screen::ContractPeriods);
@@ -107,25 +104,8 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                     } else {
                         format!("{weekly_hours}h/week")
                     };
-                    let detail = format!("{}  {}", fmt_date(*from), hours_display);
-                    if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
-                            Span::styled(
-                                "[del]",
-                                Style::default()
-                                    .fg(C_DANGEROUS)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(format!("  {detail}"), Style::default().fg(C_TEXT)),
-                        ]))
-                    } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled("[del]", Style::default().fg(C_MUTED)),
-                            Span::styled(format!("  {detail}"), Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                    let detail = format!("  {}  {}", fmt_date(*from), hours_display);
+                    del_item(is_sel, detail)
                 }
             }
         })

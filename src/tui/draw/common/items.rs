@@ -6,7 +6,7 @@ use ratatui::{
     widgets::ListItem,
 };
 
-use crate::tui::palette::{C_ACCENT, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT};
+use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT};
 
 use super::{HINT_CYCLE_VALUE, SEPARATOR_WIDTH};
 
@@ -135,32 +135,58 @@ pub(in crate::tui::draw) fn inline_field_item(
     label_w: usize,
 ) -> ListItem<'static> {
     let label_padded = format!("{:<width$}", label, width = label_w);
+    let mut spans = focused_prefix(matches!(state, FieldState::Selected | FieldState::Editing));
+    let accent_bold = Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD);
     match state {
-        FieldState::Editing => ListItem::new(Line::from(vec![
-            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
+        FieldState::Editing => {
+            spans.push(Span::styled(label_padded, accent_bold));
+            spans.push(Span::styled(
+                format!("< {value} >"),
+                Style::default().fg(C_ACCENT),
+            ));
+            spans.push(Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)));
+        }
+        FieldState::Selected => {
+            spans.push(Span::styled(label_padded, accent_bold));
+            spans.push(Span::styled(value.to_string(), accent_bold));
+        }
+        FieldState::Normal => {
+            spans.push(Span::styled(label_padded, Style::default().fg(C_TEXT)));
+            spans.push(Span::styled(value.to_string(), Style::default().fg(C_TEXT)));
+        }
+    }
+    ListItem::new(Line::from(spans))
+}
+
+/// Selection-arrow/indent prefix used by most focusable list rows.
+fn focused_prefix(is_sel: bool) -> Vec<Span<'static>> {
+    if is_sel {
+        vec![Span::styled("▸ ", Style::default().fg(C_PRIMARY))]
+    } else {
+        vec![Span::raw("  ")]
+    }
+}
+
+/// Destructive-action row: `▸ [del] detail` (selected, red) or `  [del] detail`
+/// (unselected, muted). Used by the Remove Repos list and Contract Periods.
+pub(in crate::tui::draw) fn del_item(is_sel: bool, detail: String) -> ListItem<'static> {
+    if is_sel {
+        ListItem::new(Line::from(vec![
+            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
             Span::styled(
-                label_padded,
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                "[del]",
+                Style::default()
+                    .fg(C_DANGEROUS)
+                    .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!("< {value} >"), Style::default().fg(C_ACCENT)),
-            Span::styled(HINT_CYCLE_VALUE, Style::default().fg(C_MUTED)),
-        ])),
-        FieldState::Selected => ListItem::new(Line::from(vec![
-            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-            Span::styled(
-                label_padded,
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                value.to_string(),
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-        ])),
-        FieldState::Normal => ListItem::new(Line::from(vec![
+            Span::styled(detail, Style::default().fg(C_TEXT)),
+        ]))
+    } else {
+        ListItem::new(Line::from(vec![
             Span::raw("  "),
-            Span::styled(label_padded, Style::default().fg(C_TEXT)),
-            Span::styled(value.to_string(), Style::default().fg(C_TEXT)),
-        ])),
+            Span::styled("[del]", Style::default().fg(C_MUTED)),
+            Span::styled(detail, Style::default().fg(C_TEXT)),
+        ]))
     }
 }
 

@@ -7,7 +7,8 @@ use crate::config::{ContractPeriod, TIMEDOCTOR_COMPANY_ID};
 use super::api;
 use super::cache;
 use super::compute::{
-    format_week_range, get_target_hours, get_week_end_sunday, is_past_week, WeekRow,
+    build_week_row_from_cache, format_week_range, get_target_hours, get_week_end_sunday,
+    get_week_start_monday, is_past_week, WeekRow,
 };
 
 /// All parameters that control how weeks are fetched. Shared between CLI and TUI.
@@ -79,6 +80,37 @@ pub async fn fetch_week(
         &opts.contract_periods,
         false,
     ))
+}
+
+/// Partition `mondays` into (cached WeekRows, still-uncached mondays) by
+/// reading the per-week cache for every past week. When `no_cache` is true,
+/// nothing is read from cache and every monday ends up in the uncached list.
+///
+/// This is the cache-split step shared by `time::run` (CLI) and
+/// `App::launch_td_report` (TUI); keeping it in one place prevents the two
+/// code paths from drifting.
+pub fn split_cached_weeks(
+    mondays: &[NaiveDate],
+    contract_periods: &[ContractPeriod],
+    no_cache: bool,
+) -> (Vec<WeekRow>, Vec<NaiveDate>) {
+    if no_cache {
+        return (Vec::new(), mondays.to_vec());
+    }
+    let today = chrono::Local::now().date_naive();
+    let current_monday = get_week_start_monday(today);
+    let mut cached = Vec::new();
+    let mut uncached = Vec::new();
+    for &monday in mondays {
+        if monday < current_monday {
+            if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, monday) {
+                cached.push(build_week_row_from_cache(monday, &stats, contract_periods));
+                continue;
+            }
+        }
+        uncached.push(monday);
+    }
+    (cached, uncached)
 }
 
 fn build_row(

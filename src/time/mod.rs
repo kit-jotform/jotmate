@@ -7,15 +7,14 @@ pub mod fetch;
 pub mod keychain;
 
 use anyhow::Result;
-use chrono::NaiveDate;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;
 
 use crate::cli::TimeArgs;
-use crate::config::{self, TIMEDOCTOR_COMPANY_ID};
+use crate::config;
 use crate::error::AppError;
-use compute::{build_week_row_from_cache, get_week_start_monday, WeekRow};
-pub use fetch::{fetch_week, FetchOpts};
+use compute::WeekRow;
+pub use fetch::{fetch_week, split_cached_weeks, FetchOpts};
 
 pub async fn run(args: TimeArgs) -> Result<()> {
     let mut cfg = config::load()?;
@@ -44,29 +43,8 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         return Ok(());
     }
 
-    // Split mondays into cached (compute cumulative now) and uncached (fetch in background).
-    let today = chrono::Local::now().date_naive();
-    let current_monday = get_week_start_monday(today);
-    let mut cached_rows: Vec<WeekRow> = Vec::new();
-    let mut uncached_mondays: Vec<NaiveDate> = Vec::new();
-
-    if !args.no_cache {
-        for &monday in &mondays {
-            if monday < current_monday {
-                if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, monday) {
-                    cached_rows.push(build_week_row_from_cache(
-                        monday,
-                        &stats,
-                        &opts.contract_periods,
-                    ));
-                    continue;
-                }
-            }
-            uncached_mondays.push(monday);
-        }
-    } else {
-        uncached_mondays = mondays.clone();
-    }
+    let (cached_rows, uncached_mondays) =
+        split_cached_weeks(&mondays, &opts.contract_periods, args.no_cache);
 
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<WeekRow>>>();
     if uncached_mondays.is_empty() {

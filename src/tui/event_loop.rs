@@ -3,7 +3,7 @@
 //! and the default blocking-read mode) so `tui/mod.rs` can stay small.
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
 use std::time::Duration;
@@ -40,6 +40,46 @@ pub(super) async fn event_loop(
     }
 }
 
+/// Read the next key event if one is available within `poll`. Returns `None`
+/// when nothing arrived or the event wasn't a press.
+///
+/// If `poll` is `None`, blocks on `event::read` (used by the default mode).
+fn poll_key(poll: Option<Duration>) -> Result<Option<KeyEvent>> {
+    let ready = match poll {
+        Some(d) => event::poll(d)?,
+        None => true,
+    };
+    if !ready {
+        return Ok(None);
+    }
+    match event::read()? {
+        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(Some(key)),
+        _ => Ok(None),
+    }
+}
+
+/// Dispatch a keypress to the input handlers. Returns `true` if the caller
+/// should exit the event loop. The `on_exit` hook fires on Ctrl-C or Back
+/// before the exit signal is returned — screens that need to cancel in-flight
+/// work plug their teardown there.
+fn dispatch_key(app: &mut App, key: KeyEvent, on_exit: impl FnOnce(&mut App)) -> bool {
+    if is_ctrl_c(key.code, key.modifiers) {
+        on_exit(app);
+        return true;
+    }
+    match handle_key(app, key.code) {
+        Action::Back => {
+            on_exit(app);
+            true
+        }
+        Action::StartSync => {
+            launch_sync(app);
+            false
+        }
+        Action::Continue => false,
+    }
+}
+
 /// One tick of the TD-report screen. Polls for the background fetch result and
 /// Returns `true` if the event loop should exit.
 async fn handle_td_report_tick(
@@ -47,29 +87,16 @@ async fn handle_td_report_tick(
     app: &mut App,
 ) -> Result<bool> {
     app.poll_td_report();
-
-    if event::poll(Duration::from_millis(150))? {
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Press {
-                return Ok(false);
-            }
-            if is_ctrl_c(key.code, key.modifiers) {
-                return Ok(true);
-            }
-            match handle_key(app, key.code) {
-                Action::Back => return Ok(true),
-                Action::StartSync | Action::Continue => {}
-            }
-        }
-    }
-    Ok(false)
+    let Some(key) = poll_key(Some(Duration::from_millis(150)))? else {
+        return Ok(false);
+    };
+    Ok(dispatch_key(app, key, |_| {}))
 }
 
 /// One tick of the sync-progress screen. Drains pending updates from the sync
 /// channel, polls for keys (to drive spinner animation), and falls back to a
 /// tick on the spinner when no key arrived. Returns `true` to exit.
 fn handle_sync_progress_tick(app: &mut App) -> Result<bool> {
-    // Drain pending sync updates
     let mut updates = Vec::new();
     if let Some(state) = &mut app.sync_state {
         while let Ok(update) = state.update_rx.try_recv() {
@@ -80,47 +107,23 @@ fn handle_sync_progress_tick(app: &mut App) -> Result<bool> {
         app.apply_sync_update(update);
     }
 
-    if event::poll(Duration::from_millis(80))? {
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Press {
-                return Ok(false);
+    match poll_key(Some(Duration::from_millis(80)))? {
+        Some(key) => Ok(dispatch_key(app, key, |app| app.cancel_sync())),
+        None => {
+            if let Some(state) = &mut app.sync_state {
+                state.tick = state.tick.wrapping_add(1);
             }
-            if is_ctrl_c(key.code, key.modifiers) {
-                if let Some(state) = app.sync_state.take() {
-                    if let Some(handle) = state.sync_handle {
-                        handle.abort();
-                    }
-                }
-                return Ok(true);
-            }
-            match handle_key(app, key.code) {
-                Action::Back => return Ok(true),
-                Action::StartSync | Action::Continue => {}
-            }
+            Ok(false)
         }
-    } else if let Some(state) = &mut app.sync_state {
-        // No event — tick spinner
-        state.tick = state.tick.wrapping_add(1);
     }
-    Ok(false)
 }
 
 /// One tick of the default blocking-read mode used by most list screens.
 fn handle_default_tick(app: &mut App) -> Result<bool> {
-    if let Event::Key(key) = event::read()? {
-        if key.kind != KeyEventKind::Press {
-            return Ok(false);
-        }
-        if is_ctrl_c(key.code, key.modifiers) {
-            return Ok(true);
-        }
-        match handle_key(app, key.code) {
-            Action::Back => return Ok(true),
-            Action::StartSync => launch_sync(app),
-            Action::Continue => {}
-        }
-    }
-    Ok(false)
+    let Some(key) = poll_key(None)? else {
+        return Ok(false);
+    };
+    Ok(dispatch_key(app, key, |_| {}))
 }
 
 fn is_ctrl_c(code: KeyCode, modifiers: KeyModifiers) -> bool {

@@ -1,10 +1,12 @@
 //! Shared dispatcher helpers used by multiple per-screen handlers.
 
+use std::ops::ControlFlow;
+
 use crossterm::event::KeyCode;
 
 use crate::tui::app::{App, CycleTarget, InputMode, Screen};
 
-use super::keys::{cycle_delta, is_back, is_no, is_yes, nav_delta};
+use super::keys::{cycle_delta, is_activate, is_back, is_no, is_yes, nav_delta};
 use super::Action;
 
 pub(super) fn go_to(app: &mut App, screen: Screen) {
@@ -28,6 +30,28 @@ pub(super) fn handle_list_nav(app: &mut App, code: KeyCode, parent: Screen) -> O
         return Some(Action::Back);
     }
     None
+}
+
+/// Handle nav + activate for a list screen. Returns the selected row on Enter,
+/// or an `Action` the caller should return directly.
+///
+/// Callers pass a `rows` getter (instead of the `Vec` itself) to avoid building
+/// the list when the keystroke is just navigation.
+pub(super) fn list_activate_row<R: Clone>(
+    app: &mut App,
+    code: KeyCode,
+    parent: Screen,
+    screen: Screen,
+    rows: impl FnOnce(&App) -> Vec<R>,
+) -> ControlFlow<Action, Option<R>> {
+    if let Some(a) = handle_list_nav(app, code, parent) {
+        return ControlFlow::Break(a);
+    }
+    if !is_activate(code) {
+        return ControlFlow::Break(Action::Continue);
+    }
+    let list = rows(app);
+    ControlFlow::Continue(list.get(app.selected_index(screen)).cloned())
 }
 
 /// Handle a yes/no confirm dialog. Runs `on_yes` when confirmed, clears input mode on cancel.
@@ -60,7 +84,7 @@ pub(super) fn handle_cycle(app: &mut App, code: KeyCode, target: CycleTarget) ->
 pub(super) fn handle_text_input(
     app: &mut App,
     code: KeyCode,
-    on_enter: fn(&mut App, String),
+    on_enter: impl FnOnce(&mut App, String),
 ) -> Action {
     match code {
         KeyCode::Char(c) => {

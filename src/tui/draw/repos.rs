@@ -1,23 +1,20 @@
 use ratatui::{
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{List, ListItem},
 };
 
 use crate::tui::app::{App, InputMode, RemoveRepoRow, RepoManagerRow, Screen};
-use crate::tui::layout::LayoutEngine;
-use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_TEXT};
+use crate::tui::palette::C_ACCENT;
 
 use super::{
-    back_item, blank_item, divider_item, draw_confirm_dialog, draw_screen_header,
-    hint_confirm_cancel, hint_input_confirm, hint_navigate_action, sub_link_item,
-    sub_screen_layout, toggle_item,
+    back_item, blank_item, del_item, divider_item, draw_confirm_dialog, draw_screen_header,
+    hint_confirm_cancel, hint_input_confirm, hint_navigate_action, sub_link_item, sub_screen_setup,
+    toggle_item,
 };
 
 pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (_area, engine, layout) = sub_screen_setup(f);
 
     let rm_rows = app.repo_manager_items();
     let selected = app.selected_index(Screen::RepoManager);
@@ -84,9 +81,7 @@ pub fn draw_repo_manager(f: &mut ratatui::Frame, app: &App) {
 }
 
 pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (area, engine, layout) = sub_screen_setup(f);
 
     let rr_rows = app.remove_repo_items();
     let rr_selected = app.selected_index(Screen::RemoveRepos);
@@ -120,25 +115,7 @@ pub fn draw_remove_repos(f: &mut ratatui::Frame, app: &App) {
                 RemoveRepoRow::Separator => divider_item(),
                 RemoveRepoRow::Back => back_item(is_sel),
                 RemoveRepoRow::RepoDelete { name, url } => {
-                    let detail = format!("  {name}  <{url}>");
-                    if is_sel {
-                        ListItem::new(Line::from(vec![
-                            Span::styled("▸ ", Style::default().fg(C_DANGEROUS)),
-                            Span::styled(
-                                "[del]",
-                                Style::default()
-                                    .fg(C_DANGEROUS)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(detail, Style::default().fg(C_TEXT)),
-                        ]))
-                    } else {
-                        ListItem::new(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled("[del]", Style::default().fg(C_MUTED)),
-                            Span::styled(detail, Style::default().fg(C_TEXT)),
-                        ]))
-                    }
+                    del_item(is_sel, format!("  {name}  <{url}>"))
                 }
             }
         })

@@ -1,5 +1,4 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
@@ -11,7 +10,7 @@ use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
-use super::{draw_screen_header, hint_muted, HINT_RETURN_TO_MENU};
+use super::{draw_screen_header, draw_scroll_table, hint_muted, HINT_RETURN_TO_MENU};
 
 // ── Spinner frames ──────────────────────────────────────────────────────────
 
@@ -116,9 +115,10 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             .iter()
             .map(|repo| repo_row(repo, tick))
             .collect();
-        render_repo_table(
+        draw_scroll_table(
             f,
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
+            build_header(),
             data_lines,
             app.sync_scroll,
         );
@@ -164,66 +164,6 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
                 engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("errors")),
             );
         }
-    }
-}
-
-fn render_repo_table(
-    f: &mut ratatui::Frame,
-    area: ratatui::layout::Rect,
-    data_lines: Vec<Line>,
-    scroll_pos: usize,
-) {
-    let data_area_height = area.height.saturating_sub(2);
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Length(data_area_height)])
-        .split(area);
-    let header_area = chunks[0];
-    let data_area = chunks[1];
-
-    let header_w = header_area.width.saturating_sub(2) as usize;
-    let divider = Line::from(Span::styled(
-        "─".repeat(header_w),
-        Style::default().fg(C_MUTED),
-    ));
-    f.render_widget(Paragraph::new(vec![build_header(), divider]), chunks[0]);
-
-    let total = data_lines.len();
-    let visible = data_area.height as usize;
-    let max_scroll = total.saturating_sub(visible);
-    let scroll = scroll_pos.min(max_scroll);
-
-    let hchunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(data_area);
-
-    f.render_widget(
-        Paragraph::new(data_lines).scroll((scroll as u16, 0)),
-        hchunks[0],
-    );
-
-    if total > visible {
-        let track_h = hchunks[2].height as usize;
-        let thumb_row = if max_scroll > 0 {
-            scroll * track_h.saturating_sub(1) / max_scroll
-        } else {
-            0
-        };
-        let scrollbar: Vec<Line> = (0..track_h)
-            .map(|i| {
-                if i == thumb_row {
-                    Line::from(Span::styled("▐", Style::default().fg(C_MUTED)))
-                } else {
-                    Line::from(Span::styled("│", Style::default().fg(C_MUTED)))
-                }
-            })
-            .collect();
-        f.render_widget(Paragraph::new(scrollbar), hchunks[2]);
     }
 }
 

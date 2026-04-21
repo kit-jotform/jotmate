@@ -7,19 +7,19 @@ use ratatui::{
 
 use crate::time::compute::{format_hours, format_hours_signed};
 use crate::tui::app::{App, TdReportState};
-use crate::tui::layout::{LayoutEngine, UI_WIDTH};
+use crate::tui::layout::UI_WIDTH;
 use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
 
-use super::{draw_screen_header, hint_muted, sub_screen_layout, HINT_RETURN_TO_MENU};
+use super::{
+    draw_screen_header, draw_scroll_table, hint_muted, sub_screen_setup, HINT_RETURN_TO_MENU,
+};
 
 use crate::tui::palette::C_ACCENT;
 
 const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
 
 pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (area, engine, layout) = sub_screen_setup(f);
 
     let hint_spans = match &app.td_report {
         TdReportState::Ready { .. } | TdReportState::PartialReady { .. } => {
@@ -169,10 +169,10 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             for n in 0..*pending {
                 data_lines.push(live_spinner_row(spinner_ch, rows.len() + 1 + n));
             }
-            render_table(
+            draw_scroll_table(
                 f,
                 content_area,
-                *show_cumulative,
+                build_header(*show_cumulative),
                 data_lines,
                 app.td_report_scroll,
             );
@@ -188,78 +188,14 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                 .enumerate()
                 .map(|(i, r)| build_row(r, *show_cumulative, i + 1, total))
                 .collect();
-            render_table(
+            draw_scroll_table(
                 f,
                 content_area,
-                *show_cumulative,
+                build_header(*show_cumulative),
                 data_lines,
                 app.td_report_scroll,
             );
         }
-    }
-}
-
-/// Render the header + scrollable data lines into `content_area`.
-fn render_table(
-    f: &mut ratatui::Frame,
-    content_area: Rect,
-    show_cumulative: bool,
-    data_lines: Vec<Line>,
-    scroll_pos: usize,
-) {
-    let data_area_height = content_area.height.saturating_sub(2);
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Length(data_area_height)])
-        .split(content_area);
-    let header_area = chunks[0];
-    let data_area = chunks[1];
-
-    let header_text_area = Rect {
-        width: header_area.width.saturating_sub(2),
-        ..header_area
-    };
-    let divider = Line::from(Span::styled(
-        "─".repeat(header_text_area.width as usize),
-        Style::default().fg(C_MUTED),
-    ));
-    f.render_widget(
-        Paragraph::new(vec![build_header(show_cumulative), divider]),
-        header_text_area,
-    );
-
-    let total_lines = data_lines.len();
-    let visible = data_area.height as usize;
-    let max_scroll = total_lines.saturating_sub(visible);
-    let scroll = scroll_pos.min(max_scroll);
-
-    let hchunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(data_area);
-
-    f.render_widget(
-        Paragraph::new(data_lines).scroll((scroll as u16, 0)),
-        hchunks[0],
-    );
-
-    if total_lines > visible {
-        let track_h = hchunks[2].height as usize;
-        let thumb_row = scroll * track_h.saturating_sub(1) / max_scroll;
-        let scrollbar: Vec<Line> = (0..track_h)
-            .map(|i| {
-                if i == thumb_row {
-                    Line::from(Span::styled("▐", Style::default().fg(C_MUTED)))
-                } else {
-                    Line::from(Span::styled("│", Style::default().fg(C_MUTED)))
-                }
-            })
-            .collect();
-        f.render_widget(Paragraph::new(scrollbar), hchunks[2]);
     }
 }
 

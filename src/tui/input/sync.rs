@@ -17,11 +17,7 @@ pub(super) fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
         }
         KeyCode::Enter if is_running => {}
         KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace => {
-            if let Some(state) = app.sync_state.take() {
-                if let Some(handle) = state.sync_handle {
-                    handle.abort();
-                }
-            }
+            app.cancel_sync();
             app.sync_scroll = 0;
             app.screen = Screen::MainMenu;
         }

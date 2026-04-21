@@ -1,18 +1,15 @@
 use ratatui::widgets::{List, ListItem};
 
 use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
-use crate::tui::layout::LayoutEngine;
 
 use super::{
     back_item, blank_item, divider_item, draw_screen_header, hint_navigate_action,
-    inline_field_item, link_item, separator_item, sub_screen_layout, toggle_item, FieldState,
+    inline_field_item, link_item, separator_item, sub_screen_setup, toggle_item, FieldState,
     FIELD_LABEL_W_TZ,
 };
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (_area, engine, layout) = sub_screen_setup(f);
 
     let setting_rows = app.settings_items();
     let selected = app.selected_index(Screen::Settings);
@@ -69,9 +66,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 }
 
 pub fn draw_general_toggles(f: &mut ratatui::Frame, app: &App, title: &str, is_sync: bool) {
-    let area = f.area();
-    let engine = LayoutEngine::new(area);
-    let layout = sub_screen_layout(engine.clamp_area(area));
+    let (_area, engine, layout) = sub_screen_setup(f);
 
     let screen = if is_sync {
         Screen::SyncGeneralSettings
