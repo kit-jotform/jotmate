@@ -53,11 +53,12 @@ pub(super) async fn sync_fork(
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::FetchingUpstream));
     if !opts.skip_git_fetch {
         if let Err(e) = git(repo, &["fetch", "upstream"]).await {
+            let msg = extract_fetch_error(&e);
             let _ = tx.send(SyncUpdate::Fork(
                 idx,
-                ForkStatus::Error(format!("fetch: {e}")),
+                ForkStatus::Error(format!("fetch: {msg}")),
             ));
-            return ForkResult::Error(e);
+            return ForkResult::Error(msg);
         }
     }
 
@@ -193,5 +194,33 @@ pub(super) async fn sync_fork(
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Done));
     ForkResult::Updated
+}
+
+/// `git fetch` writes progress ("From …", "* [new branch] …", "remote: …") to
+/// stderr even on success. When it exits non-zero, pull out the actual error
+/// line so we don't surface benign progress as the failure reason.
+fn extract_fetch_error(stderr: &str) -> String {
+    let is_progress = |line: &str| {
+        let t = line.trim_start();
+        t.starts_with("From ")
+            || t.starts_with("remote:")
+            || t.starts_with("* ")
+            || t.starts_with("+ ")
+            || t.starts_with("- ")
+            || t.starts_with("= ")
+            || t.starts_with("! ")
+            || t.starts_with("Fetching ")
+            || t.is_empty()
+    };
+
+    stderr
+        .lines()
+        .rev()
+        .find(|l| {
+            let t = l.trim_start();
+            !is_progress(l) && !t.to_lowercase().starts_with("warning:")
+        })
+        .map(|l| l.trim().to_string())
+        .unwrap_or_else(|| "fetch failed".to_string())
 }
 
