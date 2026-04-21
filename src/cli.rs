@@ -54,10 +54,6 @@ pub struct SyncArgs {
     /// Skip git fetch upstream (use already-fetched upstream refs)
     #[arg(long)]
     pub skip_fetch: bool,
-
-    /// Deprecated: has no effect
-    #[arg(long, hide = true)]
-    pub skip_dirty_sync: bool,
 }
 
 #[derive(Args, Clone, Debug, Default)]

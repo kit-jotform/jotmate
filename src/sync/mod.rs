@@ -10,11 +10,6 @@ use crate::cli::SyncArgs;
 use crate::config::UpstreamRepo;
 
 pub async fn run(mut args: SyncArgs) -> Result<()> {
-    // Deprecated flag warnings
-    if args.skip_dirty_sync {
-        eprintln!("Warning: --skip-dirty-sync is deprecated and has no effect.");
-    }
-
     // Conflict checks
     if args.sync_all && args.only.is_some() {
         anyhow::bail!("--sync-all and --only are mutually exclusive");
