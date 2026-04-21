@@ -45,7 +45,6 @@ pub enum ToggleKind {
     SmartSync,
     SkipCurrentWeek,
     UseTimeCache,
-    ShowCumulative,
 }
 
 impl ToggleKind {

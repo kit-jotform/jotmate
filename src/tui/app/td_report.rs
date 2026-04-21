@@ -130,7 +130,7 @@ impl App {
             self.td_report = TdReportState::PartialReady {
                 rows: cached_rows,
                 pending,
-                show_cumulative: self.td.show_cumulative,
+                show_cumulative: true,
                 tick: 0,
             };
         }
@@ -143,7 +143,7 @@ impl App {
                     show_cumulative,
                     ..
                 } => (rows.clone(), *show_cumulative),
-                _ => (vec![], self.td.show_cumulative),
+                _ => (vec![], true),
             };
             self.td_report_scroll = rows.len().saturating_sub(6);
             self.td_report = TdReportState::Ready {
@@ -205,7 +205,7 @@ impl App {
                 self.td_report_scroll = rows.len().saturating_sub(6);
                 self.td_report = TdReportState::Ready {
                     rows,
-                    show_cumulative: self.td.show_cumulative,
+                    show_cumulative: true,
                 };
             }
             Err(msg) if msg.starts_with("AUTH_FAILED:") => {

@@ -18,7 +18,6 @@ impl App {
             ToggleKind::SmartSync => &mut self.sync.smart_sync,
             ToggleKind::SkipCurrentWeek => &mut self.td.skip_current_week,
             ToggleKind::UseTimeCache => &mut self.td.use_time_cache,
-            ToggleKind::ShowCumulative => &mut self.td.show_cumulative,
         };
         *flag = !*flag;
         if kind.is_sync() {

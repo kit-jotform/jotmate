@@ -93,14 +93,6 @@ impl App {
                 indent: false,
                 disabled: false,
             },
-            GeneralToggleRow::Toggle {
-                kind: ToggleKind::ShowCumulative,
-                label: "Show cumulative balance",
-                hint: "running hour balance",
-                on: self.td.show_cumulative,
-                indent: false,
-                disabled: false,
-            },
             GeneralToggleRow::Blank,
             GeneralToggleRow::TimezoneSelector {
                 value: TIMEZONES[self.td.timezone_idx].to_string(),
