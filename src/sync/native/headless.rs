@@ -10,11 +10,11 @@ use std::path::PathBuf;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
-use crate::ansi::{
+use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
+use crate::tui::palette::{
     ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, ANSI_TEXT, ANSI_WARN,
     SPINNER,
 };
-use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
 
 use super::{run_tui, SyncOpts};
 

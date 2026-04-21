@@ -1,11 +1,25 @@
 use ratatui::style::Color;
 
-pub const C_TEXT: Color = Color::Indexed(255);
+// One macro, one literal — produces both Color::Indexed and the ANSI escape string.
+macro_rules! color {
+    ($name:ident, $ansi:ident, $idx:literal) => {
+        pub const $name: Color = Color::Indexed($idx);
+        pub const $ansi: &str = concat!("\x1b[38;5;", $idx, "m");
+    };
+}
+
+color!(C_TEXT, ANSI_TEXT, 255);
+color!(C_ACCENT, ANSI_ACCENT, 51);
+color!(C_SUCCESS, ANSI_SUCCESS, 40);
+color!(C_MUTED, ANSI_MUTED, 243);
+color!(C_DANGEROUS, ANSI_DANGEROUS, 160);
+color!(C_WARN, ANSI_WARN, 220);
+
+// TUI-only — not used by headless renderers
 pub const C_PRIMARY: Color = Color::Indexed(199);
-pub const C_ACCENT: Color = Color::Indexed(51);
+
 pub const C_SELECT: Color = C_PRIMARY;
-pub const C_SUCCESS: Color = Color::Indexed(10);
-pub const C_MUTED: Color = Color::Indexed(243);
 pub const C_LOGO: Color = C_TEXT;
-pub const C_DANGEROUS: Color = Color::Indexed(9);
-pub const C_WARN: Color = Color::Indexed(11);
+pub const ANSI_RESET: &str = "\x1b[0m";
+
+pub const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];

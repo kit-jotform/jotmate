@@ -15,8 +15,7 @@ use super::{
     HINT_RETURN_TO_MENU,
 };
 
-use crate::ansi::SPINNER;
-use crate::tui::palette::C_ACCENT;
+use crate::tui::palette::{C_ACCENT, SPINNER};
 
 pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let (area, engine, layout) = sub_screen_setup(f);

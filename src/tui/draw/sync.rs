@@ -6,10 +6,11 @@ use ratatui::{
 
 use ratatui::style::Color;
 
-use crate::ansi::SPINNER;
 use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
-use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
+use crate::tui::palette::{
+    C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN, SPINNER,
+};
 
 use super::{draw_screen_header, draw_scroll_table, hint_muted, inset_rect, HINT_RETURN_TO_MENU};
 

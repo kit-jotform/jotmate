@@ -1,6 +1,8 @@
 use std::io::Write;
 
-use crate::ansi::{ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, SPINNER};
+use crate::tui::palette::{
+    ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, SPINNER,
+};
 
 const VALUE_WIDTH: usize = 8;
 

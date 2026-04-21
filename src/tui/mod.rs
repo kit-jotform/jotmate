@@ -3,7 +3,7 @@ mod draw;
 mod event_loop;
 mod input;
 mod layout;
-mod palette;
+pub(crate) mod palette;
 mod rows;
 mod sync_launcher;
 mod sync_state;
