@@ -86,6 +86,7 @@ pub struct App {
     pub list_states: HashMap<Screen, ListState>,
     pub td_report: TdReportState,
     pub td_report_scroll: usize,
+    pub sync_scroll: usize,
     pub input_mode: InputMode,
     pub sync: SyncSettings,
     pub td: TimeSettings,
@@ -127,6 +128,7 @@ impl App {
             list_states,
             td_report: TdReportState::Loading,
             td_report_scroll: 0,
+            sync_scroll: 0,
             input_mode: InputMode::Normal,
             sync: SyncSettings {
                 use_cache: config.sync.use_cache,

@@ -1,4 +1,5 @@
 use ratatui::{
+    layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
@@ -21,21 +22,29 @@ const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧
 const NAME_W: usize = 14;
 const FORK_W: usize = 24;
 const RDS_W: usize = 18;
+const ELAPSED_W: usize = 7;
+
+const LIST_VISIBLE: u16 = 6;
 
 pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
 
-    let (repo_count, error_count) = app
+    let (error_count, repo_count) = app
         .sync_state
         .as_ref()
         .map(|s| {
             (
-                s.repos.len() as u16,
                 s.repos.iter().filter(|r| r.has_error()).count() as u16,
+                s.repos.len() as u16,
             )
         })
         .unwrap_or((0, 0));
+
+    let is_scrollable = repo_count > LIST_VISIBLE;
+
+    // header row (col names + divider) + up to LIST_VISIBLE data rows
+    let list_height = 2 + LIST_VISIBLE;
 
     let rows = ScreenLayout::new()
         .row("logo", 3)
@@ -45,8 +54,9 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .row("blank2", 1)
         .row("summary", 1)
         .row("blank3", 1)
-        .row("list", repo_count)
+        .row("list", list_height)
         .row("blank4", 1)
+        .row("nav_hint", 1)
         .row("hint", 1)
         .row("errors", error_count)
         .margin(1)
@@ -101,16 +111,25 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
 
         // ── Repo list ──
         let tick = state.tick as usize;
-        let items: Vec<ListItem> = state
+        let data_lines: Vec<Line> = state
             .repos
             .iter()
             .map(|repo| repo_row(repo, tick))
             .collect();
-
-        f.render_widget(
-            List::new(items),
+        render_repo_table(
+            f,
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
+            data_lines,
+            app.sync_scroll,
         );
+
+        // ── Nav hint (only when list is scrollable) ──
+        if is_scrollable {
+            f.render_widget(
+                Paragraph::new(Line::from(hint_muted(&["↑↓", " scroll"]))),
+                engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("nav_hint")),
+            );
+        }
 
         // ── Hint ──
         let hint_text = if is_complete {
@@ -148,13 +167,85 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
     }
 }
 
+fn render_repo_table(
+    f: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
+    data_lines: Vec<Line>,
+    scroll_pos: usize,
+) {
+    let data_area_height = area.height.saturating_sub(2);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Length(data_area_height)])
+        .split(area);
+    let header_area = chunks[0];
+    let data_area = chunks[1];
+
+    let header_w = header_area.width.saturating_sub(2) as usize;
+    let divider = Line::from(Span::styled(
+        "─".repeat(header_w),
+        Style::default().fg(C_MUTED),
+    ));
+    f.render_widget(Paragraph::new(vec![build_header(), divider]), chunks[0]);
+
+    let total = data_lines.len();
+    let visible = data_area.height as usize;
+    let max_scroll = total.saturating_sub(visible);
+    let scroll = scroll_pos.min(max_scroll);
+
+    let hchunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(data_area);
+
+    f.render_widget(
+        Paragraph::new(data_lines).scroll((scroll as u16, 0)),
+        hchunks[0],
+    );
+
+    if total > visible {
+        let track_h = hchunks[2].height as usize;
+        let thumb_row = if max_scroll > 0 {
+            scroll * track_h.saturating_sub(1) / max_scroll
+        } else {
+            0
+        };
+        let scrollbar: Vec<Line> = (0..track_h)
+            .map(|i| {
+                if i == thumb_row {
+                    Line::from(Span::styled("▐", Style::default().fg(C_MUTED)))
+                } else {
+                    Line::from(Span::styled("│", Style::default().fg(C_MUTED)))
+                }
+            })
+            .collect();
+        f.render_widget(Paragraph::new(scrollbar), hchunks[2]);
+    }
+}
+
+fn build_header() -> Line<'static> {
+    let header_style = Style::default().fg(C_MUTED).add_modifier(Modifier::BOLD);
+    let cell = |text: &str, width: usize| {
+        Span::styled(format!("{:<width$}", text, width = width), header_style)
+    };
+    Line::from(vec![
+        Span::styled("   ", Style::default()),
+        cell("Repo Name", NAME_W),
+        cell("Fork Sync", FORK_W),
+        cell("RDS Sync", RDS_W),
+        Span::styled(
+            format!("{:>width$}", "Elapsed", width = ELAPSED_W),
+            header_style,
+        ),
+    ])
+}
+
 /// Build one row of the repo progress list.
-///
-/// The only per-row variation is the leading icon/spinner and the name style:
-/// in-flight repos get a spinner glyph in `C_ACCENT` and a bold `C_PRIMARY`
-/// name; terminal states pick an icon (`✓ ✗ -`) and plain name color.
-/// Column widths, status labels and elapsed formatting are always the same.
-fn repo_row(repo: &RepoSyncState, tick: usize) -> ListItem<'static> {
+fn repo_row(repo: &RepoSyncState, tick: usize) -> Line<'static> {
     let (icon, icon_style) = if repo.has_error() {
         ("✗".to_string(), Style::default().fg(C_DANGEROUS))
     } else if repo.is_complete() {
@@ -189,18 +280,22 @@ fn repo_row(repo: &RepoSyncState, tick: usize) -> ListItem<'static> {
     let name_padded = format!("{:<width$}", repo.name, width = NAME_W);
     let fork_padded = format!("{:<width$}", repo.fork_status.label(), width = FORK_W);
     let rds_padded = format!("{:<width$}", repo.rds_status.label(), width = RDS_W);
-    let elapsed = format!("{:>5.1}s", repo.elapsed_secs);
+    let elapsed = format!(
+        "{:>width$}",
+        format!("{:.1}s", repo.elapsed_secs),
+        width = ELAPSED_W
+    );
 
     let fork_color = status_color(&repo.fork_status);
     let rds_color = rds_status_color(&repo.rds_status);
 
-    ListItem::new(Line::from(vec![
-        Span::styled(format!("{icon} "), icon_style),
+    Line::from(vec![
+        Span::styled(format!(" {icon} "), icon_style),
         Span::styled(name_padded, name_style),
         Span::styled(fork_padded, Style::default().fg(fork_color)),
         Span::styled(rds_padded, Style::default().fg(rds_color)),
         Span::styled(elapsed, Style::default().fg(C_MUTED)),
-    ]))
+    ])
 }
 
 fn status_color(status: &ForkStatus) -> Color {

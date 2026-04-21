@@ -153,6 +153,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
             print!("\x1b[?25h"); // restore cursor
             println!();
             print_errors(&states);
+            println!();
             break;
         }
 
@@ -211,7 +212,7 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, e
     };
 
     let mut line = format!(
-        "{icon_color}{icon}{ANSI_RESET}    {ANSI_ACCENT}{complete}/{total}{ANSI_RESET}{ANSI_TEXT} complete{ANSI_RESET}"
+        "  {icon_color}{icon}{ANSI_RESET}  {ANSI_ACCENT}{complete}/{total}{ANSI_RESET}{ANSI_TEXT} complete{ANSI_RESET}"
     );
 
     if errors > 0 {

@@ -55,12 +55,14 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         let _ = tx.send(fetch_weeks_parallel(&email_owned, mondays_clone, opts_clone).await);
     });
 
-    // Animate spinner until result arrives.
+    // Animate spinner until result arrives, showing live elapsed time.
     let mut tick: usize = 0;
     let mut rx = rx;
+    let start = std::time::Instant::now();
     let result = loop {
         let spinner_ch = SPINNER[tick % SPINNER.len()];
-        print!("\r{MUTED}Total Weekly:{RESET} {CYAN}{spinner_ch}{RESET} ");
+        let secs = start.elapsed().as_secs_f64();
+        print!("\r     {MUTED}Total Weekly:{RESET} {CYAN}{spinner_ch}{RESET}  {MUTED}{secs:.1}s{RESET}  ");
         use std::io::Write;
         let _ = std::io::stdout().flush();
 
@@ -74,13 +76,26 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         }
     };
 
+    let elapsed = start.elapsed().as_secs_f64();
+
     let mut rows = result?;
     compute::compute_cumulative(&mut rows, reset_from);
 
     let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
-    let color = if total >= 0.0 { GREEN } else { RED };
-    let value = compute::format_hours_signed(total);
-    println!("\r{MUTED}Total Weekly:{RESET} {color}{value}{RESET}  ");
+    let cumulative = rows
+        .iter()
+        .max_by_key(|r| r.monday)
+        .map(|r| r.cumulative_hours)
+        .unwrap_or(0.0);
+
+    let weekly_color = if total >= 0.0 { GREEN } else { RED };
+    let cum_color = if cumulative >= 0.0 { GREEN } else { RED };
+    let weekly_val = compute::format_hours_signed(total);
+    let cum_val = compute::format_hours_signed(cumulative);
+    println!(
+        "\r     {MUTED}Total Weekly:{RESET} {weekly_color}{weekly_val}{RESET}  {MUTED}•  {RESET}{MUTED}Cumulative:{RESET} {cum_color}{cum_val}{RESET}  {MUTED}•  {elapsed:.1}s{RESET}  "
+    );
+    println!();
 
     Ok(())
 }

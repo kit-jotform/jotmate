@@ -37,6 +37,7 @@ impl App {
             sync_handle: None,
             update_rx,
         });
+        self.sync_scroll = 0;
         self.screen = Screen::SyncProgress;
     }
 
