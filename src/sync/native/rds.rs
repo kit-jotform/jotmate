@@ -112,9 +112,7 @@ async fn skip_reason(
 
     // Parse `# branch.ab +<ahead> -<behind>`.
     // If this line is absent git hasn't tracked the upstream yet; fetch and proceed.
-    let ab_line = status
-        .lines()
-        .find(|l| l.starts_with("# branch.ab "));
+    let ab_line = status.lines().find(|l| l.starts_with("# branch.ab "));
 
     let (ahead, behind) = match ab_line {
         None => {

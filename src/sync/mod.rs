@@ -55,11 +55,7 @@ pub async fn run(mut args: SyncArgs) -> Result<()> {
                 Some(r) => selected.push(r),
                 None => {
                     let valid: Vec<&str> = all_repos.iter().map(|r| r.name.as_str()).collect();
-                    anyhow::bail!(
-                        "Unknown repo '{}'. Valid names: {}",
-                        name,
-                        valid.join(", ")
-                    );
+                    anyhow::bail!("Unknown repo '{}'. Valid names: {}", name, valid.join(", "));
                 }
             }
         }

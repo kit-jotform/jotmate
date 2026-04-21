@@ -53,7 +53,11 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .split(engine.clamp_area(area));
 
     let is_complete = app.sync_is_complete();
-    let title = if is_complete { "Sync Complete" } else { "Syncing Repos" };
+    let title = if is_complete {
+        "Sync Complete"
+    } else {
+        "Syncing Repos"
+    };
     draw_screen_header(
         f,
         &engine,

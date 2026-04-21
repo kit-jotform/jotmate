@@ -129,7 +129,10 @@ impl App {
     }
 
     pub fn cp_list_items(&self) -> Vec<CpListRow> {
-        let mut rows: Vec<CpListRow> = vec![CpListRow::SectionTitle("Contract Periods"), CpListRow::Blank];
+        let mut rows: Vec<CpListRow> = vec![
+            CpListRow::SectionTitle("Contract Periods"),
+            CpListRow::Blank,
+        ];
         rows.extend(
             self.td
                 .contract_periods

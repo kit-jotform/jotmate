@@ -19,7 +19,9 @@ mod time;
 use contract::{execute_pending_period_delete, handle_contract_periods};
 use helpers::{handle_cycle, handle_text_input, handle_yes_no};
 use main_menu::handle_main;
-use repos::{apply_new_repo_url, execute_pending_repo_delete, handle_remove_repos, handle_repo_manager};
+use repos::{
+    apply_new_repo_url, execute_pending_repo_delete, handle_remove_repos, handle_repo_manager,
+};
 use settings::{handle_general_toggles, handle_settings};
 use sync::handle_sync_progress;
 use td_report::handle_td_report;
@@ -35,7 +37,9 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
     match app.screen {
         Screen::MainMenu => handle_main(app, code),
         Screen::Settings => handle_settings(app, code),
-        Screen::SyncGeneralSettings | Screen::TdGeneralSettings => handle_general_toggles(app, code),
+        Screen::SyncGeneralSettings | Screen::TdGeneralSettings => {
+            handle_general_toggles(app, code)
+        }
         Screen::RepoManager => match &app.input_mode {
             InputMode::AddingRepo(_) => handle_text_input(app, code, apply_new_repo_url),
             _ => handle_repo_manager(app, code),
@@ -49,7 +53,9 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
             _ => handle_td_settings(app, code),
         },
         Screen::ContractPeriods => match &app.input_mode {
-            InputMode::ConfirmDeletePeriod(_) => handle_yes_no(app, code, execute_pending_period_delete),
+            InputMode::ConfirmDeletePeriod(_) => {
+                handle_yes_no(app, code, execute_pending_period_delete)
+            }
             InputMode::EditingCpMonday(_) => handle_cycle(app, code, CycleTarget::CpMonday),
             InputMode::EditingCpHours(_) => handle_cycle(app, code, CycleTarget::CpHours),
             _ => handle_contract_periods(app, code),

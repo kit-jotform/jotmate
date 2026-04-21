@@ -19,10 +19,7 @@ pub(in crate::tui::draw) fn blank_item() -> ListItem<'static> {
 pub(in crate::tui::draw) fn divider_item() -> ListItem<'static> {
     ListItem::new(Line::from(vec![
         Span::raw("  "),
-        Span::styled(
-            "─".repeat(SEPARATOR_WIDTH),
-            Style::default().fg(C_MUTED),
-        ),
+        Span::styled("─".repeat(SEPARATOR_WIDTH), Style::default().fg(C_MUTED)),
     ]))
 }
 

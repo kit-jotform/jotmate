@@ -34,7 +34,13 @@ pub async fn fetch_week(
 
     if past && !opts.no_cache {
         if let Some(stats) = cache::read_week_cache(company_id, monday) {
-            return Ok(build_row(monday, week_label, &stats, &opts.contract_periods, true));
+            return Ok(build_row(
+                monday,
+                week_label,
+                &stats,
+                &opts.contract_periods,
+                true,
+            ));
         }
     }
 
@@ -68,7 +74,13 @@ pub async fn fetch_week(
         cache::write_week_cache(company_id, monday, &stats);
     }
 
-    Ok(build_row(monday, week_label, &stats, &opts.contract_periods, false))
+    Ok(build_row(
+        monday,
+        week_label,
+        &stats,
+        &opts.contract_periods,
+        false,
+    ))
 }
 
 fn build_row(

@@ -223,4 +223,3 @@ fn extract_fetch_error(stderr: &str) -> String {
         .map(|l| l.trim().to_string())
         .unwrap_or_else(|| "fetch failed".to_string())
 }
-

@@ -59,4 +59,3 @@ pub fn is_valid(cache: &RepoPathsCache, expected_names: &[&str]) -> bool {
 pub fn invalidate() {
     let _ = std::fs::remove_file(cache_path());
 }
-

@@ -27,7 +27,10 @@ pub(super) fn is_back(code: KeyCode) -> bool {
 }
 
 pub(super) fn is_yes(code: KeyCode) -> bool {
-    matches!(code, KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y'))
+    matches!(
+        code,
+        KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y')
+    )
 }
 
 pub(super) fn is_no(code: KeyCode) -> bool {

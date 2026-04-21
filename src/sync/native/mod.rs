@@ -9,12 +9,12 @@
 //! This `mod.rs` owns only the public [`SyncOpts`] + [`run_tui`] entry point
 //! and the two-phase orchestration (fork → rds) over all repos.
 
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::terminal;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Instant;
 use tokio::sync::mpsc;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::terminal;
 
 use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
 
@@ -185,12 +185,12 @@ fn apply_update(states: &mut [RepoSyncState], msg: SyncUpdate) {
 }
 
 // ANSI color codes matching palette.rs indexed colors
-const ANSI_ACCENT: &str = "\x1b[38;5;51m";   // C_ACCENT  — cyan, in-progress count
-const ANSI_SUCCESS: &str = "\x1b[38;5;10m";  // C_SUCCESS — green, done count / ✓
-const ANSI_WARN: &str = "\x1b[38;5;11m";     // C_WARN    — yellow, skipped count
-const ANSI_DANGER: &str = "\x1b[38;5;9m";    // C_DANGEROUS — red, error count / ✗
-const ANSI_MUTED: &str = "\x1b[38;5;243m";   // C_MUTED   — separator •
-const ANSI_TEXT: &str = "\x1b[38;5;255m";    // C_TEXT    — labels
+const ANSI_ACCENT: &str = "\x1b[38;5;51m"; // C_ACCENT  — cyan, in-progress count
+const ANSI_SUCCESS: &str = "\x1b[38;5;10m"; // C_SUCCESS — green, done count / ✓
+const ANSI_WARN: &str = "\x1b[38;5;11m"; // C_WARN    — yellow, skipped count
+const ANSI_DANGER: &str = "\x1b[38;5;9m"; // C_DANGEROUS — red, error count / ✗
+const ANSI_MUTED: &str = "\x1b[38;5;243m"; // C_MUTED   — separator •
+const ANSI_TEXT: &str = "\x1b[38;5;255m"; // C_TEXT    — labels
 const ANSI_RESET: &str = "\x1b[0m";
 
 fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, elapsed: f64) {
@@ -200,7 +200,11 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, e
 
     let spinner_ch;
     let (icon, icon_color): (&str, &str) = if done {
-        if errors > 0 { ("✗", ANSI_DANGER) } else { ("✓", ANSI_SUCCESS) }
+        if errors > 0 {
+            ("✗", ANSI_DANGER)
+        } else {
+            ("✓", ANSI_SUCCESS)
+        }
     } else {
         spinner_ch = SPINNER[tick % SPINNER.len()].to_string();
         (&spinner_ch, ANSI_ACCENT)

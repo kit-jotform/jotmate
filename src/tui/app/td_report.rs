@@ -29,7 +29,8 @@ async fn fetch_report_result(
                 let _ = crate::time::auth::delete_token_from_keychain();
                 format!("AUTH_FAILED:{msg}")
             }
-            _ => "Could not connect to TimeDoctor. Check your internet connection and try again.".to_string(),
+            _ => "Could not connect to TimeDoctor. Check your internet connection and try again."
+                .to_string(),
         }
     })
 }
@@ -43,9 +44,8 @@ impl App {
         self.td_report_rx = None;
 
         if self.td.email.is_empty() || !self.td.password_is_set {
-            self.td_report = TdReportState::NoCredentials(
-                "Email or password not configured.".to_string(),
-            );
+            self.td_report =
+                TdReportState::NoCredentials("Email or password not configured.".to_string());
             return;
         }
 

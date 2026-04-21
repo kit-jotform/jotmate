@@ -16,7 +16,10 @@ pub(super) fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
     }
     app.auth_error = None;
     let rows = app.td_settings_items();
-    match rows.get(app.selected_index(Screen::TimeDoctorSettings)).cloned() {
+    match rows
+        .get(app.selected_index(Screen::TimeDoctorSettings))
+        .cloned()
+    {
         Some(TimeSettingRow::Back) => app.screen = Screen::Settings,
         Some(TimeSettingRow::EditField { field, value, .. }) => {
             app.input_mode = InputMode::EditingField { field, buf: value };
