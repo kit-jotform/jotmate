@@ -37,8 +37,10 @@ pub fn print_final(weekly: f64, cumulative: f64, elapsed_secs: f64) {
     };
     let weekly_val = super::compute::format_hours_signed(weekly);
     let cum_val = super::compute::format_hours_signed(cumulative);
+    let weekly_padded = format!("{weekly_val:<HOURS_DISPLAY_WIDTH$}");
+    let cum_padded = format!("{cum_val:<HOURS_DISPLAY_WIDTH$}");
     println!(
-        "\r     {ANSI_MUTED}This Week:{ANSI_RESET} {weekly_color}{weekly_val}{ANSI_RESET}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}Cumulative:{ANSI_RESET} {cum_color}{cum_val}{ANSI_RESET}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}{elapsed_secs:.1}s{ANSI_RESET}\x1b[K"
+        "\r     {ANSI_MUTED}This Week:{ANSI_RESET} {weekly_color}{weekly_padded}{ANSI_RESET}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}Cumulative:{ANSI_RESET} {cum_color}{cum_padded}{ANSI_RESET}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}{elapsed_secs:.1}s{ANSI_RESET}\x1b[K"
     );
     println!();
 }
