@@ -97,7 +97,6 @@ impl App {
             !self.td.use_time_cache,
         );
 
-        // If we have cached rows to show immediately, go to PartialReady.
         if !cached_rows.is_empty() {
             let reset_from = crate::config::load()
                 .ok()
@@ -132,7 +131,6 @@ impl App {
             return;
         }
 
-        // Spawn background fetch for uncached weeks.
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.td_report_rx = Some(rx);
         let email = self.td.email.clone();

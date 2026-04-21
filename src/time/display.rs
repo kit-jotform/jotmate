@@ -1,10 +1,9 @@
 use std::io::Write;
 
+use crate::time::compute::HOURS_DISPLAY_WIDTH;
 use crate::tui::palette::{
     ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, SPINNER,
 };
-
-const VALUE_WIDTH: usize = 9;
 
 pub fn hide_cursor() {
     print!("\x1b[?25l");
@@ -18,7 +17,7 @@ pub fn show_cursor() {
 
 pub fn print_progress(tick: usize, elapsed_secs: f64) {
     let spinner_ch = SPINNER[tick % SPINNER.len()];
-    let pad = " ".repeat(VALUE_WIDTH - 1);
+    let pad = " ".repeat(HOURS_DISPLAY_WIDTH - 1);
     print!(
         "\r     {ANSI_MUTED}This Week:{ANSI_RESET} {ANSI_ACCENT}{spinner_ch}{ANSI_RESET}{pad}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}Cumulative:{ANSI_RESET} {ANSI_ACCENT}{spinner_ch}{ANSI_RESET}{pad}  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_MUTED}{elapsed_secs:.1}s{ANSI_RESET}  "
     );

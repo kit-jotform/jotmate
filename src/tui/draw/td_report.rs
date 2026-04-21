@@ -5,7 +5,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::time::compute::{format_hours, format_hours_signed};
+use crate::time::compute::{format_hours, format_hours_signed, HOURS_DISPLAY_WIDTH};
 use crate::tui::app::{App, TdReportState};
 use crate::tui::layout::UI_WIDTH;
 use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
@@ -62,34 +62,16 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                 .td_report_started_at
                 .map(|t| t.elapsed().as_secs_f64())
                 .unwrap_or(0.0);
-            let spinner_padded = format!("{:<width$}", spinner_ch, width = BALANCE_COL_W);
-            Line::from(vec![
-                Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
-                Span::styled(spinner_padded, Style::default().fg(C_ACCENT)),
-                Span::styled(" •  ", Style::default().fg(C_MUTED)),
-                Span::styled(format!("{elapsed:.1}s"), Style::default().fg(C_MUTED)),
-            ])
+            total_weekly_line(&spinner_ch.to_string(), C_ACCENT, Some(elapsed))
         }
         TdReportState::Ready { rows, .. } => {
             let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
-            let balance_color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
-            let total_str = format!(
-                "{:<width$}",
-                format_hours_signed(total),
-                width = BALANCE_COL_W
-            );
-            let mut spans = vec![
-                Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
-                Span::styled(total_str, Style::default().fg(balance_color)),
-            ];
-            if let Some(elapsed) = app.td_report_elapsed_secs {
-                spans.push(Span::styled(" •  ", Style::default().fg(C_MUTED)));
-                spans.push(Span::styled(
-                    format!("{elapsed:.1}s"),
-                    Style::default().fg(C_MUTED),
-                ));
-            }
-            Line::from(spans)
+            let color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
+            total_weekly_line(
+                &format_hours_signed(total),
+                color,
+                app.td_report_elapsed_secs,
+            )
         }
         _ => Line::default(),
     };
@@ -237,10 +219,25 @@ fn live_spinner_row(spinner_ch: char, index: usize) -> Line<'static> {
     ])
 }
 
-/// Reserved width for the Total Weekly value so the spinner (narrow) and the
-/// final balance string (e.g. `-999h 59m`) occupy the same column — no shift
-/// when the spinner is replaced by the real value.
-const BALANCE_COL_W: usize = 9;
+fn total_weekly_line(
+    value: &str,
+    value_color: ratatui::style::Color,
+    elapsed_secs: Option<f64>,
+) -> Line<'static> {
+    let padded = format!("{:<width$}", value, width = HOURS_DISPLAY_WIDTH);
+    let mut spans = vec![
+        Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
+        Span::styled(padded, Style::default().fg(value_color)),
+    ];
+    if let Some(elapsed) = elapsed_secs {
+        spans.push(Span::styled(" •  ", Style::default().fg(C_MUTED)));
+        spans.push(Span::styled(
+            format!("{elapsed:.1}s"),
+            Style::default().fg(C_MUTED),
+        ));
+    }
+    Line::from(spans)
+}
 
 fn clamp_to_ui_width(area: Rect, base_x: u16) -> Rect {
     Rect {

@@ -150,7 +150,7 @@ jotmate/
 │   │   └── native/              # Native Rust sync engine (used by both CLI and TUI)
 │   │       ├── mod.rs           # SyncOpts + run_tui orchestration (fork → rds)
 │   │       ├── headless.rs      # run_headless: single-line CLI spinner + ANSI output
-│   │       ├── git.rs           # git/git_ok/detect_default_branch helpers
+│   │       ├── git.rs           # git/detect_default_branch helpers
 │   │       ├── fork.rs          # fork-sync pipeline (stash/fetch/merge/push)
 │   │       ├── rds.rs           # rds-sync pipeline (./sync runner with skip rules)
 │   │       └── elapsed.rs       # per-repo elapsed-time ticker

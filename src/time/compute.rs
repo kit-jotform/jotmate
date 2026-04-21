@@ -47,6 +47,8 @@ pub fn get_target_hours(monday: NaiveDate, periods: &[ContractPeriod]) -> f64 {
     applicable
 }
 
+pub const HOURS_DISPLAY_WIDTH: usize = 9;
+
 pub fn format_hours(decimal_hours: f64) -> String {
     format_hours_with(decimal_hours, "")
 }
