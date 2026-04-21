@@ -1,5 +1,4 @@
 use ratatui::{
-    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
@@ -7,13 +6,12 @@ use ratatui::{
 
 use ratatui::style::Color;
 
+use crate::ansi::SPINNER;
 use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
-use super::{draw_screen_header, draw_scroll_table, hint_muted, HINT_RETURN_TO_MENU};
-
-const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+use super::{draw_screen_header, draw_scroll_table, hint_muted, inset_rect, HINT_RETURN_TO_MENU};
 
 const NAME_W: usize = 14;
 const FORK_W: usize = 22;
@@ -105,7 +103,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         ));
         parts.push(Span::styled(" skipped", Style::default().fg(C_TEXT)));
 
-        let summary_area = inset_h(
+        let summary_area = inset_rect(
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("summary")),
             LIST_H_INSET + 1,
         );
@@ -118,7 +116,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             .iter()
             .map(|repo| repo_row(repo, tick))
             .collect();
-        let list_area = inset_h(
+        let list_area = inset_rect(
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
             LIST_H_INSET,
         );
@@ -259,14 +257,6 @@ fn rds_status_color(status: &RdsStatus) -> Color {
         RdsStatus::Skipped(_) => C_WARN,
         RdsStatus::Error(_) => C_DANGEROUS,
         _ => C_ACCENT,
-    }
-}
-
-fn inset_h(area: Rect, margin: u16) -> Rect {
-    Rect {
-        x: area.x + margin,
-        width: area.width.saturating_sub(margin * 2),
-        ..area
     }
 }
 

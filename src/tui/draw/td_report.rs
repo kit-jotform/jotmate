@@ -11,12 +11,12 @@ use crate::tui::layout::UI_WIDTH;
 use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
 
 use super::{
-    draw_screen_header, draw_scroll_table, hint_muted, sub_screen_setup, HINT_RETURN_TO_MENU,
+    draw_screen_header, draw_scroll_table, hint_muted, inset_rect, sub_screen_setup,
+    HINT_RETURN_TO_MENU,
 };
 
+use crate::ansi::SPINNER;
 use crate::tui::palette::C_ACCENT;
-
-const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
 
 pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let (area, engine, layout) = sub_screen_setup(f);
@@ -53,10 +53,10 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let content_height = 2 + MAX_VISIBLE_ROWS.min(visible_row_count) as u16;
     let (content_area, total_area, hint_area) = split_content_total_hint(list_area, content_height);
     // Inset content 3 chars on each side
-    let content_area = inset_horizontal(content_area, 3);
+    let content_area = inset_rect(content_area, 3);
 
     // Total balance row
-    let total_area = inset_horizontal(total_area, 3);
+    let total_area = inset_rect(total_area, 3);
     let total_line = match &app.td_report {
         TdReportState::PartialReady { tick, .. } => {
             let spinner_ch = SPINNER[(*tick as usize) % SPINNER.len()];
@@ -216,15 +216,6 @@ fn clamp_to_ui_width(area: Rect, base_x: u16) -> Rect {
     Rect {
         x: base_x,
         width: UI_WIDTH.min(area.width),
-        ..area
-    }
-}
-
-fn inset_horizontal(area: Rect, margin: u16) -> Rect {
-    let inset = margin * 2;
-    Rect {
-        x: area.x + margin,
-        width: area.width.saturating_sub(inset),
         ..area
     }
 }

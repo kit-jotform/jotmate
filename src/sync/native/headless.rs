@@ -10,20 +10,13 @@ use std::path::PathBuf;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
+use crate::ansi::{
+    ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, ANSI_TEXT, ANSI_WARN,
+    SPINNER,
+};
 use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
 
 use super::{run_tui, SyncOpts};
-
-const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
-
-// ANSI color codes matching palette.rs indexed colors
-const ANSI_ACCENT: &str = "\x1b[38;5;51m"; // C_ACCENT  — cyan, in-progress count
-const ANSI_SUCCESS: &str = "\x1b[38;5;10m"; // C_SUCCESS — green, done count / ✓
-const ANSI_WARN: &str = "\x1b[38;5;11m"; // C_WARN    — yellow, skipped count
-const ANSI_DANGER: &str = "\x1b[38;5;9m"; // C_DANGEROUS — red, error count / ✗
-const ANSI_MUTED: &str = "\x1b[38;5;243m"; // C_MUTED   — separator •
-const ANSI_TEXT: &str = "\x1b[38;5;255m"; // C_TEXT    — labels
-const ANSI_RESET: &str = "\x1b[0m";
 
 pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
     let n = repo_paths.len();
@@ -127,7 +120,7 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, e
     let spinner_ch;
     let (icon, icon_color): (&str, &str) = if done {
         if errors > 0 {
-            ("✗", ANSI_DANGER)
+            ("✗", ANSI_DANGEROUS)
         } else {
             ("✓", ANSI_SUCCESS)
         }
@@ -142,7 +135,7 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, e
 
     if errors > 0 {
         line.push_str(&format!(
-            "  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_DANGER}{errors}{ANSI_RESET}{ANSI_TEXT} error{ANSI_RESET}"
+            "  {ANSI_MUTED}•{ANSI_RESET}  {ANSI_DANGEROUS}{errors}{ANSI_RESET}{ANSI_TEXT} error{ANSI_RESET}"
         ));
     }
 
@@ -168,7 +161,7 @@ fn print_errors(states: &[RepoSyncState]) {
             },
         };
         println!(
-            "  {ANSI_DANGER}{}{ANSI_RESET}  {ANSI_MUTED}{msg}{ANSI_RESET}",
+            "  {ANSI_DANGEROUS}{}{ANSI_RESET}  {ANSI_MUTED}{msg}{ANSI_RESET}",
             repo.name
         );
     }

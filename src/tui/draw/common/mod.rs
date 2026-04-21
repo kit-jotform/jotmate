@@ -32,6 +32,14 @@ pub(in crate::tui::draw) fn fmt_date(d: NaiveDate) -> String {
     d.format("%d-%m-%Y").to_string()
 }
 
+pub(in crate::tui::draw) fn inset_rect(area: Rect, margin: u16) -> Rect {
+    Rect {
+        x: area.x + margin,
+        width: area.width.saturating_sub(margin * 2),
+        ..area
+    }
+}
+
 pub(in crate::tui::draw) const DIVIDER_WIDTH: u16 = 53;
 pub(in crate::tui::draw) const SEPARATOR_WIDTH: usize = 46;
 
