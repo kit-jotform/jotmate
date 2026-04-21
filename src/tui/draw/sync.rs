@@ -1,4 +1,5 @@
 use ratatui::{
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
@@ -12,16 +13,14 @@ use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, 
 
 use super::{draw_screen_header, draw_scroll_table, hint_muted, HINT_RETURN_TO_MENU};
 
-// ── Spinner frames ──────────────────────────────────────────────────────────
-
 const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
 
-// ── Column widths ───────────────────────────────────────────────────────────
-
 const NAME_W: usize = 14;
-const FORK_W: usize = 24;
-const RDS_W: usize = 18;
+const FORK_W: usize = 22;
+const RDS_W: usize = 22;
 const ELAPSED_W: usize = 7;
+
+const LIST_H_INSET: u16 = 2;
 
 const LIST_VISIBLE: u16 = 6;
 
@@ -42,10 +41,10 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
 
     let is_scrollable = repo_count > LIST_VISIBLE;
 
-    // header row (col names + divider) + up to LIST_VISIBLE data rows
-    let list_height = 2 + LIST_VISIBLE;
+    let visible_rows = repo_count.min(LIST_VISIBLE);
+    let list_height = 2 + visible_rows;
 
-    let rows = ScreenLayout::new()
+    let mut layout = ScreenLayout::new()
         .row("logo", 3)
         .row("blank1", 1)
         .row("title", 1)
@@ -54,8 +53,11 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         .row("summary", 1)
         .row("blank3", 1)
         .row("list", list_height)
-        .row("blank4", 1)
-        .row("nav_hint", 1)
+        .row("blank4", 2);
+    if is_scrollable {
+        layout = layout.row("nav_hint", 1).row("blank5", 1);
+    }
+    let rows = layout
         .row("hint", 1)
         .row("errors", error_count)
         .margin(1)
@@ -103,10 +105,11 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
         ));
         parts.push(Span::styled(" skipped", Style::default().fg(C_TEXT)));
 
-        f.render_widget(
-            Paragraph::new(Line::from(parts)),
+        let summary_area = inset_h(
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("summary")),
+            LIST_H_INSET + 3,
         );
+        f.render_widget(Paragraph::new(Line::from(parts)), summary_area);
 
         // ── Repo list ──
         let tick = state.tick as usize;
@@ -115,13 +118,11 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
             .iter()
             .map(|repo| repo_row(repo, tick))
             .collect();
-        draw_scroll_table(
-            f,
+        let list_area = inset_h(
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
-            build_header(),
-            data_lines,
-            app.sync_scroll,
+            LIST_H_INSET,
         );
+        draw_scroll_table(f, list_area, build_header(), data_lines, app.sync_scroll);
 
         // ── Nav hint (only when list is scrollable) ──
         if is_scrollable {
@@ -259,6 +260,14 @@ fn rds_status_color(status: &RdsStatus) -> Color {
         RdsStatus::Skipped(_) => C_WARN,
         RdsStatus::Error(_) => C_DANGEROUS,
         _ => C_ACCENT,
+    }
+}
+
+fn inset_h(area: Rect, margin: u16) -> Rect {
+    Rect {
+        x: area.x + margin,
+        width: area.width.saturating_sub(margin * 2),
+        ..area
     }
 }
 
