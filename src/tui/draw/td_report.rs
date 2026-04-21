@@ -306,7 +306,12 @@ fn build_row(
     let week_color = if row.from_cache { C_TEXT } else { C_WARN };
 
     let worked_str = format!("{:>width$}", format_hours(worked_h), width = num_w);
-    let target_str = format!("{:>width$}", format_hours(row.target_hours), width = num_w);
+    let target_value = if row.from_cache {
+        format!("• {}", format_hours(row.target_hours))
+    } else {
+        format_hours(row.target_hours)
+    };
+    let target_str = format!("{:>width$}", target_value, width = num_w);
     let balance_str = format!("{:>width$}", format_hours_signed(balance), width = num_w);
 
     // Index prefix width scales with total (e.g. "9. " = 3, "23. " = 4)
