@@ -100,29 +100,58 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     Ok(())
 }
 
-/// Fetch all weeks sequentially for the TUI. Re-authenticates automatically on token expiry.
-pub async fn fetch_report(email: &str, opts: FetchOpts) -> Result<Vec<WeekRow>> {
+/// Fetch a specific set of weeks in parallel for the TUI.
+/// Authenticates once, retries on token expiry, and returns all rows.
+pub async fn fetch_weeks_parallel(
+    email: &str,
+    mondays: Vec<chrono::NaiveDate>,
+    opts: FetchOpts,
+) -> Result<Vec<WeekRow>> {
+    if mondays.is_empty() {
+        return Ok(vec![]);
+    }
+
     let mut auth_cookie = auth::get_or_refresh_token(email).await?;
     let client = reqwest::Client::new();
-    let mondays = compute::weeks_to_fetch(opts.start_date, opts.skip_current);
 
-    let mut rows: Vec<WeekRow> = Vec::new();
-    for monday in mondays {
-        let result = fetch_week(&client, &auth_cookie, monday, &opts).await;
-        let row = match result {
-            Ok(row) => row,
+    // Fetch all in parallel, collect results
+    let results = futures::future::join_all(
+        mondays
+            .iter()
+            .map(|&m| fetch_week(&client, &auth_cookie, m, &opts)),
+    )
+    .await;
+
+    // Check if any failed with TokenExpired; if so reauth and retry the failed ones
+    let mut rows = Vec::with_capacity(mondays.len());
+    let mut retry_mondays = Vec::new();
+
+    for (monday, result) in mondays.iter().zip(results) {
+        match result {
+            Ok(row) => rows.push(row),
             Err(e)
                 if e.downcast_ref::<AppError>()
                     .map(|ae| matches!(ae, AppError::TokenExpired))
                     .unwrap_or(false) =>
             {
-                auth_cookie = auth::reauth(email).await?;
-                fetch_week(&client, &auth_cookie, monday, &opts).await?
+                retry_mondays.push(*monday);
             }
             Err(e) => return Err(e),
-        };
-        rows.push(row);
-        sleep(Duration::from_millis(50)).await;
+        }
     }
+
+    if !retry_mondays.is_empty() {
+        auth_cookie = auth::reauth(email).await?;
+        let retry_results = futures::future::join_all(
+            retry_mondays
+                .iter()
+                .map(|&m| fetch_week(&client, &auth_cookie, m, &opts)),
+        )
+        .await;
+        for result in retry_results {
+            rows.push(result?);
+        }
+    }
+
     Ok(rows)
 }

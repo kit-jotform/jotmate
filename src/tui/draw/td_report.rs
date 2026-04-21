@@ -12,13 +12,19 @@ use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
 
 use super::{draw_screen_header, hint_muted, sub_screen_layout};
 
+use crate::tui::palette::C_ACCENT;
+
+const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+
 pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
     let layout = sub_screen_layout(engine.clamp_area(area));
 
     let hint_spans = match &app.td_report {
-        TdReportState::Ready { .. } => hint_muted(&["↑↓", " scroll  •  ", "⌫/Esc", " cancel"]),
+        TdReportState::Ready { .. } | TdReportState::PartialReady { .. } => {
+            hint_muted(&["↑↓", " scroll  •  ", "⌫/Esc", " cancel"])
+        }
         TdReportState::NoCredentials(_) | TdReportState::NoPeriods => {
             hint_muted(&["↵", " configure  •  ", "⌫/Esc", " cancel"])
         }
@@ -39,22 +45,34 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     // Clamp to UI_WIDTH so the report doesn't bleed across wide terminals.
     let list_area = clamp_to_ui_width(layout.get("list"), area.x);
     const MAX_VISIBLE_ROWS: usize = 6;
-    let content_height = match &app.td_report {
-        TdReportState::Ready { rows, .. } => 2 + MAX_VISIBLE_ROWS.min(rows.len()) as u16,
-        _ => 2,
+    let visible_row_count = match &app.td_report {
+        TdReportState::Ready { rows, .. } => rows.len(),
+        TdReportState::PartialReady { rows, pending, .. } => rows.len() + pending,
+        _ => 0,
     };
+    let content_height = 2 + MAX_VISIBLE_ROWS.min(visible_row_count) as u16;
     let (content_area, total_area, hint_area) = split_content_total_hint(list_area, content_height);
     // Inset content 3 chars on each side
     let content_area = inset_horizontal(content_area, 3);
 
-    // Total balance row (only in Ready state)
-    if let TdReportState::Ready { rows, .. } = &app.td_report {
+    // Total balance row (Ready and PartialReady)
+    let balance_rows: Option<(&Vec<crate::time::compute::WeekRow>, bool)> = match &app.td_report {
+        TdReportState::Ready { rows, .. } => Some((rows, false)),
+        TdReportState::PartialReady { rows, .. } => Some((rows, true)),
+        _ => None,
+    };
+    if let Some((rows, partial)) = balance_rows {
         let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
         let balance_color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
         let total_area = inset_horizontal(total_area, 3);
+        let label = if partial {
+            "Total Weekly (loading…): "
+        } else {
+            "Total Weekly: "
+        };
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
+                Span::styled(label, Style::default().fg(C_MUTED)),
                 Span::styled(
                     format_hours_signed(total),
                     Style::default().fg(balance_color),
@@ -68,6 +86,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let bottom_hint = match &app.td_report {
         TdReportState::Loading => "Loading...",
         TdReportState::Ready { .. } => "Press Enter to return to the main menu",
+        TdReportState::PartialReady { .. } => "Press Enter to return to the main menu",
         _ => "",
     };
     f.render_widget(
@@ -136,77 +155,128 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             f.render_widget(Paragraph::new(lines), content_area);
         }
 
+        TdReportState::PartialReady {
+            rows,
+            pending,
+            show_cumulative,
+            tick,
+        } => {
+            let spinner_ch = SPINNER[(*tick as usize) % SPINNER.len()];
+            let total = rows.len() + pending;
+            let mut data_lines: Vec<Line> = rows
+                .iter()
+                .enumerate()
+                .map(|(i, r)| build_row(r, *show_cumulative, i + 1, total))
+                .collect();
+            for n in 0..*pending {
+                data_lines.push(live_spinner_row(spinner_ch, rows.len() + 1 + n));
+            }
+            render_table(
+                f,
+                content_area,
+                *show_cumulative,
+                data_lines,
+                app.td_report_scroll,
+            );
+        }
+
         TdReportState::Ready {
             rows,
             show_cumulative,
         } => {
-            // Split content_area: fixed 2-row header + up to 6-row scrollable data
-            let data_area_height = MAX_VISIBLE_ROWS.min(rows.len()) as u16;
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(2), Constraint::Length(data_area_height)])
-                .split(content_area);
-            let header_area = chunks[0];
-            let data_area = chunks[1];
-
-            // Fixed header (never scrolls) — inset 2 chars on right to match gap + scrollbar
-            let header_text_area = Rect {
-                width: header_area.width.saturating_sub(2),
-                ..header_area
-            };
-            let divider = Line::from(Span::styled(
-                "─".repeat(header_text_area.width as usize),
-                Style::default().fg(C_MUTED),
-            ));
-            f.render_widget(
-                Paragraph::new(vec![build_header(*show_cumulative), divider]),
-                header_text_area,
-            );
-
-            // Scrollable data rows — always reserve 1 char on the right for the scrollbar
-            let total_rows = rows.len();
+            let total = rows.len();
             let data_lines: Vec<Line> = rows
                 .iter()
                 .enumerate()
-                .map(|(i, r)| build_row(r, *show_cumulative, i + 1, total_rows))
+                .map(|(i, r)| build_row(r, *show_cumulative, i + 1, total))
                 .collect();
-            let total_lines = data_lines.len();
-            let visible = data_area.height as usize;
-            let max_scroll = total_lines.saturating_sub(visible);
-            let scroll = app.td_report_scroll.min(max_scroll);
-
-            // Reserve gap(1) + scrollbar(1) on the right
-            let hchunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Min(0),
-                    Constraint::Length(1),
-                    Constraint::Length(1),
-                ])
-                .split(data_area);
-
-            f.render_widget(
-                Paragraph::new(data_lines).scroll((scroll as u16, 0)),
-                hchunks[0],
+            render_table(
+                f,
+                content_area,
+                *show_cumulative,
+                data_lines,
+                app.td_report_scroll,
             );
-
-            if total_lines > visible {
-                // Single-char thumb: position proportionally within the track height
-                let track_h = hchunks[2].height as usize;
-                let thumb_row = scroll * track_h.saturating_sub(1) / max_scroll;
-                let lines: Vec<Line> = (0..track_h)
-                    .map(|i| {
-                        if i == thumb_row {
-                            Line::from(Span::styled("▐", Style::default().fg(C_MUTED)))
-                        } else {
-                            Line::from(Span::styled("│", Style::default().fg(C_MUTED)))
-                        }
-                    })
-                    .collect();
-                f.render_widget(Paragraph::new(lines), hchunks[2]);
-            }
         }
     }
+}
+
+/// Render the header + scrollable data lines into `content_area`.
+fn render_table(
+    f: &mut ratatui::Frame,
+    content_area: Rect,
+    show_cumulative: bool,
+    data_lines: Vec<Line>,
+    scroll_pos: usize,
+) {
+    let data_area_height = content_area.height.saturating_sub(2);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Length(data_area_height)])
+        .split(content_area);
+    let header_area = chunks[0];
+    let data_area = chunks[1];
+
+    let header_text_area = Rect {
+        width: header_area.width.saturating_sub(2),
+        ..header_area
+    };
+    let divider = Line::from(Span::styled(
+        "─".repeat(header_text_area.width as usize),
+        Style::default().fg(C_MUTED),
+    ));
+    f.render_widget(
+        Paragraph::new(vec![build_header(show_cumulative), divider]),
+        header_text_area,
+    );
+
+    let total_lines = data_lines.len();
+    let visible = data_area.height as usize;
+    let max_scroll = total_lines.saturating_sub(visible);
+    let scroll = scroll_pos.min(max_scroll);
+
+    let hchunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(data_area);
+
+    f.render_widget(
+        Paragraph::new(data_lines).scroll((scroll as u16, 0)),
+        hchunks[0],
+    );
+
+    if total_lines > visible {
+        let track_h = hchunks[2].height as usize;
+        let thumb_row = scroll * track_h.saturating_sub(1) / max_scroll;
+        let scrollbar: Vec<Line> = (0..track_h)
+            .map(|i| {
+                if i == thumb_row {
+                    Line::from(Span::styled("▐", Style::default().fg(C_MUTED)))
+                } else {
+                    Line::from(Span::styled("│", Style::default().fg(C_MUTED)))
+                }
+            })
+            .collect();
+        f.render_widget(Paragraph::new(scrollbar), hchunks[2]);
+    }
+}
+
+/// Build the spinner row shown while the live week is still loading.
+fn live_spinner_row(spinner_ch: char, index: usize) -> Line<'static> {
+    let (week_w, _) = col_widths(true); // use widest layout to align with header
+    let idx_w = index.to_string().len() + 2;
+    let date_w = week_w.saturating_sub(idx_w);
+    let idx_str = format!("{:>width$}. ", index, width = index.to_string().len());
+    let placeholder = format!("{:<width$}", "fetching…", width = date_w);
+    Line::from(vec![
+        Span::styled(format!("{spinner_ch} "), Style::default().fg(C_ACCENT)),
+        Span::styled(idx_str, Style::default().fg(C_MUTED)),
+        Span::styled(placeholder, Style::default().fg(C_MUTED)),
+    ])
 }
 
 fn clamp_to_ui_width(area: Rect, base_x: u16) -> Rect {
