@@ -1,7 +1,6 @@
 use std::path::Path;
 use tokio::process::Command;
 
-/// Run a git command and return trimmed stdout, or a stderr-derived error.
 pub(super) async fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
         .args(["-C", &repo.to_string_lossy()])
@@ -22,7 +21,6 @@ pub(super) async fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// Run a git command and return whether it exited successfully.
 pub(super) async fn git_ok(repo: &Path, args: &[&str]) -> bool {
     Command::new("git")
         .args(["-C", &repo.to_string_lossy()])

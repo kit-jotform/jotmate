@@ -71,7 +71,6 @@ fn format_hours_with(decimal_hours: f64, positive_sign: &str) -> String {
     }
 }
 
-/// Returns Mondays from start_date to today, newest first.
 pub fn weeks_to_fetch(start_date: NaiveDate, skip_current_week: bool) -> Vec<NaiveDate> {
     let today = Local::now().date_naive();
     let this_week_monday = get_week_start_monday(today);
@@ -91,11 +90,10 @@ pub fn weeks_to_fetch(start_date: NaiveDate, skip_current_week: bool) -> Vec<Nai
         current -= chrono::Duration::days(7);
     }
 
-    weeks // already newest-first
+    weeks
 }
 
 pub fn compute_cumulative(rows: &mut [WeekRow], reset_from: Option<NaiveDate>) {
-    // Compute oldest→newest, then assign back
     let mut ordered: Vec<usize> = (0..rows.len()).collect();
     ordered.sort_by_key(|&i| rows[i].monday);
 

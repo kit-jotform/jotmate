@@ -11,7 +11,6 @@ use super::compute::{
     get_week_start_monday, is_past_week, WeekRow,
 };
 
-/// All parameters that control how weeks are fetched. Shared between CLI and TUI.
 #[derive(Clone)]
 pub struct FetchOpts {
     pub timezone: String,
@@ -19,8 +18,6 @@ pub struct FetchOpts {
     pub no_cache: bool,
 }
 
-/// Fetch a single week's data. Uses the local cache for past weeks unless `no_cache` is set.
-/// Propagates `AppError::TokenExpired` so callers can decide whether to re-auth or abort.
 pub async fn fetch_week(
     client: &reqwest::Client,
     cookie: &str,

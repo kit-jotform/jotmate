@@ -15,7 +15,6 @@ mod sync;
 mod td_report;
 mod time;
 
-// Re-export helpers at `super::*` scope for sibling draw submodules.
 pub(in crate::tui::draw) use common::{
     back_item, blank_item, del_item, divider_item, draw_confirm_dialog, draw_screen_header,
     draw_scroll_table, field_state, fmt_date, hint_confirm_cancel, hint_input_confirm, hint_muted,

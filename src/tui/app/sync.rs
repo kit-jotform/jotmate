@@ -9,7 +9,6 @@ use super::screen::Screen;
 use super::App;
 
 impl App {
-    /// Initialize sync screen state from enabled repos and resolved paths.
     pub fn start_sync(
         &mut self,
         repo_paths: HashMap<String, PathBuf>,
@@ -41,7 +40,6 @@ impl App {
         self.screen = Screen::SyncProgress;
     }
 
-    /// Apply a sync update message to the sync state.
     pub fn apply_sync_update(&mut self, update: SyncUpdate) {
         if let Some(state) = &mut self.sync_state {
             match update {
@@ -69,7 +67,6 @@ impl App {
         }
     }
 
-    /// Check if all sync repos are in a terminal state.
     pub fn sync_is_complete(&self) -> bool {
         self.sync_state
             .as_ref()

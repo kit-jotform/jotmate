@@ -233,6 +233,8 @@ Prefer changes that stay small, coherent, and easy to reason about. When editing
 
 These principles reinforce each other: one responsibility per unit, one canonical definition per concept, and no unnecessary repetition.
 
+- **Comments** — Only comment when the WHY is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific bug. Well-named identifiers already explain what the code does — don't restate them. Keep comments concise (one line max). If removing the comment wouldn't confuse a future reader, don't write it.
+
 ## Key constraints
 
 - The `ansi-to-tui` crate is incompatible with ratatui 0.29 (requires <0.27) — don't add it.

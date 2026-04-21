@@ -3,8 +3,6 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-// ── Fork sync status ──────────────────────────────────────────────────────────
-
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub enum ForkStatus {
@@ -56,8 +54,6 @@ impl ForkStatus {
     }
 }
 
-// ── RDS sync status ───────────────────────────────────────────────────────────
-
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub enum RdsStatus {
@@ -95,8 +91,6 @@ impl RdsStatus {
     }
 }
 
-// ── Per-repo sync state ───────────────────────────────────────────────────────
-
 #[derive(Clone, Debug)]
 pub struct RepoSyncState {
     pub name: String,
@@ -131,15 +125,11 @@ impl RepoSyncState {
     }
 }
 
-// ── Sync channel messages ─────────────────────────────────────────────────────
-
 pub enum SyncUpdate {
     Fork(usize, ForkStatus),
     Rds(usize, RdsStatus),
     Elapsed(usize, f64),
 }
-
-// ── Sync screen state ─────────────────────────────────────────────────────────
 
 pub struct SyncScreenState {
     pub repos: Vec<RepoSyncState>,

@@ -1,5 +1,3 @@
-//! Shared dispatcher helpers used by multiple per-screen handlers.
-
 use std::ops::ControlFlow;
 
 use crossterm::event::KeyCode;
@@ -54,7 +52,6 @@ pub(super) fn list_activate_row<R: Clone>(
     ControlFlow::Continue(list.get(app.selected_index(screen)).cloned())
 }
 
-/// Handle a yes/no confirm dialog. Runs `on_yes` when confirmed, clears input mode on cancel.
 pub(super) fn handle_yes_no(app: &mut App, code: KeyCode, on_yes: fn(&mut App)) -> Action {
     if is_yes(code) {
         on_yes(app);
@@ -80,7 +77,6 @@ pub(super) fn handle_cycle(app: &mut App, code: KeyCode, target: CycleTarget) ->
     Action::Continue
 }
 
-/// Handle a single-line text input. `on_enter` is called with the buffer when Enter is pressed.
 pub(super) fn handle_text_input(
     app: &mut App,
     code: KeyCode,
@@ -108,7 +104,6 @@ pub(super) fn handle_text_input(
     Action::Continue
 }
 
-/// Returns a mutable reference to the buffer inside the active text-editing input mode.
 pub(super) fn text_buf_mut(app: &mut App) -> Option<&mut String> {
     match &mut app.input_mode {
         InputMode::AddingRepo(buf) => Some(buf),
@@ -117,7 +112,6 @@ pub(super) fn text_buf_mut(app: &mut App) -> Option<&mut String> {
     }
 }
 
-/// Clones the current text buffer value without changing input mode.
 pub(super) fn text_buf_take(app: &App) -> Option<String> {
     match &app.input_mode {
         InputMode::AddingRepo(buf) => Some(buf.clone()),

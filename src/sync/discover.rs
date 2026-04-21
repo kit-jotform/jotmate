@@ -59,13 +59,10 @@ fn get_remote_url(repo_path: &Path, remote: &str) -> Option<String> {
     None
 }
 
-/// Returns the upstream URL for a repo, falling back to origin if no upstream remote exists.
 pub fn get_upstream_url(repo_path: &Path) -> Option<String> {
     get_remote_url(repo_path, "upstream").or_else(|| get_remote_url(repo_path, "origin"))
 }
 
-/// Build a lookup map from (normalized URL → project name) for enabled repos,
-/// including SSH variants of HTTPS URLs.
 pub fn build_upstream_map(repos: &[UpstreamRepo]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for repo in repos.iter().filter(|r| r.enabled) {
@@ -74,7 +71,6 @@ pub fn build_upstream_map(repos: &[UpstreamRepo]) -> HashMap<String, String> {
         map.insert(format!("{}.git", url), repo.name.clone());
         map.insert(url.to_string(), repo.name.clone());
 
-        // Derive SSH form from HTTPS: https://github.com/org/repo → git@github.com:org/repo
         if let Some(rest) = repo.url.strip_prefix("https://") {
             if let Some(slash) = rest.find('/') {
                 let host = &rest[..slash];

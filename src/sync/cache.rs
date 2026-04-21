@@ -45,7 +45,6 @@ pub fn save(cache: &RepoPathsCache) -> Result<()> {
     Ok(())
 }
 
-/// Returns true if all expected project names exist in the cache and their paths are valid.
 pub fn is_valid(cache: &RepoPathsCache, expected_names: &[&str]) -> bool {
     for name in expected_names {
         match cache.paths.get(*name) {

@@ -39,7 +39,6 @@ pub(super) fn launch_sync(app: &mut App) {
     let (tx, rx) = mpsc::unbounded_channel();
     app.start_sync(paths.clone(), rx);
 
-    // Build repo list with indices matching sync_state.repos order
     let repo_list: Vec<(usize, std::path::PathBuf)> = app
         .sync_state
         .as_ref()

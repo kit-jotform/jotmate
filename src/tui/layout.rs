@@ -1,20 +1,12 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 /// Canonical UI width — matches the full header (icon 14 + gap 2 + logo 63).
 pub const UI_WIDTH: u16 = 79;
 
-// ── Horizontal alignment ──────────────────────────────────────────────────────
-
 pub enum HAlign {
-    /// Flush with the left edge of the UI area.
     Left,
-    /// Horizontally centered within `UI_WIDTH`.
     Center,
 }
-
-// ── Widget descriptor ─────────────────────────────────────────────────────────
 
 pub struct Widget {
     pub width: u16,
@@ -83,8 +75,6 @@ impl LayoutEngine {
     }
 }
 
-// ── Screen layout (vertical rows) ─────────────────────────────────────────────
-
 pub struct ScreenLayout {
     rows: Vec<(&'static str, u16)>, // (name, height); 0 → Min(0)
     margin: u16,
@@ -98,7 +88,6 @@ impl ScreenLayout {
         }
     }
 
-    /// Add a named row. `height = 0` becomes `Constraint::Min(0)`.
     pub fn row(mut self, name: &'static str, height: u16) -> Self {
         self.rows.push((name, height));
         self
@@ -139,12 +128,9 @@ impl ScreenLayout {
     }
 }
 
-// ── RowMap ────────────────────────────────────────────────────────────────────
-
 pub struct RowMap(Vec<(&'static str, Rect)>);
 
 impl RowMap {
-    /// Get the `Rect` for a named row. Panics with a clear message if the name is unknown.
     pub fn get(&self, name: &str) -> Rect {
         self.0
             .iter()

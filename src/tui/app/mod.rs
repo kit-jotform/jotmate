@@ -30,11 +30,6 @@ mod screen;
 mod sync;
 mod td_report;
 
-// ── Public re-exports ─────────────────────────────────────────────────────────
-//
-// External modules import row types, screen, sync types, and TD report state
-// from `crate::tui::app::*`. Keep these flat so the refactor is a pure move.
-
 pub use constants::WEEKLY_HOURS_OPTIONS;
 pub use screen::{Screen, MAIN_ITEMS};
 pub use td_report::TdReportState;
@@ -72,8 +67,6 @@ pub struct TimeSettings {
     pub contract_periods: Vec<ContractPeriod>,
 }
 
-/// Ephemeral state for the "add new contract period" inline form on the
-/// ContractPeriods screen.
 pub struct AddCpForm {
     pub monday: NaiveDate,
     pub hours_idx: usize,
@@ -91,11 +84,8 @@ pub struct App {
     pub sync: SyncSettings,
     pub td: TimeSettings,
     pub add_cp: AddCpForm,
-    // Sync progress state
     pub sync_state: Option<SyncScreenState>,
-    // Auth error message to show on TimeDoctorSettings screen
     pub auth_error: Option<String>,
-    // Channel for receiving TD report results from the background fetch task
     pub td_report_rx:
         Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
 }

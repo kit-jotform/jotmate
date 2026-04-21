@@ -1,7 +1,5 @@
 use chrono::NaiveDate;
 
-// ── Input mode (used inside RepoManager and TimeDoctorSettings) ──────────────
-
 #[derive(Clone, PartialEq)]
 pub enum InputMode {
     Normal,
@@ -11,14 +9,9 @@ pub enum InputMode {
     SelectingTimezone(usize),   // ↑↓ cycles timezone; stored value = snapshot for cancel
     EditingCpMonday(NaiveDate), // ↑↓ cycles monday date; stored value = snapshot for cancel
     EditingCpHours(usize),      // ↑↓ cycles hours option; stored value = snapshot for cancel
-    EditingField {
-        // editing a text field in TimeDoctorSettings
-        field: TimeDoctorField,
-        buf: String,
-    },
+    EditingField { field: TimeDoctorField, buf: String },
 }
 
-/// Which Time Doctor field is being edited
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TimeDoctorField {
     Email,
@@ -33,8 +26,6 @@ pub enum CycleTarget {
     CpMonday,
     CpHours,
 }
-
-// ── Toggle kind ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
 pub enum ToggleKind {
@@ -59,8 +50,6 @@ impl ToggleKind {
         )
     }
 }
-
-// ── Settings rows ────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub enum SettingRow {
@@ -88,8 +77,6 @@ impl SettingRow {
         )
     }
 }
-
-// ── General toggle rows (shared by Sync General & TD General sub-screens) ────
 
 #[derive(Clone)]
 pub enum GeneralToggleRow {
@@ -120,18 +107,14 @@ impl GeneralToggleRow {
     }
 }
 
-// ── Time Doctor settings rows ─────────────────────────────────────────────────
-
 #[derive(Clone)]
 pub enum TimeSettingRow {
-    /// Editable text field (email)
     EditField {
         field: TimeDoctorField,
         label: &'static str,
         value: String,
         masked: bool,
     },
-    /// Password row — shows [set] / [not set] badge instead of value
     Password {
         is_set: bool,
     },
@@ -150,8 +133,6 @@ impl TimeSettingRow {
         )
     }
 }
-
-// ── Contract period rows ──────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub enum CpListRow {
@@ -182,8 +163,6 @@ impl CpListRow {
     }
 }
 
-// ── Repo manager rows ─────────────────────────────────────────────────────────
-
 #[derive(Clone)]
 pub enum RepoManagerRow {
     Blank,
@@ -209,8 +188,6 @@ impl RepoManagerRow {
         )
     }
 }
-
-// ── Remove repos rows ─────────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub enum RemoveRepoRow {

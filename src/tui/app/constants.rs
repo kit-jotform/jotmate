@@ -3,8 +3,6 @@ use chrono::{Local, NaiveDate};
 use crate::config::DEFAULT_TIMEZONE;
 use crate::time::compute::get_week_start_monday;
 
-// ── Timezone options ──────────────────────────────────────────────────────────
-
 pub const TIMEZONES: &[&str] = &[
     "America/New_York",
     "America/Chicago",
@@ -22,8 +20,6 @@ pub const TIMEZONES: &[&str] = &[
     "Australia/Sydney",
     "Pacific/Auckland",
 ];
-
-// ── Weekly hours options ─────────────────────────────────────────────────────
 
 pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
 

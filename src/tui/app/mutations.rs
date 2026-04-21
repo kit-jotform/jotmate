@@ -27,8 +27,6 @@ impl App {
         }
     }
 
-    /// Enter inline editing for `target`, snapshotting the current value so
-    /// cancel can restore it.
     pub fn enter_cycle(&mut self, target: CycleTarget) {
         self.input_mode = match target {
             CycleTarget::Timezone => InputMode::SelectingTimezone(self.td.timezone_idx),
@@ -37,7 +35,6 @@ impl App {
         };
     }
 
-    /// Advance the value for `target` by `delta` (±1). Persists if needed.
     pub fn cycle(&mut self, target: CycleTarget, delta: i32) {
         match target {
             CycleTarget::Timezone => {
@@ -55,7 +52,6 @@ impl App {
         }
     }
 
-    /// Cancel an in-progress cycle edit by restoring the snapshot stored in the InputMode variant.
     pub fn cancel_cycle_edit(&mut self) {
         match self.input_mode.clone() {
             InputMode::SelectingTimezone(snapshot) => {
@@ -142,7 +138,6 @@ impl App {
 
     // ── Repo management ───────────────────────────────────────────────────────
 
-    /// Derive a short name from a URL (last path component, stripped of .git).
     fn name_from_url(url: &str) -> String {
         url.trim_end_matches('/')
             .trim_end_matches(".git")

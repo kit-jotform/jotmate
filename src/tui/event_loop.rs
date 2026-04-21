@@ -80,8 +80,6 @@ fn dispatch_key(app: &mut App, key: KeyEvent, on_exit: impl FnOnce(&mut App)) ->
     }
 }
 
-/// One tick of the TD-report screen. Polls for the background fetch result and
-/// Returns `true` if the event loop should exit.
 async fn handle_td_report_tick(
     _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,

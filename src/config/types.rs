@@ -71,11 +71,7 @@ impl Default for SyncConfig {
     }
 }
 
-/// TimeDoctor company ID — hardcoded, not user-configurable
 pub const TIMEDOCTOR_COMPANY_ID: &str = "Xms4iFqBgQAEjLy2";
-
-/// Canonical default timezone — used as the fallback when none is configured
-/// and as the initial value in the interactive prompt.
 pub const DEFAULT_TIMEZONE: &str = "Europe/Istanbul";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

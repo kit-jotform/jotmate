@@ -29,7 +29,6 @@ pub(super) async fn sync_rds(
 
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Preparing));
 
-    // Decide whether to skip (mirrors prepare_project_sync from bash).
     if opts.smart_sync && matches!(fork_result, ForkResult::Unchanged) {
         match skip_reason(repo, tx, idx).await {
             SkipDecision::Skip(reason) => {
@@ -41,13 +40,11 @@ pub(super) async fn sync_rds(
         }
     }
 
-    // Check if ./sync exists
     if !repo.join("sync").exists() {
         let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Skipped("no ./sync".into())));
         return;
     }
 
-    // Run ./sync
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Running));
     let output = Command::new("./sync").current_dir(repo).output().await;
 

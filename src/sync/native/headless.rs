@@ -56,7 +56,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
     let mut sync_done = false;
 
     let _ = terminal::enable_raw_mode();
-    print!("\x1b[?25l"); // hide cursor
+    print!("\x1b[?25l");
     let _ = std::io::stdout().flush();
 
     loop {
@@ -70,7 +70,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     sync_task.abort();
                     let _ = terminal::disable_raw_mode();
-                    print!("\x1b[?25h"); // restore cursor
+                    print!("\x1b[?25h");
                     println!();
                     return;
                 }
@@ -88,7 +88,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
         if sync_done || states.iter().all(|r| r.is_complete()) {
             print_line(&states, n, tick, true, elapsed);
             let _ = terminal::disable_raw_mode();
-            print!("\x1b[?25h"); // restore cursor
+            print!("\x1b[?25h");
             println!();
             print_errors(&states);
             println!();

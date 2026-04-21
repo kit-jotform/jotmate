@@ -138,13 +138,11 @@ impl App {
         self.list_state_mut(screen).select(Some(i));
     }
 
-    /// Select the first interactive row of the given screen (for use when navigating in).
     pub fn select_first_interactive(&mut self, screen: Screen) {
         let i = with_rows!(self, screen, rows, is_int => first_interactive(&rows, is_int); 0);
         self.select(screen, i);
     }
 
-    /// Navigate the current screen's list by `delta`, skipping non-interactive rows.
     pub fn navigate_current(&mut self, delta: i32) {
         let screen = self.screen;
         let cur = self.selected_index(screen);

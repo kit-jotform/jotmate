@@ -3,8 +3,6 @@ use tokio::sync::mpsc;
 
 use crate::tui::app::SyncUpdate;
 
-/// Emit `Elapsed` updates for each tracked repo every 100ms.
-/// Runs until aborted.
 pub(super) async fn track_elapsed(
     tx: mpsc::UnboundedSender<SyncUpdate>,
     starts: Vec<(usize, Instant)>,

@@ -1,5 +1,3 @@
-//! List-item builders shared by every draw sub-screen.
-
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
@@ -10,12 +8,10 @@ use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, 
 
 use super::{HINT_CYCLE_VALUE, SEPARATOR_WIDTH};
 
-/// Empty row — used as vertical spacing between sections.
 pub(in crate::tui::draw) fn blank_item() -> ListItem<'static> {
     ListItem::new(Line::raw(""))
 }
 
-/// Unlabelled muted divider line spanning `SEPARATOR_WIDTH` characters.
 pub(in crate::tui::draw) fn divider_item() -> ListItem<'static> {
     ListItem::new(Line::from(vec![
         Span::raw("  "),
@@ -116,7 +112,6 @@ pub(in crate::tui::draw) enum FieldState {
     Editing,
 }
 
-/// Collapse `(is_selected, is_editing)` into a `FieldState`.
 pub(in crate::tui::draw) fn field_state(is_sel: bool, editing: bool) -> FieldState {
     if editing {
         FieldState::Editing
@@ -127,7 +122,6 @@ pub(in crate::tui::draw) fn field_state(is_sel: bool, editing: bool) -> FieldSta
     }
 }
 
-/// Render one inline label+value row with consistent state visuals.
 pub(in crate::tui::draw) fn inline_field_item(
     label: &str,
     value: &str,
@@ -158,7 +152,6 @@ pub(in crate::tui::draw) fn inline_field_item(
     ListItem::new(Line::from(spans))
 }
 
-/// Selection-arrow/indent prefix used by most focusable list rows.
 fn focused_prefix(is_sel: bool) -> Vec<Span<'static>> {
     if is_sel {
         vec![Span::styled("▸ ", Style::default().fg(C_PRIMARY))]
@@ -167,8 +160,6 @@ fn focused_prefix(is_sel: bool) -> Vec<Span<'static>> {
     }
 }
 
-/// Destructive-action row: `▸ [del] detail` (selected, red) or `  [del] detail`
-/// (unselected, muted). Used by the Remove Repos list and Contract Periods.
 pub(in crate::tui::draw) fn del_item(is_sel: bool, detail: String) -> ListItem<'static> {
     if is_sel {
         ListItem::new(Line::from(vec![
@@ -194,9 +185,6 @@ pub(in crate::tui::draw) fn link_item(is_sel: bool, label: &str) -> ListItem<'st
     link_item_styled(is_sel, label, C_TEXT)
 }
 
-/// Like `link_item` but renders the unselected label in `C_MUTED` — used for
-/// sub-actions (e.g. "+ Add upstream URL", "→ Remove Repos") that should read
-/// as secondary affordances until focused.
 pub(in crate::tui::draw) fn sub_link_item(is_sel: bool, label: &str) -> ListItem<'static> {
     link_item_styled(is_sel, label, C_MUTED)
 }

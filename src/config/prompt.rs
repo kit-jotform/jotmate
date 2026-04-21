@@ -6,7 +6,6 @@ use super::io::{config_path, save};
 use super::parse::parse_contract_periods;
 use super::types::{Config, DEFAULT_TIMEZONE};
 
-/// Prompts for any missing TimeConfig fields interactively. Saves config before returning.
 pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
     let mut changed = false;
 

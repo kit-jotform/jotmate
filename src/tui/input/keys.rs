@@ -1,5 +1,3 @@
-//! Key classifiers shared by every input handler.
-
 use crossterm::event::KeyCode;
 
 pub(super) fn nav_delta(code: KeyCode) -> Option<i32> {

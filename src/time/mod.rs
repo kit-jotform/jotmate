@@ -75,8 +75,6 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     Ok(())
 }
 
-/// Animate spinner until fetch completes or user presses 'q'.
-/// Returns `None` if the user quit, otherwise `Some((rows, elapsed_secs))`.
 async fn run_spinner(
     rx: tokio::sync::oneshot::Receiver<Result<Vec<WeekRow>>>,
 ) -> Result<Option<(Vec<WeekRow>, f64)>> {
@@ -116,8 +114,6 @@ async fn run_spinner(
     Ok(Some((rows, start.elapsed().as_secs_f64())))
 }
 
-/// Fetch a specific set of weeks in parallel for the TUI.
-/// Authenticates once, retries on token expiry, and returns all rows.
 pub async fn fetch_weeks_parallel(
     email: &str,
     mondays: Vec<chrono::NaiveDate>,
