@@ -144,7 +144,7 @@ impl App {
                 skip_current_week: config.time.skip_current_week,
                 use_time_cache: config.time.use_time_cache,
                 show_cumulative: config.time.show_cumulative,
-                password_is_set: crate::time::auth::load_password_from_keychain().is_some(),
+                password_is_set: crate::time::keychain::load_password_from_keychain().is_some(),
                 contract_periods,
             },
             add_cp: AddCpForm {

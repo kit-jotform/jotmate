@@ -36,11 +36,11 @@ type FetchResult = std::result::Result<Vec<crate::time::compute::WeekRow>, Strin
 fn map_err(e: anyhow::Error) -> String {
     match e.downcast_ref::<crate::error::AppError>() {
         Some(crate::error::AppError::TokenExpired) => {
-            let _ = crate::time::auth::delete_token_from_keychain();
+            let _ = crate::time::keychain::delete_token_from_keychain();
             "AUTH_FAILED:Session expired — please re-enter your password.".to_string()
         }
         Some(crate::error::AppError::AuthFailed(msg)) => {
-            let _ = crate::time::auth::delete_token_from_keychain();
+            let _ = crate::time::keychain::delete_token_from_keychain();
             format!("AUTH_FAILED:{msg}")
         }
         _ => "Could not connect to TimeDoctor. Check your internet connection and try again."
@@ -244,8 +244,8 @@ impl App {
             return false;
         }
         // Delete old session token so a fresh login is triggered with the new password
-        let _ = crate::time::auth::delete_token_from_keychain();
-        match crate::time::auth::save_password_to_keychain(password) {
+        let _ = crate::time::keychain::delete_token_from_keychain();
+        match crate::time::keychain::save_password_to_keychain(password) {
             Ok(()) => {
                 self.td.password_is_set = true;
                 true

@@ -4,6 +4,8 @@ use crate::tui::palette::C_MUTED;
 
 pub(in crate::tui::draw) const HINT_CYCLE_VALUE: &str = "  ↑↓ change  •  ↵ confirm  •  ⌫ cancel";
 
+pub(in crate::tui::draw) const HINT_RETURN_TO_MENU: &str = "Press Enter to return to the main menu";
+
 pub(in crate::tui::draw) fn hint_muted(parts: &[&str]) -> Vec<Span<'static>> {
     parts
         .iter()

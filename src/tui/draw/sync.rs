@@ -11,7 +11,7 @@ use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
 
-use super::{draw_screen_header, hint_muted};
+use super::{draw_screen_header, hint_muted, HINT_RETURN_TO_MENU};
 
 // ── Spinner frames ──────────────────────────────────────────────────────────
 
@@ -133,7 +133,7 @@ pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
 
         // ── Hint ──
         let hint_text = if is_complete {
-            "Press Enter to return to the main menu"
+            HINT_RETURN_TO_MENU
         } else {
             "Syncing..."
         };

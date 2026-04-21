@@ -75,6 +75,7 @@ Selecting Sync or Time from the main menu closes the TUI, restores the terminal,
 | `C_MUTED` | 8 (dark gray) | Dividers, hints, unselected text, `[OFF]` badge |
 | `C_LOGO` | = `C_TEXT` | Full logo on MainMenu |
 | `C_DANGEROUS` | 9 (red) | `[del]` actions, confirmation dialog border |
+| `C_WARN` | 11 (yellow) | Skipped/warning count in sync headless output |
 
 All colors use `Color::Indexed(n)` for terminal-safe 256-color values. Never use named `Color::*` variants (e.g. `Color::Red`) — they vary by terminal theme.
 
@@ -105,13 +106,15 @@ Inline value selectors (dates, hours, timezone, etc.) must **not** enter editing
 
 ### Sync (src/sync/)
 
-`jotmate sync` runs entirely in native Rust — no shell scripts are used. Repos are discovered via `fd -H -t d "^\.git$" ~` matched against upstream URLs, with results cached at `~/.cache/jotmate/repo_paths.json`. The sync engine (`native/`) runs all repos in parallel through two phases (fork sync → RDS sync) and streams progress updates over an unbounded channel. The CLI entry point (`run_headless`) renders a single overwriting status line to stdout (e.g. `⠧ 3/4 complete  •  2 skipped`) and finalises with a `✓` or `✗` icon.
+`jotmate sync` runs entirely in native Rust — no shell scripts are used. Repos are discovered via `fd -H -t d "^\.git$" ~` matched against upstream URLs, with results cached at `~/.cache/jotmate/repo_paths.json`. The sync engine (`native/`) runs all repos in parallel through two phases (fork sync → RDS sync) and streams progress updates over an unbounded channel. The CLI entry point `run_headless` (in `native/headless.rs`) renders a single overwriting status line to stdout (e.g. `⠧ 3/4 complete  •  2 skipped`) and finalises with a `✓` or `✗` icon.
 
 The `scripts/` folder contains reference examples only and is not used by the binary.
 
 ### Time tracking (src/time/)
 
 TimeDoctor uses cookie-based auth stored in the system keychain (macOS Keychain / Linux secret-service). No plaintext fallback. Weekly data cached at `~/.cache/jotmate/time/<company_id>/YYYY-MM-DD.json`.
+
+Responsibilities are split across `auth.rs` (HTTP login / reauth / password prompt) and `keychain.rs` (all `security` CLI wrappers for session cookie + password). The headless CLI spinner and final-line renderer live in `display.rs`, called from `time::run()`.
 
 ### Config
 
@@ -145,19 +148,21 @@ jotmate/
 │   │   ├── cache.rs             # RepoPathsCache — load/save/invalidate ~/.cache/jotmate/repo_paths.json
 │   │   ├── discover.rs          # fd-based git repo discovery; matches repos to upstream URLs
 │   │   └── native/              # Native Rust sync engine (used by both CLI and TUI)
-│   │       ├── mod.rs           # SyncOpts + run_tui + run_headless entry points
+│   │       ├── mod.rs           # SyncOpts + run_tui orchestration (fork → rds)
+│   │       ├── headless.rs      # run_headless: single-line CLI spinner + ANSI output
 │   │       ├── git.rs           # git/git_ok/detect_default_branch helpers
 │   │       ├── fork.rs          # fork-sync pipeline (stash/fetch/merge/push)
 │   │       ├── rds.rs           # rds-sync pipeline (./sync runner with skip rules)
 │   │       └── elapsed.rs       # per-repo elapsed-time ticker
 │   ├── time/
-│   │   ├── mod.rs               # run() entry: auth, batch-fetches weeks, computes, displays
-│   │   ├── auth.rs              # Keychain read/write for TimeDoctor session cookie; browser login flow
+│   │   ├── mod.rs               # run() entry: auth, batch-fetches weeks, computes, delegates render
+│   │   ├── auth.rs              # TimeDoctor HTTP login, reauth, password prompt
+│   │   ├── keychain.rs          # macOS `security` CLI wrappers for session cookie + password
 │   │   ├── api.rs               # HTTP client: fetches weekly stats from TimeDoctor API
 │   │   ├── cache.rs             # Per-week JSON cache at ~/.cache/jotmate/time/<company_id>/YYYY-MM-DD.json
 │   │   ├── fetch.rs             # High-level weekly fetch + cache orchestration
 │   │   ├── compute.rs           # WeekRow, weeks_to_fetch, cumulative balance, target hours logic
-│   │   └── display.rs           # ANSI terminal table renderer for WeekRow results
+│   │   └── display.rs           # Headless spinner + final-line ANSI renderer
 │   └── tui/
 │       ├── mod.rs               # Terminal setup/teardown, run_interactive/run_settings entry points
 │       ├── event_loop.rs        # Async event loop + per-screen tick handlers

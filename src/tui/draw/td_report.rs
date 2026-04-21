@@ -10,7 +10,7 @@ use crate::tui::app::{App, TdReportState};
 use crate::tui::layout::{LayoutEngine, UI_WIDTH};
 use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
 
-use super::{draw_screen_header, hint_muted, sub_screen_layout};
+use super::{draw_screen_header, hint_muted, sub_screen_layout, HINT_RETURN_TO_MENU};
 
 use crate::tui::palette::C_ACCENT;
 
@@ -83,8 +83,8 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     // Bottom status hint
     let bottom_hint = match &app.td_report {
         TdReportState::Loading => "Loading...",
-        TdReportState::Ready { .. } => "Press Enter to return to the main menu",
-        TdReportState::PartialReady { .. } => "Press Enter to return to the main menu",
+        TdReportState::Ready { .. } => HINT_RETURN_TO_MENU,
+        TdReportState::PartialReady { .. } => HINT_RETURN_TO_MENU,
         _ => "",
     };
     f.render_widget(

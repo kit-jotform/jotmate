@@ -60,7 +60,7 @@ pub(super) fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
                     if !is_valid_email(&buf) {
                         app.auth_error = Some("Invalid email address.".to_string());
                     } else {
-                        let _ = crate::time::auth::delete_token_from_keychain();
+                        let _ = crate::time::keychain::delete_token_from_keychain();
                         app.td.email = buf;
                         app.persist_td_settings();
                     }
