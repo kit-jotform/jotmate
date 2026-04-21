@@ -5,11 +5,14 @@ pub mod compute;
 pub mod fetch;
 
 use anyhow::Result;
+use chrono::NaiveDate;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::terminal;
 
 use crate::cli::TimeArgs;
-use crate::config;
+use crate::config::{self, TIMEDOCTOR_COMPANY_ID};
 use crate::error::AppError;
-use compute::WeekRow;
+use compute::{build_week_row_from_cache, get_week_start_monday, WeekRow};
 pub use fetch::{fetch_week, FetchOpts};
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
@@ -46,25 +49,70 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         return Ok(());
     }
 
-    // Spawn the parallel fetch and animate a spinner on the same line.
-    let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<WeekRow>>>();
-    let email_owned = email.to_string();
-    let mondays_clone = mondays.clone();
-    let opts_clone = opts.clone();
-    tokio::spawn(async move {
-        let _ = tx.send(fetch_weeks_parallel(&email_owned, mondays_clone, opts_clone).await);
-    });
+    // Split mondays into cached (compute cumulative now) and uncached (fetch in background).
+    let today = chrono::Local::now().date_naive();
+    let current_monday = get_week_start_monday(today);
+    let mut cached_rows: Vec<WeekRow> = Vec::new();
+    let mut uncached_mondays: Vec<NaiveDate> = Vec::new();
 
-    // Animate spinner until result arrives, showing live elapsed time.
+    if !args.no_cache {
+        for &monday in &mondays {
+            if monday < current_monday {
+                if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, monday) {
+                    cached_rows.push(build_week_row_from_cache(
+                        monday,
+                        &stats,
+                        &opts.contract_periods,
+                    ));
+                    continue;
+                }
+            }
+            uncached_mondays.push(monday);
+        }
+    } else {
+        uncached_mondays = mondays.clone();
+    }
+
+    // Spawn fetch for uncached weeks only.
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<WeekRow>>>();
+    if uncached_mondays.is_empty() {
+        // All cached — send empty result immediately.
+        let _ = tx.send(Ok(vec![]));
+    } else {
+        let email_owned = email.to_string();
+        let opts_clone = opts.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(fetch_weeks_parallel(&email_owned, uncached_mondays, opts_clone).await);
+        });
+    }
+
+    // Animate spinner until result arrives, showing live elapsed time and cached cumulative.
     let mut tick: usize = 0;
     let mut rx = rx;
     let start = std::time::Instant::now();
-    let result = loop {
+    let _ = terminal::enable_raw_mode();
+    print!("\x1b[?25l"); // hide cursor
+    let new_rows = loop {
         let spinner_ch = SPINNER[tick % SPINNER.len()];
         let secs = start.elapsed().as_secs_f64();
-        print!("\r     {MUTED}Total Weekly:{RESET} {CYAN}{spinner_ch}{RESET}  {MUTED}{secs:.1}s{RESET}  ");
         use std::io::Write;
+        let cum_part = format!("{CYAN}{spinner_ch}{RESET}     ");
+        print!(
+            "\r     {MUTED}Total Weekly:{RESET} {CYAN}{spinner_ch}{RESET}  {MUTED}•  Cumulative:{RESET} {cum_part}  {MUTED}•  {secs:.1}s{RESET}  "
+        );
         let _ = std::io::stdout().flush();
+
+        // Check for 'q' keypress without blocking
+        while event::poll(std::time::Duration::ZERO).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                    let _ = terminal::disable_raw_mode();
+                    print!("\x1b[?25h"); // restore cursor
+                    println!();
+                    return Ok(());
+                }
+            }
+        }
 
         tokio::select! {
             res = &mut rx => {
@@ -75,22 +123,23 @@ pub async fn run(args: TimeArgs) -> Result<()> {
             }
         }
     };
+    let _ = terminal::disable_raw_mode();
+    print!("\x1b[?25h"); // restore cursor
 
     let elapsed = start.elapsed().as_secs_f64();
 
-    let mut rows = result?;
+    // Merge cached + newly fetched rows, recompute cumulative.
+    let mut rows = cached_rows;
+    rows.extend(new_rows?);
     compute::compute_cumulative(&mut rows, reset_from);
 
-    let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
-    let cumulative = rows
-        .iter()
-        .max_by_key(|r| r.monday)
-        .map(|r| r.cumulative_hours)
-        .unwrap_or(0.0);
+    let newest = rows.iter().max_by_key(|r| r.monday);
+    let weekly = newest.map(|r| r.balance_hours).unwrap_or(0.0);
+    let cumulative = newest.map(|r| r.cumulative_hours).unwrap_or(0.0);
 
-    let weekly_color = if total >= 0.0 { GREEN } else { RED };
+    let weekly_color = if weekly >= 0.0 { GREEN } else { RED };
     let cum_color = if cumulative >= 0.0 { GREEN } else { RED };
-    let weekly_val = compute::format_hours_signed(total);
+    let weekly_val = compute::format_hours_signed(weekly);
     let cum_val = compute::format_hours_signed(cumulative);
     println!(
         "\r     {MUTED}Total Weekly:{RESET} {weekly_color}{weekly_val}{RESET}  {MUTED}•  {RESET}{MUTED}Cumulative:{RESET} {cum_color}{cum_val}{RESET}  {MUTED}•  {elapsed:.1}s{RESET}  "
