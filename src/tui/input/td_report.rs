@@ -2,22 +2,23 @@ use crossterm::event::KeyCode;
 
 use crate::tui::app::{App, Screen, TdReportState};
 
+use super::helpers::clamp_scroll;
 use super::Action;
 
 pub(super) fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
     match code {
-        KeyCode::Up | KeyCode::Left => {
-            app.td_report_scroll = app.td_report_scroll.saturating_sub(1);
-        }
-        KeyCode::Down | KeyCode::Right => {
-            let max_scroll = match &app.td_report {
-                TdReportState::Ready { rows, .. } => rows.len().saturating_sub(6),
-                TdReportState::PartialReady { rows, pending, .. } => {
-                    (rows.len() + pending).saturating_sub(6)
-                }
+        KeyCode::Up | KeyCode::Left | KeyCode::Down | KeyCode::Right => {
+            let total = match &app.td_report {
+                TdReportState::Ready { rows, .. } => rows.len(),
+                TdReportState::PartialReady { rows, pending, .. } => rows.len() + pending,
                 _ => 0,
             };
-            app.td_report_scroll = (app.td_report_scroll + 1).min(max_scroll);
+            let delta = if matches!(code, KeyCode::Up | KeyCode::Left) {
+                -1
+            } else {
+                1
+            };
+            app.td_report_scroll = clamp_scroll(app.td_report_scroll, delta, total, 6);
         }
         KeyCode::Enter => match app.td_report {
             TdReportState::NoPeriods => app.screen = Screen::ContractPeriods,

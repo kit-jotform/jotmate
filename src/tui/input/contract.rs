@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 
 use crate::tui::app::{App, CpListRow, CycleTarget, InputMode, Screen};
 
-use super::helpers::list_activate_row;
+use super::helpers::{execute_if_confirmed, list_activate_row};
 use super::Action;
 
 pub(super) fn handle_contract_periods(app: &mut App, code: KeyCode) -> Action {
@@ -26,7 +26,15 @@ pub(super) fn handle_contract_periods(app: &mut App, code: KeyCode) -> Action {
 }
 
 pub(super) fn execute_pending_period_delete(app: &mut App) {
-    if let InputMode::ConfirmDeletePeriod(idx) = app.input_mode {
-        app.execute_delete_period(idx);
-    }
+    execute_if_confirmed(
+        app,
+        |m| {
+            if let InputMode::ConfirmDeletePeriod(i) = m {
+                Some(*i)
+            } else {
+                None
+            }
+        },
+        |a, idx| a.execute_delete_period(idx),
+    );
 }

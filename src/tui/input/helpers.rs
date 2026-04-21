@@ -53,6 +53,25 @@ pub(super) fn handle_yes_no(app: &mut App, code: KeyCode, on_yes: fn(&mut App)) 
     Action::Continue
 }
 
+pub(super) fn execute_if_confirmed<T: Clone>(
+    app: &mut App,
+    extract: impl Fn(&InputMode) -> Option<T>,
+    execute: fn(&mut App, T),
+) {
+    if let Some(val) = extract(&app.input_mode.clone()) {
+        execute(app, val);
+    }
+}
+
+pub(super) fn clamp_scroll(current: usize, delta: i32, total: usize, visible: usize) -> usize {
+    let max = total.saturating_sub(visible);
+    if delta < 0 {
+        current.saturating_sub(1)
+    } else {
+        (current + 1).min(max)
+    }
+}
+
 pub(super) fn handle_cycle(app: &mut App, code: KeyCode, target: CycleTarget) -> Action {
     if let Some(delta) = cycle_delta(code) {
         app.cycle(target, delta);

@@ -121,63 +121,73 @@ impl App {
     }
 
     pub fn cp_list_items(&self) -> Vec<CpListRow> {
-        let mut rows: Vec<CpListRow> = vec![
+        let periods = self
+            .td
+            .contract_periods
+            .iter()
+            .enumerate()
+            .map(|(i, p)| CpListRow::Period {
+                index: i,
+                from: p.from,
+                weekly_hours: p.weekly_hours,
+            });
+        let mut rows = vec![
             CpListRow::SectionTitle("Contract Periods"),
             CpListRow::Blank,
         ];
-        rows.extend(
-            self.td
-                .contract_periods
-                .iter()
-                .enumerate()
-                .map(|(i, p)| CpListRow::Period {
-                    index: i,
-                    from: p.from,
-                    weekly_hours: p.weekly_hours,
-                }),
-        );
-        rows.push(CpListRow::Blank);
-        rows.push(CpListRow::Separator);
-        rows.push(CpListRow::MondayField);
-        rows.push(CpListRow::HoursField);
-        rows.push(CpListRow::Blank);
-        rows.push(CpListRow::SavePeriod);
-        rows.push(CpListRow::Separator);
-        rows.push(CpListRow::Blank);
-        rows.push(CpListRow::Back);
+        rows.extend(periods);
+        rows.extend([
+            CpListRow::Blank,
+            CpListRow::Separator,
+            CpListRow::MondayField,
+            CpListRow::HoursField,
+            CpListRow::Blank,
+            CpListRow::SavePeriod,
+            CpListRow::Separator,
+            CpListRow::Blank,
+            CpListRow::Back,
+        ]);
         rows
     }
 
     pub fn repo_manager_items(&self) -> Vec<RepoManagerRow> {
-        let mut rows: Vec<RepoManagerRow> = vec![];
-        for r in &self.sync.repos {
-            rows.push(RepoManagerRow::RepoToggle {
+        let mut rows: Vec<RepoManagerRow> = self
+            .sync
+            .repos
+            .iter()
+            .map(|r| RepoManagerRow::RepoToggle {
                 name: r.name.clone(),
                 url: r.url.clone(),
                 enabled: r.enabled,
-            });
-        }
-        rows.push(RepoManagerRow::Blank);
-        rows.push(RepoManagerRow::AddUrl);
-        rows.push(RepoManagerRow::Blank);
-        rows.push(RepoManagerRow::RemoveReposLink);
-        rows.push(RepoManagerRow::Blank);
-        rows.push(RepoManagerRow::Separator);
-        rows.push(RepoManagerRow::Back);
+            })
+            .collect();
+        rows.extend([
+            RepoManagerRow::Blank,
+            RepoManagerRow::AddUrl,
+            RepoManagerRow::Blank,
+            RepoManagerRow::RemoveReposLink,
+            RepoManagerRow::Blank,
+            RepoManagerRow::Separator,
+            RepoManagerRow::Back,
+        ]);
         rows
     }
 
     pub fn remove_repo_items(&self) -> Vec<RemoveRepoRow> {
-        let mut rows: Vec<RemoveRepoRow> = vec![];
-        for r in &self.sync.repos {
-            rows.push(RemoveRepoRow::RepoDelete {
+        let mut rows: Vec<RemoveRepoRow> = self
+            .sync
+            .repos
+            .iter()
+            .map(|r| RemoveRepoRow::RepoDelete {
                 name: r.name.clone(),
                 url: r.url.clone(),
-            });
-        }
-        rows.push(RemoveRepoRow::Blank);
-        rows.push(RemoveRepoRow::Separator);
-        rows.push(RemoveRepoRow::Back);
+            })
+            .collect();
+        rows.extend([
+            RemoveRepoRow::Blank,
+            RemoveRepoRow::Separator,
+            RemoveRepoRow::Back,
+        ]);
         rows
     }
 }
