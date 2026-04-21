@@ -2,11 +2,9 @@ pub mod api;
 pub mod auth;
 pub mod cache;
 pub mod compute;
-pub mod display;
 pub mod fetch;
 
 use anyhow::Result;
-use tokio::time::{sleep, Duration};
 
 use crate::cli::TimeArgs;
 use crate::config;
@@ -14,8 +12,12 @@ use crate::error::AppError;
 use compute::WeekRow;
 pub use fetch::{fetch_week, FetchOpts};
 
-const BATCH_SIZE: usize = 10;
-const BATCH_DELAY_MS: u64 = 500;
+const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
+const GREEN: &str = "\x1b[92m";
+const RED: &str = "\x1b[91m";
+const CYAN: &str = "\x1b[96m";
+const MUTED: &str = "\x1b[90m";
+const RESET: &str = "\x1b[0m";
 
 pub async fn run(args: TimeArgs) -> Result<()> {
     let mut cfg = config::load()?;
@@ -30,72 +32,55 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         .or_else(|| contract_periods.first().map(|p| p.from))
         .ok_or_else(|| anyhow::anyhow!("No start date or contract periods configured"))?;
     let skip_current = args.skip_current_week || time_cfg.skip_current_week;
-    let show_cumulative = time_cfg.show_cumulative;
     let reset_from = time_cfg.reset_cumulative_from_date;
 
     let opts = FetchOpts {
         timezone: timezone.to_string(),
         contract_periods: contract_periods.to_vec(),
-        start_date,
-        skip_current,
         no_cache: args.no_cache,
     };
 
-    // Get auth token (with retry on 401)
-    let cookie = auth::get_or_refresh_token(email).await?;
-
-    let client = reqwest::Client::new();
-
-    let mondays = compute::weeks_to_fetch(opts.start_date, opts.skip_current);
+    let mondays = compute::weeks_to_fetch(start_date, skip_current);
     if mondays.is_empty() {
-        println!("No weeks to fetch.");
+        println!("Total Weekly: no weeks");
         return Ok(());
     }
 
-    eprintln!(
-        "Fetching {} weeks in batches of {}...",
-        mondays.len(),
-        BATCH_SIZE
-    );
+    // Spawn the parallel fetch and animate a spinner on the same line.
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<WeekRow>>>();
+    let email_owned = email.to_string();
+    let mondays_clone = mondays.clone();
+    let opts_clone = opts.clone();
+    tokio::spawn(async move {
+        let _ = tx.send(fetch_weeks_parallel(&email_owned, mondays_clone, opts_clone).await);
+    });
 
-    let mut rows: Vec<WeekRow> = Vec::new();
-    let mut auth_cookie = cookie;
+    // Animate spinner until result arrives.
+    let mut tick: usize = 0;
+    let mut rx = rx;
+    let result = loop {
+        let spinner_ch = SPINNER[tick % SPINNER.len()];
+        print!("\r{MUTED}Total Weekly:{RESET} {CYAN}{spinner_ch}{RESET} ");
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
 
-    for (batch_idx, chunk) in mondays.chunks(BATCH_SIZE).enumerate() {
-        if batch_idx > 0 {
-            sleep(Duration::from_millis(BATCH_DELAY_MS)).await;
-        }
-
-        let batch_futures = chunk
-            .iter()
-            .map(|&monday| fetch_week(&client, &auth_cookie, monday, &opts));
-        let results = futures::future::join_all(batch_futures).await;
-
-        for result in results {
-            match result {
-                Ok(row) => rows.push(row),
-                Err(e) => {
-                    // Check if token expired, re-auth once
-                    if e.downcast_ref::<AppError>()
-                        .map(|ae| matches!(ae, AppError::TokenExpired))
-                        .unwrap_or(false)
-                    {
-                        eprintln!("Session expired, re-authenticating...");
-                        auth_cookie = auth::reauth(email).await?;
-                        // Note: the failed weeks in this batch are skipped; user can re-run
-                        eprintln!(
-                            "Re-authenticated. Some weeks may be missing — re-run to fetch them."
-                        );
-                    } else {
-                        eprintln!("Warning: {e}");
-                    }
-                }
+        tokio::select! {
+            res = &mut rx => {
+                break res.map_err(|_| anyhow::anyhow!("fetch task dropped"))?;
+            }
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                tick += 1;
             }
         }
-    }
+    };
 
+    let mut rows = result?;
     compute::compute_cumulative(&mut rows, reset_from);
-    display::print_results(&rows, show_cumulative);
+
+    let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
+    let color = if total >= 0.0 { GREEN } else { RED };
+    let value = compute::format_hours_signed(total);
+    println!("\r{MUTED}Total Weekly:{RESET} {color}{value}{RESET}  ");
 
     Ok(())
 }

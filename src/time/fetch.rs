@@ -15,8 +15,6 @@ use super::compute::{
 pub struct FetchOpts {
     pub timezone: String,
     pub contract_periods: Vec<ContractPeriod>,
-    pub start_date: NaiveDate,
-    pub skip_current: bool,
     pub no_cache: bool,
 }
 

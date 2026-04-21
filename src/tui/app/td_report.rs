@@ -88,8 +88,6 @@ impl App {
         let opts = crate::time::FetchOpts {
             timezone: TIMEZONES[self.td.timezone_idx].to_string(),
             contract_periods: self.td.contract_periods.clone(),
-            start_date,
-            skip_current: self.td.skip_current_week,
             no_cache: !self.td.use_time_cache,
         };
 
