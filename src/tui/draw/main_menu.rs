@@ -21,10 +21,11 @@ const TAGLINES: &[&str] = &[
     "Keep your RDS always in sync!",
     "How many hours are you behind?",
 ];
-const TAGLINE_CYCLE_MS: u64 = 6000;
+const TAGLINE_CYCLE_MS: u64 = 10000;
 const TAGLINE_FADE_MS: u64 = 600;
-// Palette index 243 ≈ rgb(118, 118, 118); fade towards black.
-const TAGLINE_RGB: (u8, u8, u8) = (118, 118, 118);
+// 256-color grayscale ramp from black to ≈ C_MUTED.
+// 232 = near-black, 243 = C_MUTED tone.
+const TAGLINE_GRAY_RAMP: &[u8] = &[232, 234, 236, 238, 240, 241, 242, 243];
 
 fn current_tagline() -> (&'static str, Color) {
     let now_ms = SystemTime::now()
@@ -35,8 +36,6 @@ fn current_tagline() -> (&'static str, Color) {
     let phase = now_ms % TAGLINE_CYCLE_MS;
     let idx = ((now_ms / TAGLINE_CYCLE_MS) as usize) % TAGLINES.len();
 
-    // First half of FADE window → current line fading out.
-    // Second half → next line fading in.
     let (line_idx, alpha) = if phase < TAGLINE_FADE_MS / 2 {
         let out = phase as f32 / (TAGLINE_FADE_MS as f32 / 2.0);
         (
@@ -50,13 +49,10 @@ fn current_tagline() -> (&'static str, Color) {
         (idx, 1.0)
     };
 
-    let (r, g, b) = TAGLINE_RGB;
-    let faded = Color::Rgb(
-        (r as f32 * alpha) as u8,
-        (g as f32 * alpha) as u8,
-        (b as f32 * alpha) as u8,
-    );
-    (TAGLINES[line_idx], faded)
+    let last = TAGLINE_GRAY_RAMP.len() - 1;
+    let ramp_idx = (alpha * last as f32).round() as usize;
+    let color = Color::Indexed(TAGLINE_GRAY_RAMP[ramp_idx.min(last)]);
+    (TAGLINES[line_idx], color)
 }
 
 pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
