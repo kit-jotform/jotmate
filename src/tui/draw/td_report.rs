@@ -168,10 +168,10 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             for n in 0..*pending {
                 data_lines.push(live_spinner_row(spinner_ch, rows.len() + 1 + n));
             }
-            draw_scroll_table(
+            draw_report_table(
                 f,
                 content_area,
-                build_header(*show_cumulative),
+                *show_cumulative,
                 data_lines,
                 app.td_report_scroll,
             );
@@ -187,15 +187,25 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
                 .enumerate()
                 .map(|(i, r)| build_row(r, *show_cumulative, i + 1, total))
                 .collect();
-            draw_scroll_table(
+            draw_report_table(
                 f,
                 content_area,
-                build_header(*show_cumulative),
+                *show_cumulative,
                 data_lines,
                 app.td_report_scroll,
             );
         }
     }
+}
+
+fn draw_report_table(
+    f: &mut ratatui::Frame,
+    area: Rect,
+    show_cumulative: bool,
+    data_lines: Vec<Line>,
+    scroll: usize,
+) {
+    draw_scroll_table(f, area, build_header(show_cumulative), data_lines, scroll);
 }
 
 fn live_spinner_row(spinner_ch: char, index: usize) -> Line<'static> {

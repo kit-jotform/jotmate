@@ -9,7 +9,7 @@ use crate::tui::palette::{C_ACCENT, C_MUTED, C_PRIMARY, C_WARN};
 
 use super::{
     back_item, blank_item, del_item, divider_item, draw_confirm_dialog, draw_screen_header,
-    field_state, fmt_date, hint_confirm_cancel, hint_navigate_action, inline_field_item,
+    field_state, fmt_date, fmt_hours, hint_confirm_cancel, hint_navigate_action, inline_field_item,
     sub_screen_setup, FIELD_LABEL_W,
 };
 
@@ -83,15 +83,10 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 }
                 CpListRow::HoursField => {
                     let hours_val = WEEKLY_HOURS_OPTIONS[app.add_cp.hours_idx];
-                    let value = if hours_val.fract() == 0.0 {
-                        format!("{}h", hours_val as u32)
-                    } else {
-                        format!("{hours_val}h")
-                    };
                     let editing = matches!(app.input_mode, InputMode::EditingCpHours(_));
                     inline_field_item(
                         "Weekly hours",
-                        &value,
+                        &fmt_hours(hours_val),
                         field_state(is_sel, editing),
                         FIELD_LABEL_W,
                     )
@@ -99,12 +94,8 @@ pub fn draw_contract_periods(f: &mut ratatui::Frame, app: &App) {
                 CpListRow::Period {
                     from, weekly_hours, ..
                 } => {
-                    let hours_display = if weekly_hours.fract() == 0.0 {
-                        format!("{}h/week", *weekly_hours as u32)
-                    } else {
-                        format!("{weekly_hours}h/week")
-                    };
-                    let detail = format!("  {}  {}", fmt_date(*from), hours_display);
+                    let detail =
+                        format!("  {}  {}/week", fmt_date(*from), fmt_hours(*weekly_hours));
                     del_item(is_sel, detail)
                 }
             }

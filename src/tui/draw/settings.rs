@@ -35,8 +35,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::Divider => divider_item(),
 
                 SettingRow::Separator => {
-                    let rows = app.settings_items();
-                    let sep_count = rows[..i]
+                    let sep_count = setting_rows[..i]
                         .iter()
                         .filter(|r| matches!(r, SettingRow::Separator))
                         .count();

@@ -32,6 +32,14 @@ pub(in crate::tui::draw) fn fmt_date(d: NaiveDate) -> String {
     d.format("%d-%m-%Y").to_string()
 }
 
+pub(in crate::tui::draw) fn fmt_hours(h: f64) -> String {
+    if h.fract() == 0.0 {
+        format!("{}h", h as u32)
+    } else {
+        format!("{h}h")
+    }
+}
+
 pub(in crate::tui::draw) fn inset_rect(area: Rect, margin: u16) -> Rect {
     Rect {
         x: area.x + margin,
