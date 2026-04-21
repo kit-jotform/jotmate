@@ -138,20 +138,20 @@ impl App {
         }
 
         if uncached_mondays.is_empty() {
-            // Everything was cached — finalize immediately.
-            if let TdReportState::PartialReady {
-                rows,
-                show_cumulative,
-                ..
-            } = &self.td_report
-            {
-                let rows = rows.clone();
-                let show_cumulative = *show_cumulative;
-                self.td_report = TdReportState::Ready {
+            // Nothing to fetch — finalize immediately from whatever we have.
+            let (rows, show_cumulative) = match &self.td_report {
+                TdReportState::PartialReady {
                     rows,
                     show_cumulative,
-                };
-            }
+                    ..
+                } => (rows.clone(), *show_cumulative),
+                _ => (vec![], self.td.show_cumulative),
+            };
+            self.td_report_scroll = rows.len().saturating_sub(6);
+            self.td_report = TdReportState::Ready {
+                rows,
+                show_cumulative,
+            };
             return;
         }
 

@@ -55,32 +55,30 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     // Inset content 3 chars on each side
     let content_area = inset_horizontal(content_area, 3);
 
-    // Total balance row (Ready and PartialReady)
-    let balance_rows: Option<(&Vec<crate::time::compute::WeekRow>, bool)> = match &app.td_report {
-        TdReportState::Ready { rows, .. } => Some((rows, false)),
-        TdReportState::PartialReady { rows, .. } => Some((rows, true)),
-        _ => None,
-    };
-    if let Some((rows, partial)) = balance_rows {
-        let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
-        let balance_color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
-        let total_area = inset_horizontal(total_area, 3);
-        let label = if partial {
-            "Total Weekly (loading…): "
-        } else {
-            "Total Weekly: "
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(label, Style::default().fg(C_MUTED)),
+    // Total balance row
+    let total_area = inset_horizontal(total_area, 3);
+    let total_line = match &app.td_report {
+        TdReportState::PartialReady { tick, .. } => {
+            let spinner_ch = SPINNER[(*tick as usize) % SPINNER.len()];
+            Line::from(vec![
+                Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
+                Span::styled(spinner_ch.to_string(), Style::default().fg(C_ACCENT)),
+            ])
+        }
+        TdReportState::Ready { rows, .. } => {
+            let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
+            let balance_color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
+            Line::from(vec![
+                Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
                 Span::styled(
                     format_hours_signed(total),
                     Style::default().fg(balance_color),
                 ),
-            ])),
-            total_area,
-        );
-    }
+            ])
+        }
+        _ => Line::default(),
+    };
+    f.render_widget(Paragraph::new(total_line), total_area);
 
     // Bottom status hint
     let bottom_hint = match &app.td_report {
