@@ -100,17 +100,28 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     Ok(())
 }
 
-/// Fetch all weeks sequentially for the TUI. Bails on token expiry.
+/// Fetch all weeks sequentially for the TUI. Re-authenticates automatically on token expiry.
 pub async fn fetch_report(email: &str, opts: FetchOpts) -> Result<Vec<WeekRow>> {
-    let auth_cookie = auth::get_or_refresh_token(email).await?;
+    let mut auth_cookie = auth::get_or_refresh_token(email).await?;
     let client = reqwest::Client::new();
     let mondays = compute::weeks_to_fetch(opts.start_date, opts.skip_current);
 
     let mut rows: Vec<WeekRow> = Vec::new();
     for monday in mondays {
-        let row = fetch_week(&client, &auth_cookie, monday, &opts).await?;
+        let result = fetch_week(&client, &auth_cookie, monday, &opts).await;
+        let row = match result {
+            Ok(row) => row,
+            Err(e)
+                if e.downcast_ref::<AppError>()
+                    .map(|ae| matches!(ae, AppError::TokenExpired))
+                    .unwrap_or(false) =>
+            {
+                auth_cookie = auth::reauth(email).await?;
+                fetch_week(&client, &auth_cookie, monday, &opts).await?
+            }
+            Err(e) => return Err(e),
+        };
         rows.push(row);
-        // Small delay between API calls to avoid hammering
         sleep(Duration::from_millis(50)).await;
     }
     Ok(rows)

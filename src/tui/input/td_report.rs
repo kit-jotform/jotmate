@@ -18,6 +18,7 @@ pub(super) fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
         KeyCode::Enter => match app.td_report {
             TdReportState::NoPeriods => app.screen = Screen::ContractPeriods,
             TdReportState::NoCredentials(_) => app.screen = Screen::TimeDoctorSettings,
+            TdReportState::Ready { .. } => app.screen = Screen::MainMenu,
             _ => {}
         },
         KeyCode::Esc | KeyCode::Backspace => app.screen = Screen::MainMenu,

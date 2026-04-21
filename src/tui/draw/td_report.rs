@@ -8,7 +8,7 @@ use ratatui::{
 use crate::time::compute::{format_hours, format_hours_signed};
 use crate::tui::app::{App, TdReportState};
 use crate::tui::layout::{LayoutEngine, UI_WIDTH};
-use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN};
+use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
 
 use super::{draw_screen_header, hint_muted, sub_screen_layout};
 
@@ -18,12 +18,11 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     let layout = sub_screen_layout(engine.clamp_area(area));
 
     let hint_spans = match &app.td_report {
-        TdReportState::Loading => hint_muted(&["loading…"]),
-        TdReportState::Error(_) => hint_muted(&["⌫/Esc", " back"]),
+        TdReportState::Ready { .. } => hint_muted(&["↑↓", " scroll  •  ", "⌫/Esc", " cancel"]),
         TdReportState::NoCredentials(_) | TdReportState::NoPeriods => {
-            hint_muted(&["↵", " configure  •  ", "⌫/Esc", " back"])
+            hint_muted(&["↵", " configure  •  ", "⌫/Esc", " cancel"])
         }
-        TdReportState::Ready { .. } => hint_muted(&["↑↓", " scroll  •  ", "⌫/Esc", " back"]),
+        _ => hint_muted(&["⌫/Esc", " cancel"]),
     };
 
     draw_screen_header(
@@ -36,23 +35,47 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         hint_spans,
     );
 
-    // Split the list area into scrollable content + fixed back footer.
+    // Split the list area into scrollable content + total balance + hint row.
     // Clamp to UI_WIDTH so the report doesn't bleed across wide terminals.
     let list_area = clamp_to_ui_width(layout.get("list"), area.x);
-    let (content_area, back_area) = split_content_back(list_area);
+    const MAX_VISIBLE_ROWS: usize = 6;
+    let content_height = match &app.td_report {
+        TdReportState::Ready { rows, .. } => 2 + MAX_VISIBLE_ROWS.min(rows.len()) as u16,
+        _ => 2,
+    };
+    let (content_area, total_area, hint_area) = split_content_total_hint(list_area, content_height);
     // Inset content 3 chars on each side
     let content_area = inset_horizontal(content_area, 3);
 
-    // Fixed "← Back" footer, always visible
+    // Total balance row (only in Ready state)
+    if let TdReportState::Ready { rows, .. } = &app.td_report {
+        let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
+        let balance_color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
+        let total_area = inset_horizontal(total_area, 3);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled("Total Weekly: ", Style::default().fg(C_MUTED)),
+                Span::styled(
+                    format_hours_signed(total),
+                    Style::default().fg(balance_color),
+                ),
+            ])),
+            total_area,
+        );
+    }
+
+    // Bottom status hint
+    let bottom_hint = match &app.td_report {
+        TdReportState::Loading => "Loading...",
+        TdReportState::Ready { .. } => "Press Enter to return to the main menu",
+        _ => "",
+    };
     f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("▸ ", Style::default().fg(C_PRIMARY)),
-            Span::styled(
-                "← Back",
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ),
-        ])),
-        back_area,
+        Paragraph::new(Line::from(Span::styled(
+            bottom_hint,
+            Style::default().fg(C_MUTED),
+        ))),
+        hint_area,
     );
 
     match &app.td_report {
@@ -118,7 +141,6 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
             show_cumulative,
         } => {
             // Split content_area: fixed 2-row header + up to 6-row scrollable data
-            const MAX_VISIBLE_ROWS: usize = 6;
             let data_area_height = MAX_VISIBLE_ROWS.min(rows.len()) as u16;
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -204,13 +226,20 @@ fn inset_horizontal(area: Rect, margin: u16) -> Rect {
     }
 }
 
-/// Split `area` into (content, back_footer) — footer is 2 rows: blank + Back item.
-fn split_content_back(area: Rect) -> (Rect, Rect) {
+/// Split `area` into (content, total, hint) with content sized to `content_height`
+/// and a blank row between content and total.
+fn split_content_total_hint(area: Rect, content_height: u16) -> (Rect, Rect, Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(2)])
+        .constraints([
+            Constraint::Length(content_height),
+            Constraint::Length(1), // blank
+            Constraint::Length(1), // total
+            Constraint::Length(1), // blank
+            Constraint::Length(1), // hint
+        ])
         .split(area);
-    (chunks[0], chunks[1])
+    (chunks[0], chunks[2], chunks[4])
 }
 
 const WEEK_W: usize = 26; // 4-char index prefix + 22-char date range
