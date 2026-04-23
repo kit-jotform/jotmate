@@ -1,18 +1,18 @@
 use std::path::Path;
-use tokio::process::Command;
 use tokio::sync::mpsc;
 
 use crate::tui::app::{RdsStatus, SyncUpdate};
 
 use super::fork::ForkResult;
-use super::git::git;
+use super::git::GitExec;
 
-pub(super) struct RdsOpts {
+pub struct RdsOpts {
     pub skip_rds_sync: bool,
     pub smart_sync: bool,
 }
 
-pub(super) async fn sync_rds(
+pub async fn sync_rds(
+    git: &dyn GitExec,
     idx: usize,
     repo: &Path,
     fork_result: &ForkResult,
@@ -30,7 +30,7 @@ pub(super) async fn sync_rds(
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Preparing));
 
     if opts.smart_sync && matches!(fork_result, ForkResult::Unchanged) {
-        match skip_reason(repo, tx, idx).await {
+        match skip_reason(git, repo, tx, idx).await {
             SkipDecision::Skip(reason) => {
                 let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Skipped(reason)));
                 return;
@@ -46,23 +46,12 @@ pub(super) async fn sync_rds(
     }
 
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Running));
-    let output = Command::new("./sync").current_dir(repo).output().await;
-
-    match output {
-        Ok(o) if o.status.success() => {
+    match git.run_rds_script(repo).await {
+        Ok(()) => {
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Done));
         }
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
-            let msg = if stderr.is_empty() {
-                format!("exit {}", o.status.code().unwrap_or(1))
-            } else {
-                stderr.lines().next().unwrap_or("failed").to_string()
-            };
+        Err(msg) => {
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Error(msg)));
-        }
-        Err(e) => {
-            let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Error(e.to_string())));
         }
     }
 }
@@ -76,11 +65,13 @@ enum SkipDecision {
 // Uses `git status --porcelain=v2 --branch` to get dirty state, branch name, and
 // ahead/behind counts in a single command instead of 4-6 sequential git calls.
 async fn skip_reason(
+    git: &dyn GitExec,
     repo: &Path,
     tx: &mpsc::UnboundedSender<SyncUpdate>,
     idx: usize,
 ) -> SkipDecision {
-    let status = git(repo, &["status", "--porcelain=v2", "--branch"])
+    let status = git
+        .git(repo, &["status", "--porcelain=v2", "--branch"])
         .await
         .unwrap_or_default();
 
@@ -109,7 +100,7 @@ async fn skip_reason(
     let (ahead, behind) = match ab_line {
         None => {
             // No upstream tracking info — fetch origin and proceed.
-            let _ = git(repo, &["fetch", "origin", &branch]).await;
+            let _ = git.git(repo, &["fetch", "origin", &branch]).await;
             return SkipDecision::Proceed;
         }
         Some(line) => {
@@ -129,7 +120,10 @@ async fn skip_reason(
 
     if behind > 0 {
         let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Pulling));
-        if let Err(e) = git(repo, &["pull", "--ff-only", "origin", &branch]).await {
+        if let Err(e) = git
+            .git(repo, &["pull", "--ff-only", "origin", &branch])
+            .await
+        {
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Error(format!("pull: {e}"))));
             return SkipDecision::AlreadyReported;
         }

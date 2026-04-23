@@ -3,22 +3,24 @@ use tokio::sync::mpsc;
 
 use crate::tui::app::{ForkStatus, SyncUpdate};
 
-use super::git::{detect_default_branch, git};
+use super::git::{detect_default_branch, GitExec};
 
-pub(super) struct ForkOpts {
+pub struct ForkOpts {
     pub skip_fork_sync: bool,
     pub skip_git_fetch: bool,
     pub skip_rebase: bool,
 }
 
 #[allow(dead_code)]
-pub(super) enum ForkResult {
+#[derive(Debug, PartialEq, Eq)]
+pub enum ForkResult {
     Updated,
     Unchanged,
     Error(String),
 }
 
-pub(super) async fn sync_fork(
+pub async fn sync_fork(
+    git: &dyn GitExec,
     idx: usize,
     repo: &Path,
     tx: &mpsc::UnboundedSender<SyncUpdate>,
@@ -39,7 +41,7 @@ pub(super) async fn sync_fork(
         return ForkResult::Error(msg);
     }
 
-    let remotes = match git(repo, &["remote"]).await {
+    let remotes = match git.git(repo, &["remote"]).await {
         Ok(r) => r,
         Err(e) => {
             let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Error(e)));
@@ -56,7 +58,7 @@ pub(super) async fn sync_fork(
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::FetchingUpstream));
     if !opts.skip_git_fetch {
-        if let Err(e) = git(repo, &["fetch", "upstream"]).await {
+        if let Err(e) = git.git(repo, &["fetch", "upstream"]).await {
             let msg = extract_fetch_error(&e);
             let _ = tx.send(SyncUpdate::Fork(
                 idx,
@@ -66,7 +68,7 @@ pub(super) async fn sync_fork(
         }
     }
 
-    let default_branch = match detect_default_branch(repo).await {
+    let default_branch = match detect_default_branch(git, repo).await {
         Some(b) => b,
         None => {
             let _ = tx.send(SyncUpdate::Fork(
@@ -79,11 +81,13 @@ pub(super) async fn sync_fork(
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::CheckingDiff));
 
-    let local_commit = git(repo, &["rev-parse", &default_branch])
+    let local_commit = git
+        .git(repo, &["rev-parse", &default_branch])
         .await
         .unwrap_or_default();
     let upstream_ref = format!("upstream/{default_branch}");
-    let upstream_commit = git(repo, &["rev-parse", &upstream_ref])
+    let upstream_commit = git
+        .git(repo, &["rev-parse", &upstream_ref])
         .await
         .unwrap_or_default();
 
@@ -100,25 +104,29 @@ pub(super) async fn sync_fork(
         return ForkResult::Unchanged;
     }
 
-    let current_branch = git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])
+    let current_branch = git
+        .git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])
         .await
         .unwrap_or_default();
 
-    let dirty = git(repo, &["diff-index", "--quiet", "HEAD", "--"])
+    let dirty = git
+        .git(repo, &["diff-index", "--quiet", "HEAD", "--"])
         .await
         .is_err();
     if dirty {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Stashing));
-        let _ = git(
-            repo,
-            &["stash", "push", "-m", "Auto-stash before fork sync"],
-        )
-        .await;
+        let _ = git
+            .git(
+                repo,
+                &["stash", "push", "-m", "Auto-stash before fork sync"],
+            )
+            .await;
     }
 
     // Local helper that reports an error and, if dirty, pops the stash.
     // Returns a matching ForkResult::Error so callers can early-return.
     async fn fail(
+        git: &dyn GitExec,
         idx: usize,
         repo: &Path,
         tx: &mpsc::UnboundedSender<SyncUpdate>,
@@ -127,7 +135,7 @@ pub(super) async fn sync_fork(
         err: String,
     ) -> ForkResult {
         if dirty {
-            let _ = git(repo, &["stash", "pop"]).await;
+            let _ = git.git(repo, &["stash", "pop"]).await;
         }
         let _ = tx.send(SyncUpdate::Fork(
             idx,
@@ -137,31 +145,31 @@ pub(super) async fn sync_fork(
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::CheckingOut));
-    if let Err(e) = git(repo, &["checkout", &default_branch]).await {
-        return fail(idx, repo, tx, dirty, "checkout", e).await;
+    if let Err(e) = git.git(repo, &["checkout", &default_branch]).await {
+        return fail(git, idx, repo, tx, dirty, "checkout", e).await;
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Merging));
-    if let Err(e) = git(repo, &["merge", &upstream_ref, "--no-edit"]).await {
-        return fail(idx, repo, tx, dirty, "merge", e).await;
+    if let Err(e) = git.git(repo, &["merge", &upstream_ref, "--no-edit"]).await {
+        return fail(git, idx, repo, tx, dirty, "merge", e).await;
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::PushingDefault));
-    if let Err(e) = git(repo, &["push", "origin", &default_branch]).await {
-        return fail(idx, repo, tx, dirty, "push", e).await;
+    if let Err(e) = git.git(repo, &["push", "origin", &default_branch]).await {
+        return fail(git, idx, repo, tx, dirty, "push", e).await;
     }
 
     if !current_branch.is_empty() && current_branch != default_branch {
-        if let Err(e) = git(repo, &["checkout", &current_branch]).await {
-            return fail(idx, repo, tx, dirty, "checkout back", e).await;
+        if let Err(e) = git.git(repo, &["checkout", &current_branch]).await {
+            return fail(git, idx, repo, tx, dirty, "checkout back", e).await;
         }
 
         if !opts.skip_rebase {
             let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Rebasing));
-            if git(repo, &["rebase", &default_branch]).await.is_err() {
-                let _ = git(repo, &["rebase", "--abort"]).await;
+            if git.git(repo, &["rebase", &default_branch]).await.is_err() {
+                let _ = git.git(repo, &["rebase", "--abort"]).await;
                 if dirty {
-                    let _ = git(repo, &["stash", "pop"]).await;
+                    let _ = git.git(repo, &["stash", "pop"]).await;
                 }
                 let _ = tx.send(SyncUpdate::Fork(
                     idx,
@@ -171,20 +179,21 @@ pub(super) async fn sync_fork(
             }
 
             let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::PushingBranch));
-            if let Err(e) = git(
-                repo,
-                &["push", "--force-with-lease", "origin", &current_branch],
-            )
-            .await
+            if let Err(e) = git
+                .git(
+                    repo,
+                    &["push", "--force-with-lease", "origin", &current_branch],
+                )
+                .await
             {
-                return fail(idx, repo, tx, dirty, "push branch", e).await;
+                return fail(git, idx, repo, tx, dirty, "push branch", e).await;
             }
         }
     }
 
     if dirty {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Unstashing));
-        if let Err(e) = git(repo, &["stash", "pop"]).await {
+        if let Err(e) = git.git(repo, &["stash", "pop"]).await {
             let _ = tx.send(SyncUpdate::Fork(
                 idx,
                 ForkStatus::Error(format!(

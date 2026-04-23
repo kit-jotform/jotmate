@@ -105,7 +105,8 @@ pub async fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
             "Could not locate any enabled repos on disk. Ensure they are cloned under your home directory."
         );
     }
-    native::run_headless(repo_list, plan.opts).await;
+    let git: std::sync::Arc<dyn native::GitExec> = std::sync::Arc::new(native::SubprocessGit);
+    native::run_headless(git, repo_list, plan.opts).await;
     Ok(())
 }
 

@@ -11,17 +11,19 @@
 //! and the two-phase orchestration (fork → rds) over all repos.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::tui::app::SyncUpdate;
 
 mod elapsed;
-mod fork;
-mod git;
+pub mod fork;
+pub mod git;
 mod headless;
-mod rds;
+pub mod rds;
 
+pub use git::{GitExec, SubprocessGit};
 pub use headless::run_headless;
 
 use elapsed::track_elapsed;
@@ -38,6 +40,7 @@ pub struct SyncOpts {
 }
 
 pub async fn run_tui(
+    git: Arc<dyn GitExec>,
     repos: Vec<(usize, PathBuf)>,
     tx: mpsc::UnboundedSender<SyncUpdate>,
     opts: SyncOpts,
@@ -60,19 +63,20 @@ pub async fn run_tui(
     for &(idx, ref path) in &repos {
         let tx = tx.clone();
         let path = path.clone();
+        let git = git.clone();
         handles.push(tokio::spawn(async move {
             let fork_opts = ForkOpts {
                 skip_fork_sync,
                 skip_git_fetch,
                 skip_rebase,
             };
-            let fork_result = sync_fork(idx, &path, &tx, &fork_opts).await;
+            let fork_result = sync_fork(git.as_ref(), idx, &path, &tx, &fork_opts).await;
 
             let rds_opts = RdsOpts {
                 skip_rds_sync,
                 smart_sync,
             };
-            sync_rds(idx, &path, &fork_result, &tx, &rds_opts).await;
+            sync_rds(git.as_ref(), idx, &path, &fork_result, &tx, &rds_opts).await;
         }));
     }
 

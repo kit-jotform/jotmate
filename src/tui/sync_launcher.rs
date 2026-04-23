@@ -106,8 +106,10 @@ fn start_real_sync(app: &mut App, enabled: &[UpstreamRepo], paths: HashMap<Strin
         smart_sync: app.sync.smart_sync,
     };
 
+    let git: std::sync::Arc<dyn crate::sync::native::GitExec> =
+        std::sync::Arc::new(crate::sync::native::SubprocessGit);
     let handle = tokio::spawn(async move {
-        crate::sync::native::run_tui(repo_list, tx, opts).await;
+        crate::sync::native::run_tui(git, repo_list, tx, opts).await;
     });
 
     if let Some(state) = &mut app.sync_state {

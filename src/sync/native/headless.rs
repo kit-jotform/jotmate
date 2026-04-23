@@ -16,9 +16,15 @@ use crate::tui::palette::{
     SPINNER,
 };
 
-use super::{run_tui, SyncOpts};
+use std::sync::Arc;
 
-pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
+use super::{run_tui, GitExec, SyncOpts};
+
+pub async fn run_headless(
+    git: Arc<dyn GitExec>,
+    repo_paths: Vec<(String, PathBuf)>,
+    opts: SyncOpts,
+) {
     let n = repo_paths.len();
 
     let mut states: Vec<RepoSyncState> = repo_paths
@@ -42,7 +48,7 @@ pub async fn run_headless(repo_paths: Vec<(String, PathBuf)>, opts: SyncOpts) {
         .collect();
 
     let start = Instant::now();
-    let sync_task = tokio::spawn(run_tui(indexed, tx, opts));
+    let sync_task = tokio::spawn(run_tui(git, indexed, tx, opts));
     tokio::pin!(sync_task);
 
     let mut tick: usize = 0;

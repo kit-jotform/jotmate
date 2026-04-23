@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use jotmate::ctx::{Ctx, HttpBase, Paths};
+use jotmate::sync::native::GitExec;
 use jotmate::time::keychain::KeychainStore;
 use tempfile::TempDir;
 
@@ -165,4 +167,156 @@ impl TestCtx {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, toml).unwrap();
     }
+}
+
+// ─── FakeGit — programmable GitExec for sync-pipeline tests ────────────────
+
+/// A scripted `GitExec` for tests. Each command matches against a vector of
+/// rules; the first rule whose args-prefix matches wins. Call `log()` to
+/// inspect the exact sequence of invocations for assertions.
+///
+/// Typical use:
+/// ```ignore
+/// let git = FakeGit::new()
+///     .on(&["remote"], Ok("origin\nupstream\n"))
+///     .on(&["fetch", "upstream"], Ok(""))
+///     .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+///     .on(&["rev-parse", "main"], Ok("aaaa"))
+///     .on(&["rev-parse", "upstream/main"], Ok("aaaa"));  // up-to-date
+/// ```
+pub struct FakeGit {
+    rules: Mutex<Vec<Rule>>,
+    rds_result: Mutex<Result<(), String>>,
+    calls: Mutex<Vec<Vec<String>>>,
+}
+
+struct Rule {
+    prefix: Vec<String>,
+    response: Result<String, String>,
+    /// If set, this rule can fire only once. Useful for scripting "stash
+    /// pop fails the first time" while keeping a default afterwards.
+    once: bool,
+    consumed: bool,
+}
+
+impl FakeGit {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            rules: Mutex::new(Vec::new()),
+            rds_result: Mutex::new(Ok(())),
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+
+    /// Register a rule: when the `git` call's args start with `prefix`,
+    /// return `response`. Rules are matched in registration order.
+    pub fn on(self: Arc<Self>, prefix: &[&str], response: Result<&str, &str>) -> Arc<Self> {
+        let rule = Rule {
+            prefix: prefix.iter().map(|s| s.to_string()).collect(),
+            response: response.map(|s| s.to_string()).map_err(|s| s.to_string()),
+            once: false,
+            consumed: false,
+        };
+        self.rules.lock().unwrap().push(rule);
+        self
+    }
+
+    /// Register a rule that fires exactly once, then is ignored (so a
+    /// later, broader rule can handle subsequent calls). Use for
+    /// "stash pop fails the first time, succeeds the second" or similar.
+    pub fn on_once(self: Arc<Self>, prefix: &[&str], response: Result<&str, &str>) -> Arc<Self> {
+        let rule = Rule {
+            prefix: prefix.iter().map(|s| s.to_string()).collect(),
+            response: response.map(|s| s.to_string()).map_err(|s| s.to_string()),
+            once: true,
+            consumed: false,
+        };
+        self.rules.lock().unwrap().push(rule);
+        self
+    }
+
+    pub fn set_rds_result(&self, result: Result<(), String>) {
+        *self.rds_result.lock().unwrap() = result;
+    }
+
+    pub fn log(&self) -> Vec<Vec<String>> {
+        self.calls.lock().unwrap().clone()
+    }
+
+    /// Returns true if any logged call's args started with `prefix`.
+    pub fn was_called(&self, prefix: &[&str]) -> bool {
+        let prefix: Vec<String> = prefix.iter().map(|s| s.to_string()).collect();
+        self.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|args| args.len() >= prefix.len() && args[..prefix.len()] == prefix[..])
+    }
+
+    /// Count of calls whose args started with `prefix`.
+    pub fn call_count(&self, prefix: &[&str]) -> usize {
+        let prefix: Vec<String> = prefix.iter().map(|s| s.to_string()).collect();
+        self.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|args| args.len() >= prefix.len() && args[..prefix.len()] == prefix[..])
+            .count()
+    }
+}
+
+#[async_trait]
+impl GitExec for FakeGit {
+    async fn git(&self, _repo: &Path, args: &[&str]) -> std::result::Result<String, String> {
+        let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        self.calls.lock().unwrap().push(args_owned.clone());
+
+        let mut rules = self.rules.lock().unwrap();
+        for rule in rules.iter_mut() {
+            if rule.once && rule.consumed {
+                continue;
+            }
+            if args_owned.len() < rule.prefix.len() {
+                continue;
+            }
+            if args_owned[..rule.prefix.len()] == rule.prefix[..] {
+                if rule.once {
+                    rule.consumed = true;
+                }
+                return rule.response.clone();
+            }
+        }
+        Err(format!(
+            "FakeGit: no rule matched args: {}",
+            args_owned.join(" ")
+        ))
+    }
+
+    async fn run_rds_script(&self, _repo: &Path) -> std::result::Result<(), String> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(vec!["__rds_script__".to_string()]);
+        self.rds_result.lock().unwrap().clone()
+    }
+}
+
+/// Helper: create a tempdir that looks like a git repo (has a `.git/`
+/// subdirectory) so `fork.rs`'s `.git` existence check passes. Optionally
+/// create a `sync` executable so RDS-phase tests can exercise the script path.
+pub fn fake_repo_dir(with_sync_script: bool) -> TempDir {
+    let td = TempDir::new().unwrap();
+    std::fs::create_dir_all(td.path().join(".git")).unwrap();
+    if with_sync_script {
+        let p = td.path().join("sync");
+        std::fs::write(&p, "#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&p).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&p, perms).unwrap();
+        }
+    }
+    td
 }
