@@ -6,7 +6,7 @@ use ratatui::{
 
 use ratatui::style::Color;
 
-use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState};
+use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState, SyncPhase};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{
     C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN, SPINNER,
@@ -24,6 +24,114 @@ const LIST_H_INSET: u16 = 2;
 const LIST_VISIBLE: u16 = 6;
 
 pub fn draw_sync_progress(f: &mut ratatui::Frame, app: &App) {
+    match app.sync_state.as_ref().map(|s| s.phase.clone()) {
+        Some(SyncPhase::Discovering) => draw_discovering(f, app),
+        Some(SyncPhase::Failed) => draw_failed(f, app),
+        _ => draw_syncing(f, app),
+    }
+}
+
+fn draw_discovering(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+    let engine = LayoutEngine::new(area);
+
+    let rows = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("status", 1)
+        .row("blank3", 1)
+        .row("hint", 1)
+        .margin(1)
+        .split(engine.clamp_area(area));
+
+    draw_screen_header(
+        f,
+        &engine,
+        rows.get("logo"),
+        rows.get("title"),
+        rows.get("divider"),
+        "Preparing Sync",
+        hint_muted(&["⌫/Esc", " cancel"]),
+    );
+
+    let tick = app
+        .sync_state
+        .as_ref()
+        .map(|s| s.tick as usize)
+        .unwrap_or(0);
+    let spinner = SPINNER[tick % SPINNER.len()].to_string();
+    let status_line = Line::from(vec![
+        Span::styled(format!("  {spinner}  "), Style::default().fg(C_ACCENT)),
+        Span::styled("Discovering repositories…", Style::default().fg(C_TEXT)),
+    ]);
+    f.render_widget(
+        Paragraph::new(status_line),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("status")),
+    );
+
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "Scanning your home directory for cloned repos (first run only)…",
+            Style::default().fg(C_MUTED),
+        ))),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("hint")),
+    );
+}
+
+fn draw_failed(f: &mut ratatui::Frame, app: &App) {
+    let area = f.area();
+    let engine = LayoutEngine::new(area);
+
+    let msg = app
+        .sync_state
+        .as_ref()
+        .and_then(|s| s.setup_error.clone())
+        .unwrap_or_else(|| "Sync could not start.".to_string());
+
+    let rows = ScreenLayout::new()
+        .row("logo", 3)
+        .row("blank1", 1)
+        .row("title", 1)
+        .row("divider", 1)
+        .row("blank2", 1)
+        .row("error", 2)
+        .row("blank3", 1)
+        .row("hint", 1)
+        .margin(1)
+        .split(engine.clamp_area(area));
+
+    draw_screen_header(
+        f,
+        &engine,
+        rows.get("logo"),
+        rows.get("title"),
+        rows.get("divider"),
+        "Sync Unavailable",
+        hint_muted(&["↵", " back"]),
+    );
+
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("  ✗  ", Style::default().fg(C_DANGEROUS)),
+            Span::styled(msg, Style::default().fg(C_TEXT)),
+        ]))
+        .wrap(ratatui::widgets::Wrap { trim: false }),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("error")),
+    );
+
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            HINT_RETURN_TO_MENU,
+            Style::default().fg(C_MUTED),
+        ))),
+        engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("hint")),
+    );
+}
+
+fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
 

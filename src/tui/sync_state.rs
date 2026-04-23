@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+
+use crate::config::UpstreamRepo;
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -92,6 +95,7 @@ impl RdsStatus {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct RepoSyncState {
     pub name: String,
     pub path: PathBuf,
@@ -131,9 +135,30 @@ pub enum SyncUpdate {
     Elapsed(usize, f64),
 }
 
+/// Lifecycle phase of the sync screen. `Discovering` is shown while we're
+/// populating the repo-paths cache on first use; `Syncing` is the normal
+/// per-repo progress view; `Failed` means we bailed before starting work and
+/// `setup_error` holds the user-facing reason.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SyncPhase {
+    Discovering,
+    Syncing,
+    Failed,
+}
+
+/// Payload delivered once the background discovery task finishes. The launcher
+/// hands ownership of the enabled-repo list to the background worker; we get
+/// it back here so we can preserve config order when building the sync plan.
+pub type DiscoveryResult = Result<(Vec<UpstreamRepo>, HashMap<String, PathBuf>), String>;
+
 pub struct SyncScreenState {
     pub repos: Vec<RepoSyncState>,
     pub tick: u8,
     pub sync_handle: Option<JoinHandle<()>>,
     pub update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
+    pub phase: SyncPhase,
+    pub setup_error: Option<String>,
+    /// Populated while `phase == Discovering`. When this channel resolves,
+    /// the event loop either transitions to `Syncing` or `Failed`.
+    pub discovery_rx: Option<oneshot::Receiver<DiscoveryResult>>,
 }

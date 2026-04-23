@@ -1,52 +1,95 @@
-//! Launches a background sync task for the currently-enabled upstream repos
-//! and wires its progress channel into the `App`'s sync state.
+//! Single source of truth for "can we start a sync?" — every failure path
+//! routes through `App::fail_sync_setup` so the user always sees a
+//! SyncProgress screen with a reason, never a silent no-op on the main menu.
 
-use tokio::sync::mpsc;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use tokio::sync::oneshot;
 
+use crate::config::UpstreamRepo;
 use crate::tui::app::App;
+use crate::tui::sync_state::DiscoveryResult;
 
 pub(super) fn launch_sync(app: &mut App) {
-    let Ok(config) = crate::config::load() else {
-        return;
+    let config = match crate::config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            app.fail_sync_setup(format!("Could not load config: {e}"));
+            return;
+        }
     };
 
-    let enabled: Vec<_> = config
+    let enabled: Vec<UpstreamRepo> = config
         .sync
         .upstream_repos
         .iter()
         .filter(|r| r.enabled)
+        .cloned()
         .collect();
     if enabled.is_empty() {
+        app.fail_sync_setup(
+            "No repos enabled for sync. Add or enable at least one in Settings → Repos.",
+        );
         return;
     }
 
-    // Resolve repo paths from the cache. We can't discover inside the TUI
-    // (fd is slow + prints), so bail if the cache is missing or invalid.
-    let paths = {
-        if !config.sync.use_cache {
-            return;
-        }
-        let Some(cached) = crate::sync::cache::load() else {
-            return;
-        };
-        let enabled_names: Vec<&str> = enabled.iter().map(|r| r.name.as_str()).collect();
-        if !crate::sync::cache::is_valid(&cached, &enabled_names) {
-            return;
-        }
-        cached.paths
+    let enabled_names: Vec<&str> = enabled.iter().map(|r| r.name.as_str()).collect();
+    let cached_paths = if config.sync.use_cache {
+        crate::sync::cache::load()
+            .filter(|c| crate::sync::cache::is_valid(c, &enabled_names))
+            .map(|c| c.paths)
+    } else {
+        None
     };
 
-    let (tx, rx) = mpsc::unbounded_channel();
-    app.start_sync(paths.clone(), rx);
+    match cached_paths {
+        Some(paths) => start_real_sync(app, &enabled, paths),
+        None => spawn_discovery(app, enabled),
+    }
+}
 
-    let repo_list: Vec<(usize, std::path::PathBuf)> = app
-        .sync_state
-        .as_ref()
-        .unwrap()
-        .repos
+pub(super) fn promote_discovery_if_ready(app: &mut App) {
+    let Some(result) = app.take_discovery_result() else {
+        return;
+    };
+    match result {
+        Ok((enabled, paths)) => start_real_sync(app, &enabled, paths),
+        Err(msg) => app.fail_sync_setup(format!("Repo discovery failed: {msg}")),
+    }
+}
+
+fn spawn_discovery(app: &mut App, enabled: Vec<UpstreamRepo>) {
+    let (tx, rx) = oneshot::channel::<DiscoveryResult>();
+    app.enter_sync_discovering_with(rx);
+
+    tokio::task::spawn_blocking(move || {
+        let result = crate::sync::discover::discover_and_cache_quiet(&enabled)
+            .map(|cache| (enabled, cache.paths))
+            .map_err(|e| e.to_string());
+        let _ = tx.send(result);
+    });
+}
+
+fn start_real_sync(app: &mut App, enabled: &[UpstreamRepo], paths: HashMap<String, PathBuf>) {
+    // Preserve config order so the UI list is stable across runs.
+    let ordered: Vec<(String, PathBuf)> = enabled
         .iter()
+        .filter_map(|r| paths.get(&r.name).map(|p| (r.name.clone(), p.clone())))
+        .collect();
+
+    if ordered.is_empty() {
+        app.fail_sync_setup(
+            "Could not locate any enabled repos on disk. Check that they are cloned under your home directory.",
+        );
+        return;
+    }
+
+    let tx = app.start_sync(ordered.clone());
+
+    let repo_list: Vec<(usize, PathBuf)> = ordered
+        .into_iter()
         .enumerate()
-        .map(|(idx, r)| (idx, r.path.clone()))
+        .map(|(idx, (_, path))| (idx, path))
         .collect();
 
     let opts = crate::sync::native::SyncOpts {

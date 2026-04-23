@@ -40,7 +40,6 @@ pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
                         v.push(parent.to_path_buf());
                     }
                 }
-                // Don't descend into .git
                 WalkState::Skip
             })
         });
@@ -154,6 +153,20 @@ pub fn discover_and_cache(upstream_repos: &[UpstreamRepo]) -> Result<RepoPathsCa
         paths,
     };
 
+    cache::save(&cache)?;
+    Ok(cache)
+}
+
+/// Same as [`discover_and_cache`] but emits no stdout output — stray `println!`
+/// calls would corrupt the TUI frame buffer.
+pub fn discover_and_cache_quiet(upstream_repos: &[UpstreamRepo]) -> Result<RepoPathsCache> {
+    let repos = discover_all_git_repos()?;
+    let paths = match_repos_to_projects(&repos, upstream_repos)?;
+    let cache = RepoPathsCache {
+        version: 1,
+        cached_at: Utc::now(),
+        paths,
+    };
     cache::save(&cache)?;
     Ok(cache)
 }

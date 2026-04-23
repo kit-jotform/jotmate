@@ -1,43 +1,85 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
-use crate::tui::sync_state::{ForkStatus, RdsStatus, RepoSyncState, SyncScreenState, SyncUpdate};
+use crate::tui::sync_state::{
+    DiscoveryResult, ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate,
+};
 
 use super::screen::Screen;
 use super::App;
 
 impl App {
-    pub fn start_sync(
+    fn open_sync_screen(
         &mut self,
-        repo_paths: HashMap<String, PathBuf>,
-        update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
-    ) {
-        let repos: Vec<RepoSyncState> = self
-            .sync
-            .repos
-            .iter()
-            .filter(|r| r.enabled)
-            .filter_map(|r| {
-                repo_paths.get(&r.name).map(|path| RepoSyncState {
-                    name: r.name.clone(),
-                    path: path.clone(),
-                    fork_status: ForkStatus::Pending,
-                    rds_status: RdsStatus::Pending,
-                    started_at: None,
-                    elapsed_secs: 0.0,
-                })
-            })
-            .collect();
+        repos: Vec<RepoSyncState>,
+        phase: SyncPhase,
+        setup_error: Option<String>,
+    ) -> mpsc::UnboundedSender<SyncUpdate> {
+        let (tx, rx) = mpsc::unbounded_channel();
         self.sync_state = Some(SyncScreenState {
             repos,
             tick: 0,
             sync_handle: None,
-            update_rx,
+            update_rx: rx,
+            phase,
+            setup_error,
+            discovery_rx: None,
         });
         self.sync_scroll = 0;
         self.screen = Screen::SyncProgress;
+        tx
+    }
+
+    pub fn enter_sync_discovering_with(
+        &mut self,
+        discovery_rx: oneshot::Receiver<DiscoveryResult>,
+    ) {
+        let _ = self.open_sync_screen(Vec::new(), SyncPhase::Discovering, None);
+        if let Some(state) = &mut self.sync_state {
+            state.discovery_rx = Some(discovery_rx);
+        }
+    }
+
+    pub fn take_discovery_result(&mut self) -> Option<DiscoveryResult> {
+        let state = self.sync_state.as_mut()?;
+        let rx = state.discovery_rx.as_mut()?;
+        match rx.try_recv() {
+            Ok(result) => {
+                state.discovery_rx = None;
+                Some(result)
+            }
+            Err(oneshot::error::TryRecvError::Empty) => None,
+            Err(oneshot::error::TryRecvError::Closed) => {
+                state.discovery_rx = None;
+                Some(Err("discovery task was cancelled".into()))
+            }
+        }
+    }
+
+    /// No config filtering here — the launcher is the single source of truth
+    /// for which repos to sync, so drift between `App::sync.repos` and the
+    /// config cannot produce an empty list.
+    pub fn start_sync(
+        &mut self,
+        ordered_repos: Vec<(String, PathBuf)>,
+    ) -> mpsc::UnboundedSender<SyncUpdate> {
+        let repos: Vec<RepoSyncState> = ordered_repos
+            .into_iter()
+            .map(|(name, path)| RepoSyncState {
+                name,
+                path,
+                fork_status: ForkStatus::Pending,
+                rds_status: RdsStatus::Pending,
+                started_at: None,
+                elapsed_secs: 0.0,
+            })
+            .collect();
+        self.open_sync_screen(repos, SyncPhase::Syncing, None)
+    }
+
+    pub fn fail_sync_setup(&mut self, message: impl Into<String>) {
+        let _ = self.open_sync_screen(Vec::new(), SyncPhase::Failed, Some(message.into()));
     }
 
     pub fn apply_sync_update(&mut self, update: SyncUpdate) {
@@ -68,10 +110,14 @@ impl App {
     }
 
     pub fn sync_is_complete(&self) -> bool {
-        self.sync_state
-            .as_ref()
-            .map(|s| s.repos.iter().all(|r| r.is_complete()))
-            .unwrap_or(true)
+        let Some(state) = self.sync_state.as_ref() else {
+            return true;
+        };
+        match state.phase {
+            SyncPhase::Discovering => false,
+            SyncPhase::Failed => true,
+            SyncPhase::Syncing => state.repos.iter().all(|r| r.is_complete()),
+        }
     }
 
     /// Drop the active sync state and abort the spawned task (if any). Called

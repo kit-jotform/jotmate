@@ -136,7 +136,7 @@ jotmate/
 ├── src/
 │   ├── main.rs                  # Entry point — parses CLI args, dispatches to tui/sync/time
 │   ├── cli.rs                   # Clap structs: Cli, Commands, SyncArgs, TimeArgs
-│   ├── error.rs                 # AppError enum (thiserror) — IO, HTTP, auth, keyring, fd
+│   ├── error.rs                 # AppError enum (thiserror) — IO, HTTP, auth, keyring
 │   ├── config/                  # Config module (see ### Config)
 │   │   ├── mod.rs               # Re-exports the public surface: load, save, types, ensure_time_credentials
 │   │   ├── types.rs             # Config, SyncConfig, TimeConfig, UpstreamRepo, ContractPeriod
@@ -146,7 +146,7 @@ jotmate/
 │   ├── sync/
 │   │   ├── mod.rs               # run() entry: resolves repo paths, runs headless sync
 │   │   ├── cache.rs             # RepoPathsCache — load/save/invalidate ~/.cache/jotmate/repo_paths.json
-│   │   ├── discover.rs          # fd-based git repo discovery; matches repos to upstream URLs
+│   │   ├── discover.rs          # native git repo discovery via the ignore crate; matches repos to upstream URLs
 │   │   └── native/              # Native Rust sync engine (used by both CLI and TUI)
 │   │       ├── mod.rs           # SyncOpts + run_tui orchestration (fork → rds)
 │   │       ├── headless.rs      # run_headless: single-line CLI spinner + ANSI output

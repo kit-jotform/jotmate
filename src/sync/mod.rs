@@ -59,6 +59,12 @@ pub async fn run(mut args: SyncArgs) -> Result<()> {
         all_repos.iter().filter(|r| r.enabled).collect()
     };
 
+    if repos_to_sync.is_empty() {
+        anyhow::bail!(
+            "No repos selected for sync. Enable at least one in Settings → Repos, or pass --sync-all / --only <name>."
+        );
+    }
+
     let use_cache = config.sync.use_cache && !args.no_cache;
     let paths = resolve_repo_paths(repos_to_sync.as_slice(), use_cache)?;
 

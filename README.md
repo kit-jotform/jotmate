@@ -50,7 +50,7 @@ jf sync --only frontend,backend    # sync specific repos (bypasses enabled/disab
 jf sync --sync-all                 # sync all repos including disabled ones, bypass smart sync
 jf sync --rds-only                 # skip fork sync, run only RDS (./sync) in each repo
 jf sync -S                         # --no-smart-sync: run RDS unconditionally, don't skip
-jf sync --no-cache                 # ignore repo path cache, rediscover with fd
+jf sync --no-cache                 # ignore repo path cache, rediscover repos
 jf sync --skip-fork-sync           # skip fork sync for this run
 jf sync --skip-rebase              # skip rebasing current branch after fork sync
 jf sync --skip-rds-sync            # skip RDS sync for this run
@@ -80,7 +80,7 @@ jf
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Use repo path cache | ON | Cache discovered repo paths; skip `fd` scan on subsequent runs |
+| Use repo path cache | ON | Cache discovered repo paths; skip home-directory scan on subsequent runs |
 | Fork sync | ON | Fetch upstream, merge into default branch, push to origin |
 | → Rebase | ON | After fork sync, rebase current branch onto default branch |
 | RDS sync | ON | Run `./sync` in each repo to sync files to the Remote Dev Server |
@@ -138,7 +138,7 @@ jotmate/
 │   │   └── prompt.rs          # interactive fill-in for missing creds
 │   ├── sync/                  # git fork sync
 │   │   ├── cache.rs           # ~/.cache/jotmate/repo_paths.json
-│   │   ├── discover.rs        # fd-based repo discovery
+│   │   ├── discover.rs        # native repo discovery (ignore crate walker)
 │   │   ├── runner.rs          # runs embedded run-sync.sh
 │   │   └── native/            # in-TUI sync pipeline
 │   │       ├── fork.rs        # fetch/merge/push upstream

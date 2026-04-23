@@ -39,7 +39,9 @@ pub use super::rows::{
     CpListRow, CycleTarget, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, SettingRow,
     TimeDoctorField, TimeSettingRow,
 };
-pub use super::sync_state::{ForkStatus, RdsStatus, RepoSyncState, SyncScreenState, SyncUpdate};
+pub use super::sync_state::{
+    ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate,
+};
 
 use constants::{this_monday, timezone_index};
 use navigation::list_state_at;

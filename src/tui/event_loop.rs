@@ -11,7 +11,7 @@ use std::time::Duration;
 use crate::tui::app::{App, Screen};
 use crate::tui::draw::draw;
 use crate::tui::input::{handle_key, Action};
-use crate::tui::sync_launcher::launch_sync;
+use crate::tui::sync_launcher::{launch_sync, promote_discovery_if_ready};
 
 pub(super) async fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
@@ -89,6 +89,8 @@ async fn handle_td_report_tick(
 }
 
 fn handle_sync_progress_tick(app: &mut App) -> Result<bool> {
+    promote_discovery_if_ready(app);
+
     let mut updates = Vec::new();
     if let Some(state) = &mut app.sync_state {
         while let Ok(update) = state.update_rx.try_recv() {

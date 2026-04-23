@@ -32,6 +32,13 @@ pub(super) async fn sync_fork(
         return ForkResult::Unchanged;
     }
 
+    // Catches stale ~/.cache/jotmate/repo_paths.json pointing at a moved repo.
+    if !repo.join(".git").exists() {
+        let msg = format!("not a git repository: {}", repo.display());
+        let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Error(msg.clone())));
+        return ForkResult::Error(msg);
+    }
+
     let remotes = match git(repo, &["remote"]).await {
         Ok(r) => r,
         Err(e) => {
