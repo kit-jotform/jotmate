@@ -1,6 +1,6 @@
 # jotmate
 
-Jotform developer productivity CLI — syncs forks with upstream and tracks TimeDoctor work hours.
+Jotform developer productivity CLI — syncs forks with upstream and tracks TimeDoctor work hours. **jotmate is blazingly fast.**
 
 ## Installation
 
@@ -96,7 +96,7 @@ Configure your email, password (stored in the system keychain), timezone, and co
 
 ## Configuration file
 
-`~/.config/jotmate/config.toml` — edited automatically by the settings screen. Manual edits are also fine.
+Config lives at the platform config dir — `~/Library/Application Support/jotmate/config.toml` on macOS, `~/.config/jotmate/config.toml` on Linux. It is edited automatically by the settings screen, but manual edits are also fine.
 
 ```toml
 [sync]
@@ -131,13 +131,13 @@ jotmate/
 │   ├── main.rs                # entry point: dispatches to tui / sync / time
 │   ├── cli.rs                 # clap CLI definitions
 │   ├── error.rs               # AppError enum
-│   ├── config/                # ~/.config/jotmate/config.toml load/save
+│   ├── config/                # platform config dir (macOS: Library/Application Support, Linux: ~/.config) — config.toml load/save
 │   │   ├── types.rs           # Config, SyncConfig, TimeConfig, ContractPeriod
 │   │   ├── io.rs              # load / save
 │   │   ├── parse.rs           # contract period parsing
 │   │   └── prompt.rs          # interactive fill-in for missing creds
 │   ├── sync/                  # git fork sync
-│   │   ├── cache.rs           # ~/.cache/jotmate/repo_paths.json
+│   │   ├── cache.rs           # repo_paths.json under the platform cache dir
 │   │   ├── discover.rs        # native repo discovery (ignore crate walker)
 │   │   ├── runner.rs          # runs embedded run-sync.sh
 │   │   └── native/            # in-TUI sync pipeline
