@@ -9,16 +9,19 @@ pub mod keychain;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;
+use std::sync::Arc;
 
 use crate::cli::TimeArgs;
 use crate::config;
+use crate::ctx::Ctx;
 use crate::error::AppError;
+use crate::time::keychain::KeychainStore;
 use compute::WeekRow;
 pub use fetch::{fetch_week, split_cached_weeks, FetchOpts};
 
-pub async fn run(args: TimeArgs) -> Result<()> {
-    let mut cfg = config::load()?;
-    config::ensure_time_credentials(&mut cfg)?;
+pub async fn run(ctx: &Ctx, args: TimeArgs) -> Result<()> {
+    let mut cfg = config::load(&ctx.paths)?;
+    config::ensure_time_credentials(&ctx.paths, &mut cfg)?;
 
     let time_cfg = &cfg.time;
     let email = time_cfg
@@ -45,6 +48,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         timezone: timezone.to_string(),
         contract_periods: contract_periods.to_vec(),
         no_cache: args.no_cache,
+        stats_url: ctx.http.stats.clone(),
     };
 
     let mondays = compute::weeks_to_fetch(start_date, skip_current);
@@ -54,6 +58,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     }
 
     let (cached_rows, uncached_mondays) = split_cached_weeks(
+        &ctx.paths,
         &mondays,
         &opts.timezone,
         &opts.contract_periods,
@@ -67,8 +72,21 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     } else {
         let email_owned = email.to_string();
         let opts_clone = opts.clone();
+        let paths_clone = ctx.paths.clone();
+        let keychain_clone = ctx.keychain.clone();
+        let http_clone = ctx.http.clone();
         Some(tokio::spawn(async move {
-            let _ = tx.send(fetch_weeks_parallel(&email_owned, uncached_mondays, opts_clone).await);
+            let _ = tx.send(
+                fetch_weeks_parallel(
+                    &paths_clone,
+                    keychain_clone,
+                    &http_clone,
+                    &email_owned,
+                    uncached_mondays,
+                    opts_clone,
+                )
+                .await,
+            );
         }))
     };
 
@@ -134,6 +152,9 @@ async fn run_spinner(
 }
 
 pub async fn fetch_weeks_parallel(
+    paths: &crate::ctx::Paths,
+    keychain: Arc<dyn KeychainStore>,
+    http: &crate::ctx::HttpBase,
     email: &str,
     mondays: Vec<chrono::NaiveDate>,
     opts: FetchOpts,
@@ -142,13 +163,13 @@ pub async fn fetch_weeks_parallel(
         return Ok(vec![]);
     }
 
-    let mut auth_cookie = auth::get_or_refresh_token(email).await?;
+    let mut auth_cookie = auth::get_or_refresh_token(keychain.clone(), http, email).await?;
     let client = api::shared_client();
 
     let results = futures::future::join_all(
         mondays
             .iter()
-            .map(|&m| fetch_week(client, &auth_cookie, m, &opts)),
+            .map(|&m| fetch_week(paths, client, &auth_cookie, m, &opts)),
     )
     .await;
 
@@ -170,11 +191,11 @@ pub async fn fetch_weeks_parallel(
     }
 
     if !retry_mondays.is_empty() {
-        auth_cookie = auth::reauth(email).await?;
+        auth_cookie = auth::reauth(keychain.clone(), http, email).await?;
         let retry_results = futures::future::join_all(
             retry_mondays
                 .iter()
-                .map(|&m| fetch_week(client, &auth_cookie, m, &opts)),
+                .map(|&m| fetch_week(paths, client, &auth_cookie, m, &opts)),
         )
         .await;
         for (monday, result) in retry_mondays.iter().zip(retry_results) {

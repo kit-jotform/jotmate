@@ -145,12 +145,31 @@ impl App {
             .to_string()
     }
 
-    fn name_from_url(url: &str) -> String {
-        Self::normalize_url(url)
-            .rsplit('/')
-            .next()
-            .unwrap_or("")
-            .to_string()
+    /// Returns the last path segment, or `None` if the URL has no path part
+    /// (e.g. `https://github.com`). Supports both `https://host/path` and
+    /// `git@host:path` SSH forms.
+    fn name_from_url(url: &str) -> Option<String> {
+        let normalized = Self::normalize_url(url);
+        // Strip the host prefix so the remaining string *is* the path.
+        // For https URLs: take everything after the first `/` past `://`.
+        // For SSH URLs (git@host:path): take everything after the `:`.
+        let path = if let Some(rest) = normalized.strip_prefix("https://") {
+            rest.split_once('/').map(|(_host, p)| p)?
+        } else if let Some(rest) = normalized.strip_prefix("http://") {
+            rest.split_once('/').map(|(_host, p)| p)?
+        } else if let Some((_host, p)) = normalized.split_once(':') {
+            // SSH form: git@host:owner/repo
+            p
+        } else {
+            // Plain relative-looking input; take the last segment.
+            normalized.as_str()
+        };
+        let last = path.rsplit('/').next().unwrap_or("");
+        if last.is_empty() {
+            None
+        } else {
+            Some(last.to_string())
+        }
     }
 
     pub fn add_repo_from_input(&mut self, url: String) {
@@ -158,10 +177,9 @@ impl App {
         if normalized.is_empty() {
             return;
         }
-        let name = Self::name_from_url(&normalized);
-        if name.is_empty() {
+        let Some(name) = Self::name_from_url(&normalized) else {
             return;
-        }
+        };
         let url_exists = self
             .sync
             .repos

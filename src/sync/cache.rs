@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::ctx::Paths;
+
 const CACHE_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,15 +15,8 @@ pub struct RepoPathsCache {
     pub paths: HashMap<String, PathBuf>,
 }
 
-pub fn cache_path() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.cache"))
-        .join("jotmate")
-        .join("repo_paths.json")
-}
-
-pub fn load() -> Option<RepoPathsCache> {
-    let path = cache_path();
+pub fn load(paths: &Paths) -> Option<RepoPathsCache> {
+    let path = paths.repo_paths_cache();
     if !path.exists() {
         return None;
     }
@@ -33,8 +28,8 @@ pub fn load() -> Option<RepoPathsCache> {
     Some(cache)
 }
 
-pub fn save(cache: &RepoPathsCache) -> Result<()> {
-    let path = cache_path();
+pub fn save(paths: &Paths, cache: &RepoPathsCache) -> Result<()> {
+    let path = paths.repo_paths_cache();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create cache directory {}", parent.display()))?;
@@ -55,6 +50,6 @@ pub fn is_valid(cache: &RepoPathsCache, expected_names: &[&str]) -> bool {
     true
 }
 
-pub fn invalidate() {
-    let _ = std::fs::remove_file(cache_path());
+pub fn invalidate(paths: &Paths) {
+    let _ = std::fs::remove_file(paths.repo_paths_cache());
 }

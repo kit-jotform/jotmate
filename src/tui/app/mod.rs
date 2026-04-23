@@ -77,6 +77,7 @@ pub struct AddCpForm {
 // ── App struct ────────────────────────────────────────────────────────────────
 
 pub struct App {
+    pub ctx: crate::ctx::Ctx,
     pub screen: Screen,
     pub list_states: HashMap<Screen, ListState>,
     pub td_report: TdReportState,
@@ -100,16 +101,15 @@ impl App {
         // An `Err` here (e.g. user denied keychain access) is reported as
         // "not set" so the UI still lets them re-enter the password. If the
         // save path also hits a keychain error it surfaces the real message.
-        *self.td.password_is_set.get_or_init(|| {
-            matches!(
-                crate::time::keychain::load_password_from_keychain(),
-                Ok(Some(_))
-            )
-        })
+        let kc = self.ctx.keychain.clone();
+        *self
+            .td
+            .password_is_set
+            .get_or_init(|| matches!(kc.get_password(), Ok(Some(_))))
     }
 
-    pub fn new() -> Result<Self> {
-        let (config, config_load_error) = match crate::config::load() {
+    pub fn new(ctx: crate::ctx::Ctx) -> Result<Self> {
+        let (config, config_load_error) = match crate::config::load(&ctx.paths) {
             Ok(c) => (c, None),
             Err(e) => (crate::config::Config::default(), Some(format!("{e:#}"))),
         };
@@ -134,6 +134,7 @@ impl App {
             .unwrap_or_else(this_monday);
         let td_tz = config.time.timezone.as_deref().unwrap_or(DEFAULT_TIMEZONE);
         Ok(Self {
+            ctx,
             screen: Screen::MainMenu,
             list_states,
             td_report: TdReportState::Loading,

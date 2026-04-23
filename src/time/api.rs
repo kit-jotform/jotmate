@@ -33,6 +33,7 @@ pub struct StatsEntry {
 
 pub async fn get_week_stats(
     client: &reqwest::Client,
+    url: &str,
     cookie_string: &str,
     from: DateTime<Utc>,
     to: DateTime<Utc>,
@@ -56,7 +57,7 @@ pub async fn get_week_stats(
     );
 
     let resp = client
-        .get("https://api2.timedoctor.com/api/1.1/stats/total")
+        .get(url)
         .headers(headers)
         .query(&[
             ("from", from.to_rfc3339()),

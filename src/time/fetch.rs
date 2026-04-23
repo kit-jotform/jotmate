@@ -3,6 +3,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 
 use crate::config::{ContractPeriod, TIMEDOCTOR_COMPANY_ID};
+use crate::ctx::Paths;
 
 use super::api;
 use super::cache;
@@ -16,9 +17,11 @@ pub struct FetchOpts {
     pub timezone: String,
     pub contract_periods: Vec<ContractPeriod>,
     pub no_cache: bool,
+    pub stats_url: String,
 }
 
 pub async fn fetch_week(
+    paths: &Paths,
     client: &reqwest::Client,
     cookie: &str,
     monday: NaiveDate,
@@ -29,7 +32,7 @@ pub async fn fetch_week(
     let past = is_past_week(monday);
 
     if past && !opts.no_cache {
-        if let Some(stats) = cache::read_week_cache(company_id, &opts.timezone, monday) {
+        if let Some(stats) = cache::read_week_cache(paths, company_id, &opts.timezone, monday) {
             return Ok(build_row(
                 monday,
                 week_label,
@@ -68,11 +71,19 @@ pub async fn fetch_week(
             anyhow::anyhow!("Could not convert {} to timezone {}", sunday, opts.timezone)
         })?;
 
-    let stats =
-        api::get_week_stats(client, cookie, from_dt, to_dt, company_id, &opts.timezone).await?;
+    let stats = api::get_week_stats(
+        client,
+        &opts.stats_url,
+        cookie,
+        from_dt,
+        to_dt,
+        company_id,
+        &opts.timezone,
+    )
+    .await?;
 
     if past {
-        cache::write_week_cache(company_id, &opts.timezone, monday, &stats);
+        cache::write_week_cache(paths, company_id, &opts.timezone, monday, &stats);
     }
 
     Ok(build_row(
@@ -86,6 +97,7 @@ pub async fn fetch_week(
 
 // Shared by time::run (CLI) and App::launch_td_report (TUI) to prevent the two paths from drifting.
 pub fn split_cached_weeks(
+    paths: &Paths,
     mondays: &[NaiveDate],
     timezone: &str,
     contract_periods: &[ContractPeriod],
@@ -100,7 +112,9 @@ pub fn split_cached_weeks(
     let mut uncached = Vec::new();
     for &monday in mondays {
         if monday < current_monday {
-            if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, timezone, monday) {
+            if let Some(stats) =
+                cache::read_week_cache(paths, TIMEDOCTOR_COMPANY_ID, timezone, monday)
+            {
                 cached.push(build_week_row_from_cache(monday, &stats, contract_periods));
                 continue;
             }

@@ -2,11 +2,12 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use std::io::{self, Write};
 
-use super::io::{config_path, save};
+use super::io::save;
 use super::parse::parse_contract_periods;
 use super::types::{Config, DEFAULT_TIMEZONE};
+use crate::ctx::Paths;
 
-pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
+pub fn ensure_time_credentials(paths: &Paths, config: &mut Config) -> Result<()> {
     let mut changed = false;
 
     if config
@@ -66,8 +67,8 @@ pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
     }
 
     if changed {
-        save(config)?;
-        println!("Configuration saved to {}", config_path().display());
+        save(paths, config)?;
+        println!("Configuration saved to {}", paths.config_file().display());
     }
 
     Ok(())

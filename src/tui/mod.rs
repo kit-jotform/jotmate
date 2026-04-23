@@ -1,4 +1,4 @@
-pub(crate) mod app;
+pub mod app;
 mod draw;
 mod event_loop;
 mod input;
@@ -38,17 +38,17 @@ pub(super) fn teardown_terminal(terminal: &mut Terminal<CrosstermBackend<std::io
 
 // ── Entry points ──────────────────────────────────────────────────────────────
 
-pub async fn run_interactive() -> Result<()> {
-    run_tui(Screen::MainMenu).await
+pub async fn run_interactive(ctx: crate::ctx::Ctx) -> Result<()> {
+    run_tui(ctx, Screen::MainMenu).await
 }
 
-pub async fn run_settings() -> Result<()> {
-    run_tui(Screen::Settings).await
+pub async fn run_settings(ctx: crate::ctx::Ctx) -> Result<()> {
+    run_tui(ctx, Screen::Settings).await
 }
 
-async fn run_tui(initial_screen: Screen) -> Result<()> {
+async fn run_tui(ctx: crate::ctx::Ctx, initial_screen: Screen) -> Result<()> {
     let mut terminal = setup_terminal()?;
-    let mut app = App::new()?;
+    let mut app = App::new(ctx)?;
     app.screen = initial_screen;
     if initial_screen == Screen::Settings {
         app.select_first_interactive(Screen::Settings);

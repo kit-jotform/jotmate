@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use std::path::PathBuf;
 
+use crate::ctx::Paths;
 use crate::time::api::StatsResponse;
 
 /// IANA timezone names contain `/` which can't go in a path segment on its own.
@@ -9,22 +10,26 @@ fn sanitize_tz(tz: &str) -> String {
     tz.replace('/', "_")
 }
 
-pub fn week_cache_path(company_id: &str, timezone: &str, monday: NaiveDate) -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.cache"))
-        .join("jotmate")
-        .join("time")
+pub fn week_cache_path(
+    paths: &Paths,
+    company_id: &str,
+    timezone: &str,
+    monday: NaiveDate,
+) -> PathBuf {
+    paths
+        .time_cache_root()
         .join(company_id)
         .join(sanitize_tz(timezone))
         .join(format!("{}.json", monday.format("%Y-%m-%d")))
 }
 
 pub fn read_week_cache(
+    paths: &Paths,
     company_id: &str,
     timezone: &str,
     monday: NaiveDate,
 ) -> Option<StatsResponse> {
-    let path = week_cache_path(company_id, timezone, monday);
+    let path = week_cache_path(paths, company_id, timezone, monday);
     if !path.exists() {
         return None;
     }
@@ -33,12 +38,13 @@ pub fn read_week_cache(
 }
 
 pub fn write_week_cache(
+    paths: &Paths,
     company_id: &str,
     timezone: &str,
     monday: NaiveDate,
     stats: &StatsResponse,
 ) {
-    let path = week_cache_path(company_id, timezone, monday);
+    let path = week_cache_path(paths, company_id, timezone, monday);
     if let Some(parent) = path.parent() {
         if std::fs::create_dir_all(parent).is_err() {
             return;

@@ -6,7 +6,7 @@
 //! - [`prompt`]  — `ensure_time_credentials` (interactive fill-in)
 
 mod io;
-mod parse;
+pub mod parse;
 mod prompt;
 mod types;
 

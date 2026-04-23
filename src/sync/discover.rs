@@ -8,6 +8,7 @@ use std::sync::Mutex;
 
 use super::cache::{self, RepoPathsCache};
 use crate::config::UpstreamRepo;
+use crate::ctx::Paths;
 
 pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
     let home = dirs::home_dir().context("Cannot determine home directory")?;
@@ -132,7 +133,10 @@ pub fn match_repos_to_projects(
     Ok(found)
 }
 
-pub fn discover_and_cache(upstream_repos: &[UpstreamRepo]) -> Result<RepoPathsCache> {
+pub fn discover_and_cache(
+    paths: &Paths,
+    upstream_repos: &[UpstreamRepo],
+) -> Result<RepoPathsCache> {
     println!("Discovering git repositories (this may take a moment)...");
     let repos = discover_all_git_repos()?;
     println!(
@@ -140,33 +144,36 @@ pub fn discover_and_cache(upstream_repos: &[UpstreamRepo]) -> Result<RepoPathsCa
         repos.len()
     );
 
-    let paths = match_repos_to_projects(&repos, upstream_repos)?;
+    let matched = match_repos_to_projects(&repos, upstream_repos)?;
 
     println!("All repositories located:");
-    for (project, path) in &paths {
+    for (project, path) in &matched {
         println!("  {project}: {}", path.display());
     }
 
     let cache = RepoPathsCache {
         version: 1,
         cached_at: Utc::now(),
-        paths,
+        paths: matched,
     };
 
-    cache::save(&cache)?;
+    cache::save(paths, &cache)?;
     Ok(cache)
 }
 
 /// Same as [`discover_and_cache`] but emits no stdout output — stray `println!`
 /// calls would corrupt the TUI frame buffer.
-pub fn discover_and_cache_quiet(upstream_repos: &[UpstreamRepo]) -> Result<RepoPathsCache> {
+pub fn discover_and_cache_quiet(
+    paths: &Paths,
+    upstream_repos: &[UpstreamRepo],
+) -> Result<RepoPathsCache> {
     let repos = discover_all_git_repos()?;
-    let paths = match_repos_to_projects(&repos, upstream_repos)?;
+    let matched = match_repos_to_projects(&repos, upstream_repos)?;
     let cache = RepoPathsCache {
         version: 1,
         cached_at: Utc::now(),
-        paths,
+        paths: matched,
     };
-    cache::save(&cache)?;
+    cache::save(paths, &cache)?;
     Ok(cache)
 }

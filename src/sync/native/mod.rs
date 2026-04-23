@@ -28,6 +28,7 @@ use elapsed::track_elapsed;
 use fork::{sync_fork, ForkOpts};
 use rds::{sync_rds, RdsOpts};
 
+#[derive(Debug)]
 pub struct SyncOpts {
     pub skip_fork_sync: bool,
     pub skip_git_fetch: bool,

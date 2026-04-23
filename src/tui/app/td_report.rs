@@ -1,6 +1,9 @@
 use chrono::NaiveDate;
+use std::sync::Arc;
 
+use crate::ctx::{HttpBase, Paths};
 use crate::time::compute::{compute_cumulative, weeks_to_fetch};
+use crate::time::keychain::KeychainStore;
 use crate::time::split_cached_weeks;
 
 use super::constants::TIMEZONES;
@@ -30,14 +33,14 @@ pub enum TdReportState {
 
 type FetchResult = std::result::Result<Vec<crate::time::compute::WeekRow>, String>;
 
-fn map_err(e: anyhow::Error) -> String {
+fn map_err(keychain: &dyn KeychainStore, e: anyhow::Error) -> String {
     match e.downcast_ref::<crate::error::AppError>() {
         Some(crate::error::AppError::TokenExpired) => {
-            let _ = crate::time::keychain::delete_token_from_keychain();
+            let _ = keychain.delete_token();
             "AUTH_FAILED:Session expired — please re-enter your password.".to_string()
         }
         Some(crate::error::AppError::AuthFailed(msg)) => {
-            let _ = crate::time::keychain::delete_token_from_keychain();
+            let _ = keychain.delete_token();
             format!("AUTH_FAILED:{msg}")
         }
         _ => "Could not connect to TimeDoctor. Check your internet connection and try again."
@@ -46,13 +49,17 @@ fn map_err(e: anyhow::Error) -> String {
 }
 
 async fn fetch_parallel(
+    paths: Paths,
+    keychain: Arc<dyn KeychainStore>,
+    http: HttpBase,
     email: String,
     mondays: Vec<NaiveDate>,
     opts: crate::time::FetchOpts,
 ) -> FetchResult {
-    crate::time::fetch_weeks_parallel(&email, mondays, opts)
+    let keychain_for_err = keychain.clone();
+    crate::time::fetch_weeks_parallel(&paths, keychain, &http, &email, mondays, opts)
         .await
-        .map_err(map_err)
+        .map_err(|e| map_err(keychain_for_err.as_ref(), e))
 }
 
 impl App {
@@ -88,10 +95,12 @@ impl App {
             timezone: TIMEZONES[self.td.timezone_idx].to_string(),
             contract_periods: self.td.contract_periods.clone(),
             no_cache: !self.td.use_time_cache,
+            stats_url: self.ctx.http.stats.clone(),
         };
 
         let all_mondays = weeks_to_fetch(start_date, self.td.skip_current_week);
         let (mut cached_rows, uncached_mondays) = split_cached_weeks(
+            &self.ctx.paths,
             &all_mondays,
             &opts.timezone,
             &opts.contract_periods,
@@ -99,7 +108,7 @@ impl App {
         );
 
         if !cached_rows.is_empty() {
-            let reset_from = crate::config::load()
+            let reset_from = crate::config::load(&self.ctx.paths)
                 .ok()
                 .and_then(|c| c.time.reset_cumulative_from_date);
             compute_cumulative(&mut cached_rows, reset_from);
@@ -135,8 +144,12 @@ impl App {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.td_report_rx = Some(rx);
         let email = self.td.email.clone();
+        let paths = self.ctx.paths.clone();
+        let keychain = self.ctx.keychain.clone();
+        let http = self.ctx.http.clone();
         tokio::spawn(async move {
-            let _ = tx.send(fetch_parallel(email, uncached_mondays, opts).await);
+            let _ =
+                tx.send(fetch_parallel(paths, keychain, http, email, uncached_mondays, opts).await);
         });
     }
 
@@ -166,7 +179,7 @@ impl App {
     }
 
     fn apply_fetch_result(&mut self, result: FetchResult) {
-        let reset_from = crate::config::load()
+        let reset_from = crate::config::load(&self.ctx.paths)
             .ok()
             .and_then(|c| c.time.reset_cumulative_from_date);
 
@@ -229,8 +242,8 @@ impl App {
             return false;
         }
         // Delete old session token so a fresh login is triggered with the new password
-        let _ = crate::time::keychain::delete_token_from_keychain();
-        match crate::time::keychain::save_password_to_keychain(password) {
+        let _ = self.ctx.keychain.delete_token();
+        match self.ctx.keychain.set_password(password) {
             Ok(()) => {
                 self.td.password_is_set.take();
                 let _ = self.td.password_is_set.set(true);

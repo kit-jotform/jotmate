@@ -1,17 +1,10 @@
 use anyhow::{Context, Result};
-use std::path::PathBuf;
 
 use super::types::Config;
+use crate::ctx::Paths;
 
-pub fn config_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.config"))
-        .join("jotmate")
-        .join("config.toml")
-}
-
-pub fn load() -> Result<Config> {
-    let path = config_path();
+pub fn load(paths: &Paths) -> Result<Config> {
+    let path = paths.config_file();
     if !path.exists() {
         return Ok(Config::default());
     }
@@ -21,8 +14,8 @@ pub fn load() -> Result<Config> {
     Ok(config)
 }
 
-pub fn save(config: &Config) -> Result<()> {
-    let path = config_path();
+pub fn save(paths: &Paths, config: &Config) -> Result<()> {
+    let path = paths.config_file();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create config directory {}", parent.display()))?;

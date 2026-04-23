@@ -7,11 +7,12 @@ use std::path::PathBuf;
 use tokio::sync::oneshot;
 
 use crate::config::UpstreamRepo;
+use crate::ctx::Paths;
 use crate::tui::app::App;
 use crate::tui::sync_state::DiscoveryResult;
 
 pub(super) fn launch_sync(app: &mut App) {
-    let config = match crate::config::load() {
+    let config = match crate::config::load(&app.ctx.paths) {
         Ok(c) => c,
         Err(e) => {
             app.fail_sync_setup(format!("Could not load config: {e}"));
@@ -35,7 +36,7 @@ pub(super) fn launch_sync(app: &mut App) {
 
     let enabled_names: Vec<&str> = enabled.iter().map(|r| r.name.as_str()).collect();
     let cached_paths = if config.sync.use_cache {
-        crate::sync::cache::load()
+        crate::sync::cache::load(&app.ctx.paths)
             .filter(|c| crate::sync::cache::is_valid(c, &enabled_names))
             .map(|c| c.paths)
     } else {
@@ -62,12 +63,17 @@ fn spawn_discovery(app: &mut App, enabled: Vec<UpstreamRepo>) {
     let (tx, rx) = oneshot::channel::<DiscoveryResult>();
     app.enter_sync_discovering_with(rx);
 
+    let paths = app.ctx.paths.clone();
     tokio::task::spawn_blocking(move || {
-        let result = crate::sync::discover::discover_and_cache_quiet(&enabled)
-            .map(|cache| (enabled, cache.paths))
-            .map_err(|e| e.to_string());
+        let result = discover_blocking(&paths, enabled);
         let _ = tx.send(result);
     });
+}
+
+fn discover_blocking(paths: &Paths, enabled: Vec<UpstreamRepo>) -> DiscoveryResult {
+    crate::sync::discover::discover_and_cache_quiet(paths, &enabled)
+        .map(|cache| (enabled, cache.paths))
+        .map_err(|e| e.to_string())
 }
 
 fn start_real_sync(app: &mut App, enabled: &[UpstreamRepo], paths: HashMap<String, PathBuf>) {

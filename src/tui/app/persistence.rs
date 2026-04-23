@@ -28,9 +28,9 @@ impl App {
     }
 
     fn mutate_and_save(&self, mutate: impl FnOnce(&mut crate::config::Config)) {
-        if let Ok(mut config) = crate::config::load() {
+        if let Ok(mut config) = crate::config::load(&self.ctx.paths) {
             mutate(&mut config);
-            let _ = crate::config::save(&config);
+            let _ = crate::config::save(&self.ctx.paths, &config);
         }
     }
 }

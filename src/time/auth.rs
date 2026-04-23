@@ -1,25 +1,24 @@
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use std::sync::Arc;
 
+use crate::ctx::HttpBase;
 use crate::error::AppError;
-use crate::time::keychain::{
-    delete_token_from_keychain, load_password_from_keychain, load_token_from_keychain,
-    save_token_to_keychain,
-};
+use crate::time::keychain::KeychainStore;
 
-/// Run a blocking `security` CLI call on the blocking pool so it doesn't
-/// stall the async runtime thread.
-async fn blocking_keychain<F, T>(f: F) -> T
+/// Run a blocking operation on the blocking pool so it doesn't stall the
+/// async runtime. Used for the `security` CLI which is inherently blocking.
+async fn blocking<F, T>(f: F) -> T
 where
     F: FnOnce() -> T + Send + 'static,
     T: Send + 'static,
 {
     tokio::task::spawn_blocking(f)
         .await
-        .expect("keychain blocking task panicked")
+        .expect("blocking task panicked")
 }
 
-pub async fn login(email: &str, password: &str) -> Result<String> {
+pub async fn login(http: &HttpBase, email: &str, password: &str) -> Result<String> {
     let client = crate::time::api::shared_client();
 
     let mut headers = HeaderMap::new();
@@ -39,7 +38,7 @@ pub async fn login(email: &str, password: &str) -> Result<String> {
     });
 
     let resp = client
-        .post("https://api2.timedoctor.com/api/2.0/auth/v2/login")
+        .post(&http.login)
         .headers(headers)
         .json(&body)
         .send()
@@ -86,22 +85,37 @@ pub async fn prompt_password(email: &str) -> Result<String> {
     Ok(password)
 }
 
-pub async fn get_or_refresh_token(email: &str) -> Result<String> {
-    match blocking_keychain(load_token_from_keychain).await {
+pub async fn get_or_refresh_token(
+    keychain: Arc<dyn KeychainStore>,
+    http: &HttpBase,
+    email: &str,
+) -> Result<String> {
+    let kc = keychain.clone();
+    match blocking(move || kc.get_token()).await {
         Ok(Some(token)) => return Ok(token),
         Ok(None) => {}
         Err(e) => return Err(e.context("Could not read session token from keychain")),
     }
-    do_login(email).await
+    do_login(keychain, http, email).await
 }
 
-pub async fn reauth(email: &str) -> Result<String> {
-    let _ = blocking_keychain(delete_token_from_keychain).await;
-    do_login(email).await
+pub async fn reauth(
+    keychain: Arc<dyn KeychainStore>,
+    http: &HttpBase,
+    email: &str,
+) -> Result<String> {
+    let kc = keychain.clone();
+    let _ = blocking(move || kc.delete_token()).await;
+    do_login(keychain, http, email).await
 }
 
-async fn do_login(email: &str) -> Result<String> {
-    let stored_password = blocking_keychain(load_password_from_keychain)
+async fn do_login(
+    keychain: Arc<dyn KeychainStore>,
+    http: &HttpBase,
+    email: &str,
+) -> Result<String> {
+    let kc = keychain.clone();
+    let stored_password = blocking(move || kc.get_password())
         .await
         .context("Could not read saved password from keychain")?;
     let password = match stored_password {
@@ -109,8 +123,9 @@ async fn do_login(email: &str) -> Result<String> {
         None => prompt_password(email).await?,
     };
 
-    let cookie = login(email, &password).await?;
+    let cookie = login(http, email, &password).await?;
     let cookie_for_keychain = cookie.clone();
-    blocking_keychain(move || save_token_to_keychain(&cookie_for_keychain)).await?;
+    let kc = keychain.clone();
+    blocking(move || kc.set_token(&cookie_for_keychain)).await?;
     Ok(cookie)
 }
