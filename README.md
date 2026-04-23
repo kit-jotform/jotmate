@@ -125,41 +125,46 @@ TimeDoctor credentials (password / session cookie) are stored in the system keyc
 
 ```
 jotmate/
-├── scripts/
-│   └── run-sync.sh            # embedded into the binary via include_str!()
+├── scripts/                   # reference examples only; not used by the binary
 ├── src/
 │   ├── main.rs                # entry point: dispatches to tui / sync / time
+│   ├── lib.rs                 # library surface so tests/ and main share one tree
 │   ├── cli.rs                 # clap CLI definitions
+│   ├── ctx.rs                 # composition root: Paths, HttpBase, KeychainStore
 │   ├── error.rs               # AppError enum
-│   ├── config/                # platform config dir (macOS: Library/Application Support, Linux: ~/.config) — config.toml load/save
+│   ├── config/                # ~/.config/jotmate/config.toml load/save
 │   │   ├── types.rs           # Config, SyncConfig, TimeConfig, ContractPeriod
 │   │   ├── io.rs              # load / save
 │   │   ├── parse.rs           # contract period parsing
 │   │   └── prompt.rs          # interactive fill-in for missing creds
 │   ├── sync/                  # git fork sync
+│   │   ├── mod.rs             # plan_sync + run() entry
 │   │   ├── cache.rs           # repo_paths.json under the platform cache dir
 │   │   ├── discover.rs        # native repo discovery (ignore crate walker)
-│   │   ├── runner.rs          # runs embedded run-sync.sh
-│   │   └── native/            # in-TUI sync pipeline
+│   │   └── native/            # native Rust sync engine (TUI + headless)
+│   │       ├── mod.rs         # SyncOpts + run_tui orchestration (fork → rds)
+│   │       ├── headless.rs    # single-line CLI spinner renderer
 │   │       ├── fork.rs        # fetch/merge/push upstream
 │   │       ├── rds.rs         # ./sync runner + smart sync skip logic
-│   │       ├── git.rs         # git helpers
+│   │       ├── git.rs         # GitExec trait + SubprocessGit impl
 │   │       └── elapsed.rs     # per-repo elapsed timer
 │   ├── time/                  # TimeDoctor tracking
-│   │   ├── auth.rs            # system keychain session cookie
-│   │   ├── api.rs             # HTTP client
+│   │   ├── mod.rs             # run() entry + parallel week fetch
+│   │   ├── auth.rs            # HTTP login / reauth / password prompt
+│   │   ├── keychain.rs        # KeychainStore trait + macOS security CLI impl
+│   │   ├── api.rs             # HTTP client + shared td_headers()
 │   │   ├── fetch.rs           # weekly fetch + cache orchestration
 │   │   ├── cache.rs           # per-week JSON cache
 │   │   ├── compute.rs         # WeekRow / balance / target hours
-│   │   └── display.rs         # terminal table renderer
+│   │   └── display.rs         # headless spinner + final-line renderer
 │   └── tui/                   # Ratatui interactive UI
 │       ├── mod.rs             # terminal setup/teardown + entry points
 │       ├── event_loop.rs      # async event loop + per-screen tick handlers
-│       ├── sync_launcher.rs   # kicks off in-TUI sync
-│       ├── sync_state.rs      # RepoSyncState / ForkStatus / RdsStatus
+│       ├── sync_launcher.rs   # kicks off in-TUI sync (discovery + spawn)
+│       ├── sync_state.rs      # RepoSyncState / ForkStatus / RdsStatus / SyncPhase
 │       ├── rows.rs            # row enums + InputMode
 │       ├── layout.rs          # ScreenLayout / LayoutEngine / UI_WIDTH
-│       ├── palette.rs         # indexed color constants
+│       ├── palette.rs         # indexed color constants + ANSI escapes
 │       ├── widgets.rs         # IconWidget, LOGO, LOGO_SMALL
 │       ├── app/               # App state (split by concern)
 │       │   ├── mod.rs         #   struct + constructor
@@ -181,10 +186,12 @@ jotmate/
 │       │   ├── td_report.rs   #   Time Doctor report
 │       │   ├── sync.rs        #   SyncProgress
 │       │   └── common/        #   shared helpers
+│       │       ├── mod.rs     #     fmt_date, sub_screen_setup, width constants
 │       │       ├── hints.rs   #     hint span builders
 │       │       ├── items.rs   #     list-item builders + FieldState
 │       │       ├── header.rs  #     screen header (logo + title + divider)
-│       │       └── dialog.rs  #     centered confirm dialog
+│       │       ├── dialog.rs  #     centered confirm dialog
+│       │       └── scroll_table.rs # scrollable table (TD report + sync progress)
 │       └── input/             # keyboard handlers (one file per screen)
 │           ├── mod.rs         #   handle_key dispatcher + Action enum
 │           ├── keys.rs        #   key classifiers
@@ -196,6 +203,7 @@ jotmate/
 │           ├── contract.rs    #   ContractPeriods
 │           ├── td_report.rs
 │           └── sync.rs        #   SyncProgress
+├── tests/                     # integration tests (use Ctx with TempDir + fakes)
 ├── Cargo.toml
 ├── install.sh                 # release + local installer (--local for source builds)
 └── AGENTS.md                  # detailed guidance for AI-assisted development
