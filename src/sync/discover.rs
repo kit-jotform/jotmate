@@ -70,7 +70,6 @@ pub fn build_upstream_map(repos: &[UpstreamRepo]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for repo in repos.iter().filter(|r| r.enabled) {
         let url = repo.url.trim_end_matches('/').trim_end_matches(".git");
-        // HTTPS form
         map.insert(format!("{}.git", url), repo.name.clone());
         map.insert(url.to_string(), repo.name.clone());
 
@@ -133,37 +132,9 @@ pub fn match_repos_to_projects(
     Ok(found)
 }
 
+/// Discover, match against `upstream_repos`, and persist to disk. Silent —
+/// callers print their own progress; the TUI must never see stray stdout.
 pub fn discover_and_cache(
-    paths: &Paths,
-    upstream_repos: &[UpstreamRepo],
-) -> Result<RepoPathsCache> {
-    println!("Discovering git repositories (this may take a moment)...");
-    let repos = discover_all_git_repos()?;
-    println!(
-        "Found {} git repos, matching against known upstreams...",
-        repos.len()
-    );
-
-    let matched = match_repos_to_projects(&repos, upstream_repos)?;
-
-    println!("All repositories located:");
-    for (project, path) in &matched {
-        println!("  {project}: {}", path.display());
-    }
-
-    let cache = RepoPathsCache {
-        version: 1,
-        cached_at: Utc::now(),
-        paths: matched,
-    };
-
-    cache::save(paths, &cache)?;
-    Ok(cache)
-}
-
-/// Same as [`discover_and_cache`] but emits no stdout output — stray `println!`
-/// calls would corrupt the TUI frame buffer.
-pub fn discover_and_cache_quiet(
     paths: &Paths,
     upstream_repos: &[UpstreamRepo],
 ) -> Result<RepoPathsCache> {

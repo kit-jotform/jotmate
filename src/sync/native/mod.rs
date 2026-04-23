@@ -1,14 +1,6 @@
-//! Native (no-bash) sync engine shared by the TUI and the headless CLI.
-//!
-//! Split by responsibility:
-//! - [`git`] — git command helpers and default-branch detection
-//! - [`fork`] — per-repo fork sync pipeline (fetch/merge/push/rebase)
-//! - [`rds`] — per-repo RDS sync pipeline (./sync invocation + skip logic)
-//! - [`elapsed`] — per-repo wall-clock elapsed reporter
-//! - [`headless`] — single-line CLI renderer that wraps [`run_tui`]
-//!
-//! This `mod.rs` owns only the public [`SyncOpts`] + [`run_tui`] entry point
-//! and the two-phase orchestration (fork → rds) over all repos.
+//! Native sync engine shared by TUI and headless CLI. This `mod.rs` owns the
+//! public [`SyncOpts`] + [`run_tui`] entry point; per-phase pipelines live in
+//! [`fork`], [`rds`], [`git`], [`elapsed`], [`headless`].
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -57,8 +49,7 @@ pub async fn run_tui(
     let starts: Vec<(usize, Instant)> = repos.iter().map(|&(idx, _)| (idx, now)).collect();
     let elapsed_handle = tokio::spawn(track_elapsed(tx.clone(), starts));
 
-    // Each repo gets a pipeline task: fork sync → immediately followed by its own RDS sync.
-    // This means a fast repo's RDS can start while slower repos are still fetching upstream.
+    // Per-repo pipeline (fork → rds) — a fast repo's RDS can start while a slower repo is still fetching.
     let mut handles = Vec::new();
     for &(idx, ref path) in &repos {
         let tx = tx.clone();

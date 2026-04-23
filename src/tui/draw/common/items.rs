@@ -21,12 +21,10 @@ pub(in crate::tui::draw) fn divider_item() -> ListItem<'static> {
 
 pub(in crate::tui::draw) const FIELD_LABEL_W: usize = 18;
 
-/// Narrower label column for the timezone selector — the inline editing hint
-/// (↑↓ change • ↵ confirm • ⌫ cancel) needs the extra room to fit in UI_WIDTH.
+/// Narrower than `FIELD_LABEL_W` to leave room for the inline editing hint.
 pub(in crate::tui::draw) const FIELD_LABEL_W_TZ: usize = 13;
 
 pub(in crate::tui::draw) fn separator_item(label: &str) -> ListItem<'static> {
-    // "── " + label + " " = prefix; fill the rest with "─"
     let prefix_chars = 3 + label.chars().count() + 1;
     let dashes = "─".repeat(SEPARATOR_WIDTH.saturating_sub(prefix_chars));
     let text = format!("── {} {}", label, dashes);

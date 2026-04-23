@@ -1,9 +1,5 @@
-//! Shared draw helpers: hint spans, common list-item builders, header renderer,
-//! confirm-dialog overlay, and layout/constant helpers used by every sub-screen.
-//!
-//! Everything here is `pub(in crate::tui::draw)` so sibling draw modules can
-//! import from `super::common::*` (or, via re-exports in `draw/mod.rs`, from
-//! `super::*`).
+//! Shared draw helpers, all `pub(in crate::tui::draw)` so per-screen renderers
+//! reach them as `super::*` via re-exports in `draw/mod.rs`.
 
 mod dialog;
 mod header;

@@ -1,15 +1,30 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 use crate::error::AppError;
 
-/// Building a `reqwest::Client` pays TLS init (~50–100ms); reuse one process-wide.
+/// Reuse one client process-wide; building one pays ~50-100ms TLS init.
 pub fn shared_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(reqwest::Client::new)
+}
+
+/// Headers required by every TimeDoctor request; callers add `Cookie` themselves.
+pub fn td_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+        "Origin",
+        HeaderValue::from_static("https://2.timedoctor.com"),
+    );
+    headers.insert(
+        "Referer",
+        HeaderValue::from_static("https://2.timedoctor.com/"),
+    );
+    headers
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,20 +55,11 @@ pub async fn get_week_stats(
     company_id: &str,
     timezone: &str,
 ) -> Result<StatsResponse> {
-    let mut headers = HeaderMap::new();
+    let mut headers = td_headers();
     headers.insert(
         "Cookie",
         HeaderValue::from_str(cookie_string)
             .map_err(|_| AppError::AuthFailed("Invalid cookie string".to_string()))?,
-    );
-    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-    headers.insert(
-        "Origin",
-        HeaderValue::from_static("https://2.timedoctor.com"),
-    );
-    headers.insert(
-        "Referer",
-        HeaderValue::from_static("https://2.timedoctor.com/"),
     );
 
     let resp = client

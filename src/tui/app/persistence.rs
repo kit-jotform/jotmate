@@ -17,7 +17,6 @@ impl App {
         self.mutate_and_save(|cfg| {
             cfg.time.email = Some(self.td.email.clone()).filter(|e| !e.is_empty());
             cfg.time.timezone = Some(TIMEZONES[self.td.timezone_idx].to_string());
-            // start_date auto-derived from first contract period
             cfg.time.start_date = self.td.contract_periods.first().map(|p| p.from);
             cfg.time.skip_current_week = self.td.skip_current_week;
             cfg.time.use_time_cache = self.td.use_time_cache;

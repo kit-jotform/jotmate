@@ -34,7 +34,7 @@ pub async fn sync_fork(
         return ForkResult::Unchanged;
     }
 
-    // Catches stale ~/.cache/jotmate/repo_paths.json pointing at a moved repo.
+    // Stale repo_paths.json may point at a moved repo.
     if !repo.join(".git").exists() {
         let msg = format!("not a git repository: {}", repo.display());
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Error(msg.clone())));
@@ -123,8 +123,7 @@ pub async fn sync_fork(
             .await;
     }
 
-    // Local helper that reports an error and, if dirty, pops the stash.
-    // Returns a matching ForkResult::Error so callers can early-return.
+    /// Report an error, pop the stash if dirty, return ForkResult::Error.
     async fn fail(
         git: &dyn GitExec,
         idx: usize,
@@ -208,9 +207,8 @@ pub async fn sync_fork(
     ForkResult::Updated
 }
 
-/// `git fetch` writes progress ("From …", "* [new branch] …", "remote: …") to
-/// stderr even on success. When it exits non-zero, pull out the actual error
-/// line so we don't surface benign progress as the failure reason.
+/// `git fetch` writes progress to stderr even on success; pick the real error
+/// line so benign progress doesn't surface as the failure reason.
 fn extract_fetch_error(stderr: &str) -> String {
     let is_progress = |line: &str| {
         let t = line.trim_start();

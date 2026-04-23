@@ -186,7 +186,6 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
         hint_muted(&["⌫/Esc", " cancel"]),
     );
 
-    // ── Summary line ──
     if let Some(state) = &app.sync_state {
         let total = state.repos.len();
         let complete = state.repos.iter().filter(|r| r.is_complete()).count();
@@ -218,7 +217,6 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
         );
         f.render_widget(Paragraph::new(Line::from(parts)), summary_area);
 
-        // ── Repo list ──
         let tick = state.tick as usize;
         let data_lines: Vec<Line> = state
             .repos
@@ -231,7 +229,6 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
         );
         draw_scroll_table(f, list_area, build_header(), data_lines, app.sync_scroll);
 
-        // ── Nav hint (only when list is scrollable) ──
         if is_scrollable {
             f.render_widget(
                 Paragraph::new(Line::from(hint_muted(&["↑↓", " scroll"]))),
@@ -239,7 +236,6 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
             );
         }
 
-        // ── Hint ──
         let hint_text = if is_complete {
             HINT_RETURN_TO_MENU
         } else {
@@ -253,7 +249,6 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("hint")),
         );
 
-        // ── Error details ──
         if error_count > 0 {
             let error_items: Vec<ListItem> = state
                 .repos
@@ -306,12 +301,6 @@ fn repo_row(repo: &RepoSyncState, tick: usize) -> Line<'static> {
         (ch.to_string(), Style::default().fg(C_ACCENT))
     };
 
-    // Name color precedence matches the pre-refactor render:
-    //   - in-flight (no error yet) → bold C_PRIMARY alongside spinner
-    //   - in-flight but errored on fork/rds → plain C_PRIMARY (still active)
-    //   - terminal error → C_DANGEROUS
-    //   - terminal skipped → C_MUTED
-    //   - terminal success → C_TEXT
     let name_style = if repo.is_active() && !repo.has_error() {
         Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD)
     } else if repo.is_active() {

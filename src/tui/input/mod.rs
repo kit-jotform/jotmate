@@ -1,6 +1,4 @@
-//! Keyboard input dispatcher. Each screen's handler lives in its own submodule;
-//! this file owns only the public [`Action`] enum, [`handle_key`] dispatcher,
-//! and the module declarations.
+//! Keyboard dispatcher. Per-screen handlers live in submodules.
 
 use crossterm::event::KeyCode;
 

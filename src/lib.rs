@@ -1,7 +1,5 @@
-//! Library surface for the `jotmate` binary — makes modules reachable from
-//! integration tests in `tests/`. The binary (`src/main.rs`) imports from
-//! here rather than declaring its own module tree, so production and tests
-//! share one definition of every type.
+//! Library surface so integration tests in `tests/` and `src/main.rs` share
+//! one module tree.
 
 pub mod cli;
 pub mod config;

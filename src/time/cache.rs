@@ -4,8 +4,7 @@ use std::path::PathBuf;
 use crate::ctx::Paths;
 use crate::time::api::StatsResponse;
 
-/// IANA timezone names contain `/` which can't go in a path segment on its own.
-/// Replace with `_` so `Europe/Istanbul` becomes `Europe_Istanbul`.
+/// `Europe/Istanbul` → `Europe_Istanbul` (IANA names contain `/`).
 fn sanitize_tz(tz: &str) -> String {
     tz.replace('/', "_")
 }

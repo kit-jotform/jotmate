@@ -1,6 +1,6 @@
 use ratatui::style::Color;
 
-// One macro, one literal — produces both Color::Indexed and the ANSI escape string.
+// One literal → both Color::Indexed and the matching ANSI escape.
 macro_rules! color {
     ($name:ident, $ansi:ident, $idx:literal) => {
         pub const $name: Color = Color::Indexed($idx);
@@ -15,7 +15,6 @@ color!(C_MUTED, ANSI_MUTED, 243);
 color!(C_DANGEROUS, ANSI_DANGEROUS, 160);
 color!(C_WARN, ANSI_WARN, 220);
 
-// TUI-only — not used by headless renderers
 pub const C_PRIMARY: Color = Color::Indexed(199);
 
 pub const C_SELECT: Color = C_PRIMARY;

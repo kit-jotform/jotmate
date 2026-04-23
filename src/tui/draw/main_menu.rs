@@ -23,8 +23,6 @@ const TAGLINES: &[&str] = &[
 ];
 const TAGLINE_CYCLE_MS: u64 = 10000;
 const TAGLINE_FADE_MS: u64 = 600;
-// 256-color grayscale ramp from black to ≈ C_MUTED.
-// 232 = near-black, 243 = C_MUTED tone.
 const TAGLINE_GRAY_RAMP: &[u8] = &[232, 234, 236, 238, 240, 241, 242, 243];
 
 fn current_tagline() -> (&'static str, Color) {
@@ -58,7 +56,6 @@ fn current_tagline() -> (&'static str, Color) {
 pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
-    // Drop the icon on narrow terminals so the logo stays intact.
     let show_icon = area.width >= UI_WIDTH;
 
     let rows = ScreenLayout::new()
@@ -76,7 +73,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .margin(1)
         .split(engine.clamp_area(area));
 
-    // Header row: [icon | gap |] logo
     let header_row = rows.get("header");
     let logo_col = if show_icon {
         let header_cols = Layout::default()
@@ -93,7 +89,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         header_row
     };
 
-    // ── Logo (vertically centred in 7-row area) ──
     let logo_area = Rect {
         y: logo_col.y + 1,
         height: 6,
@@ -110,7 +105,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .collect();
     f.render_widget(Paragraph::new(logo_lines), logo_area);
 
-    // ── Divider ──
     let divider = "─".repeat(DIVIDER_WIDTH as usize);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -120,7 +114,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         engine.center(DIVIDER_WIDTH, rows.get("divider")),
     );
 
-    // ── Tagline ──
     let (tagline, tagline_color) = current_tagline();
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -132,7 +125,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         engine.center(tagline.chars().count() as u16, rows.get("tagline")),
     );
 
-    // ── Time | version ──
     let now = Local::now().format("%H:%M").to_string();
     let version = env!("CARGO_PKG_VERSION");
     let time_str = format!("{}  |  v{}", now, version);
@@ -146,7 +138,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         engine.center(time_len, rows.get("time_ver")),
     );
 
-    // ── "SELECT TOOL" header with keys ──
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -158,7 +149,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         engine.place(&Widget::anon(UI_WIDTH, HAlign::Center), rows.get("sel_hdr")),
     );
 
-    // ── Menu list ──
     let items: Vec<ListItem> = MAIN_ITEMS
         .iter()
         .enumerate()
@@ -202,7 +192,6 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         &mut app.list_state(Screen::MainMenu).clone(),
     );
 
-    // ── Hint (or config-load warning) ──
     let hint_line = if app.config_load_error.is_some() {
         Line::from(Span::styled(
             "⚠ config unreadable — using defaults; changes won't persist until fixed",

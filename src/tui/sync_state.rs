@@ -135,10 +135,7 @@ pub enum SyncUpdate {
     Elapsed(usize, f64),
 }
 
-/// Lifecycle phase of the sync screen. `Discovering` is shown while we're
-/// populating the repo-paths cache on first use; `Syncing` is the normal
-/// per-repo progress view; `Failed` means we bailed before starting work and
-/// `setup_error` holds the user-facing reason.
+/// `Failed` carries its reason in `setup_error`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyncPhase {
     Discovering,
@@ -146,9 +143,8 @@ pub enum SyncPhase {
     Failed,
 }
 
-/// Payload delivered once the background discovery task finishes. The launcher
-/// hands ownership of the enabled-repo list to the background worker; we get
-/// it back here so we can preserve config order when building the sync plan.
+/// Discovery returns the enabled-repo list back so the launcher can preserve
+/// config order when building the sync plan.
 pub type DiscoveryResult = Result<(Vec<UpstreamRepo>, HashMap<String, PathBuf>), String>;
 
 pub struct SyncScreenState {
@@ -158,7 +154,6 @@ pub struct SyncScreenState {
     pub update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
     pub phase: SyncPhase,
     pub setup_error: Option<String>,
-    /// Populated while `phase == Discovering`. When this channel resolves,
-    /// the event loop either transitions to `Syncing` or `Failed`.
+    /// Populated while `phase == Discovering`; resolves into `Syncing` or `Failed`.
     pub discovery_rx: Option<oneshot::Receiver<DiscoveryResult>>,
 }

@@ -62,8 +62,8 @@ enum SkipDecision {
     AlreadyReported,
 }
 
-// Uses `git status --porcelain=v2 --branch` to get dirty state, branch name, and
-// ahead/behind counts in a single command instead of 4-6 sequential git calls.
+/// One `git status --porcelain=v2 --branch` covers dirty state, branch, and
+/// ahead/behind — replaces 4-6 sequential git calls.
 async fn skip_reason(
     git: &dyn GitExec,
     repo: &Path,
@@ -75,13 +75,11 @@ async fn skip_reason(
         .await
         .unwrap_or_default();
 
-    // Any entry that isn't a `#` header line means the working tree is dirty.
     let dirty = status.lines().any(|l| !l.starts_with('#'));
     if dirty {
         return SkipDecision::Proceed;
     }
 
-    // Parse `# branch.head <name>` — detached HEAD means "HEAD".
     let branch = status
         .lines()
         .find(|l| l.starts_with("# branch.head "))
@@ -93,18 +91,14 @@ async fn skip_reason(
         return SkipDecision::Proceed;
     }
 
-    // Parse `# branch.ab +<ahead> -<behind>`.
-    // If this line is absent git hasn't tracked the upstream yet; fetch and proceed.
     let ab_line = status.lines().find(|l| l.starts_with("# branch.ab "));
-
     let (ahead, behind) = match ab_line {
         None => {
-            // No upstream tracking info — fetch origin and proceed.
+            // Missing `branch.ab` means upstream isn't tracked yet; fetch and proceed.
             let _ = git.git(repo, &["fetch", "origin", &branch]).await;
             return SkipDecision::Proceed;
         }
         Some(line) => {
-            // Format: `# branch.ab +A -B`
             let mut ahead = 0u32;
             let mut behind = 0u32;
             for token in line.split_whitespace() {

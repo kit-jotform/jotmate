@@ -81,7 +81,7 @@ pub fn weeks_to_fetch(start_date: NaiveDate, skip_current_week: bool) -> Vec<Nai
 
     loop {
         if skip_current_week && current >= this_week_monday {
-            // skip current/future weeks
+            // skip
         } else if current >= start_date {
             weeks.push(current);
         }
@@ -123,22 +123,22 @@ pub fn get_week_end_sunday(monday: NaiveDate) -> NaiveDate {
     monday + chrono::Duration::days(6)
 }
 
-pub fn build_week_row_from_cache(
+pub fn build_week_row(
     monday: NaiveDate,
     stats: &crate::time::api::StatsResponse,
     contract_periods: &[ContractPeriod],
+    from_cache: bool,
 ) -> WeekRow {
-    let week_label = format_week_range(monday);
     let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
     let target_hours = get_target_hours(monday, contract_periods);
     WeekRow {
         monday,
-        week_label,
+        week_label: format_week_range(monday),
         worked_secs,
         target_hours,
         balance_hours: (worked_secs as f64 / 3600.0) - target_hours,
         cumulative_hours: 0.0,
-        from_cache: true,
+        from_cache,
     }
 }
 

@@ -1,22 +1,13 @@
-//! Execution context — the "composition root" threaded through the app.
-//!
-//! Holds every piece of ambient state the business logic needs (filesystem
-//! roots, keychain backend, HTTP base URLs) so that:
-//!   - the binary builds one `Ctx::production()` at startup, and
-//!   - tests build a `Ctx` with a temp-dir filesystem, a fake keychain, and
-//!     a mockito base URL — never touching the user's real home.
-//!
-//! Leaf functions should generally take the narrowest dependency they need
-//! (`&Paths`, `&dyn KeychainStore`) rather than `&Ctx`, so pure-function
-//! tests stay narrow and don't need to build the whole world.
+//! Composition root: filesystem roots, keychain, HTTP bases. Production builds
+//! one `Ctx::production()`; tests swap in a temp-dir + fake keychain + mockito.
+//! Prefer narrow leaf args (`&Paths`, `&dyn KeychainStore`) over `&Ctx`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::time::keychain::KeychainStore;
 
-/// Filesystem layout roots. Production reads from `dirs::config_dir()` /
-/// `dirs::cache_dir()`; tests point them at a `TempDir`.
+/// Production reads `dirs::config_dir()` / `dirs::cache_dir()`; tests pass a `TempDir`.
 #[derive(Debug, Clone)]
 pub struct Paths {
     config_dir: PathBuf,
@@ -63,7 +54,7 @@ impl Paths {
     }
 }
 
-/// Base URLs for TimeDoctor HTTP endpoints. Tests point these at mockito.
+/// TimeDoctor endpoint URLs; tests point these at mockito.
 #[derive(Debug, Clone)]
 pub struct HttpBase {
     pub login: String,
@@ -79,8 +70,7 @@ impl HttpBase {
     }
 }
 
-/// Top-level execution context. Built once by `main.rs`; tests build a
-/// per-test `Ctx` via helpers in `tests/common`.
+/// Top-level execution context; built once by `main.rs`, per-test in `tests/common`.
 #[derive(Clone)]
 pub struct Ctx {
     pub paths: Paths,

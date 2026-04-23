@@ -7,17 +7,13 @@ const KEYCHAIN_SERVICE: &str = "jotmate-timedoctor";
 const KEY_SESSION: &str = "session-cookie";
 const KEY_PASSWORD: &str = "password";
 
-// Using the `security` CLI instead of the keyring crate's apple-native backend
-// because the native SecKeychain API binds items to the calling binary's hash.
-// Every `cargo build` produces a new binary → new hash → macOS re-prompts even
-// after "Always Allow". Items written via the `security` CLI have no
-// trusted-application ACL and never prompt.
+// `security` CLI instead of the keyring crate's apple-native backend: SecKeychain binds items to
+// the calling binary's hash, so every `cargo build` re-prompts even after "Always Allow". Items
+// written via the CLI have no trusted-application ACL and never prompt.
 
-/// Abstract credential store so tests can substitute an in-memory fake
-/// without touching the user's real macOS Keychain.
+/// Abstracted so tests can substitute an in-memory fake.
 pub trait KeychainStore: Send + Sync {
-    /// `Ok(Some(_))` = present, `Ok(None)` = not present, `Err(_)` = access
-    /// denied or backend unavailable.
+    /// `Ok(Some(_))` present · `Ok(None)` absent · `Err(_)` access denied or backend unavailable.
     fn get_token(&self) -> Result<Option<String>>;
     fn set_token(&self, value: &str) -> Result<()>;
     fn delete_token(&self) -> Result<()>;
@@ -28,10 +24,9 @@ pub trait KeychainStore: Send + Sync {
     fn delete_password(&self) -> Result<()>;
 }
 
-/// Production `KeychainStore` backed by the macOS `security` CLI.
 pub struct SecurityCliKeychain;
 
-/// macOS `security` exit code for `errSecItemNotFound`.
+/// `errSecItemNotFound`.
 const SECURITY_EXIT_NOT_FOUND: i32 = 44;
 
 impl SecurityCliKeychain {
@@ -81,8 +76,7 @@ impl SecurityCliKeychain {
     }
 
     fn set(&self, account: &str, password: &str) -> Result<()> {
-        // Delete first (ignore errors), then add fresh — this avoids
-        // "SecKeychainItemModifyAttributesAndData" errors on update.
+        // Delete-then-add avoids `SecKeychainItemModifyAttributesAndData` errors on update.
         let _ = self.delete(account);
 
         let status = Command::new("security")

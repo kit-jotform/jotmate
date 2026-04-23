@@ -20,8 +20,6 @@ use std::io::stdout;
 use app::{App, Screen};
 use event_loop::event_loop;
 
-// ── Terminal setup / teardown ─────────────────────────────────────────────────
-
 pub(super) fn setup_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>> {
     enable_raw_mode()?;
     let mut out = stdout();
@@ -35,8 +33,6 @@ pub(super) fn teardown_terminal(terminal: &mut Terminal<CrosstermBackend<std::io
     let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
     let _ = terminal.show_cursor();
 }
-
-// ── Entry points ──────────────────────────────────────────────────────────────
 
 pub async fn run_interactive(ctx: crate::ctx::Ctx) -> Result<()> {
     run_tui(ctx, Screen::MainMenu).await

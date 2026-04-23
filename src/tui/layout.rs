@@ -1,6 +1,6 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-/// Canonical UI width — matches the full header (icon 14 + gap 2 + logo 63).
+/// Icon (14) + gap (2) + logo (63).
 pub const UI_WIDTH: u16 = 79;
 
 pub enum HAlign {
@@ -18,8 +18,6 @@ impl Widget {
         Self { width, halign }
     }
 }
-
-// ── Layout engine (horizontal) ────────────────────────────────────────────────
 
 pub struct LayoutEngine {
     ui_width: u16,

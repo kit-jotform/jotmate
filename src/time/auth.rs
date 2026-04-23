@@ -1,13 +1,11 @@
 use anyhow::{Context, Result};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use std::sync::Arc;
 
 use crate::ctx::HttpBase;
 use crate::error::AppError;
 use crate::time::keychain::KeychainStore;
 
-/// Run a blocking operation on the blocking pool so it doesn't stall the
-/// async runtime. Used for the `security` CLI which is inherently blocking.
+/// Offload to the blocking pool — the `security` CLI is inherently blocking.
 async fn blocking<F, T>(f: F) -> T
 where
     F: FnOnce() -> T + Send + 'static,
@@ -20,17 +18,7 @@ where
 
 pub async fn login(http: &HttpBase, email: &str, password: &str) -> Result<String> {
     let client = crate::time::api::shared_client();
-
-    let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    headers.insert(
-        "Origin",
-        HeaderValue::from_static("https://2.timedoctor.com"),
-    );
-    headers.insert(
-        "Referer",
-        HeaderValue::from_static("https://2.timedoctor.com/"),
-    );
+    let headers = crate::time::api::td_headers();
 
     let body = serde_json::json!({
         "email": email,

@@ -13,7 +13,7 @@ pub(in crate::tui::draw) fn hint_muted(parts: &[&str]) -> Vec<Span<'static>> {
         .collect()
 }
 
-// `action` is padded to 6 chars so the `•` separators align regardless of verb.
+/// `action` is padded to 6 chars so the `•` separators align across verbs.
 pub(in crate::tui::draw) fn hint_navigate_action(action: &str) -> Vec<Span<'static>> {
     hint_muted(&[
         "↑↓",

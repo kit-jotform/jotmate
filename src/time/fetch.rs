@@ -8,8 +8,7 @@ use crate::ctx::Paths;
 use super::api;
 use super::cache;
 use super::compute::{
-    build_week_row_from_cache, format_week_range, get_target_hours, get_week_end_sunday,
-    get_week_start_monday, is_past_week, WeekRow,
+    build_week_row, get_week_end_sunday, get_week_start_monday, is_past_week, WeekRow,
 };
 
 #[derive(Clone)]
@@ -28,18 +27,11 @@ pub async fn fetch_week(
     opts: &FetchOpts,
 ) -> Result<WeekRow> {
     let company_id = TIMEDOCTOR_COMPANY_ID;
-    let week_label = format_week_range(monday);
     let past = is_past_week(monday);
 
     if past && !opts.no_cache {
         if let Some(stats) = cache::read_week_cache(paths, company_id, &opts.timezone, monday) {
-            return Ok(build_row(
-                monday,
-                week_label,
-                &stats,
-                &opts.contract_periods,
-                true,
-            ));
+            return Ok(build_week_row(monday, &stats, &opts.contract_periods, true));
         }
     }
 
@@ -86,16 +78,15 @@ pub async fn fetch_week(
         cache::write_week_cache(paths, company_id, &opts.timezone, monday, &stats);
     }
 
-    Ok(build_row(
+    Ok(build_week_row(
         monday,
-        week_label,
         &stats,
         &opts.contract_periods,
         false,
     ))
 }
 
-// Shared by time::run (CLI) and App::launch_td_report (TUI) to prevent the two paths from drifting.
+/// Single source of truth for CLI (`time::run`) and TUI (`App::launch_td_report`).
 pub fn split_cached_weeks(
     paths: &Paths,
     mondays: &[NaiveDate],
@@ -115,32 +106,11 @@ pub fn split_cached_weeks(
             if let Some(stats) =
                 cache::read_week_cache(paths, TIMEDOCTOR_COMPANY_ID, timezone, monday)
             {
-                cached.push(build_week_row_from_cache(monday, &stats, contract_periods));
+                cached.push(build_week_row(monday, &stats, contract_periods, true));
                 continue;
             }
         }
         uncached.push(monday);
     }
     (cached, uncached)
-}
-
-fn build_row(
-    monday: NaiveDate,
-    week_label: String,
-    stats: &api::StatsResponse,
-    contract_periods: &[ContractPeriod],
-    from_cache: bool,
-) -> WeekRow {
-    let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
-    let target_hours = get_target_hours(monday, contract_periods);
-    let balance_hours = (worked_secs as f64 / 3600.0) - target_hours;
-    WeekRow {
-        monday,
-        week_label,
-        worked_secs,
-        target_hours,
-        balance_hours,
-        cumulative_hours: 0.0,
-        from_cache,
-    }
 }

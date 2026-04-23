@@ -64,14 +64,9 @@ pub(super) fn clamp_to_last_interactive<T>(
     current.min(last)
 }
 
-// ── with_rows! macro ──────────────────────────────────────────────────────────
-
-/// Dispatches an expression across every list-screen's row-provider so both
-/// `first_interactive` and `navigate_rows` can share one match arm per screen.
-///
-/// Usage: `with_rows!(self, screen, rows, is_int => body; default_expr)` —
-/// inside `body`, `rows` is the `Vec<RowType>` and `is_int` is the corresponding
-/// row type's `is_interactive` function.
+/// Dispatches an expression across every list-screen's row-provider, so
+/// `first_interactive` and `navigate_rows` share one match arm per screen.
+/// Usage: `with_rows!(self, screen, rows, is_int => body; default_expr)`.
 macro_rules! with_rows {
     ($self:ident, $screen:expr, $rows:ident, $is_int:ident => $body:expr ; $default:expr) => {
         match $screen {
@@ -116,8 +111,6 @@ macro_rules! with_rows {
 }
 
 impl App {
-    // ── List state accessors ───────────────────────────────────────────────────
-
     pub fn list_state(&self, screen: Screen) -> &ListState {
         self.list_states
             .get(&screen)

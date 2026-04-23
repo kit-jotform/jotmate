@@ -1,18 +1,6 @@
-//! App state module. The `App` struct and its behavior are split across
-//! submodules by responsibility:
-//!
-//! - [`screen`] — `Screen` enum and `MAIN_ITEMS`
-//! - [`constants`] — `TIMEZONES`, `WEEKLY_HOURS_OPTIONS`, and small helpers
-//! - [`navigation`] — list-state accessors, row navigation, `with_rows!` macro
-//! - [`row_builders`] — `App::*_items()` methods that build screen row vectors
-//! - [`mutations`] — toggle, cycle, confirm/execute delete, add repo, etc.
-//! - [`persistence`] — `persist_settings` / `persist_td_settings` + `mutate_and_save`
-//! - [`sync`] — sync-screen lifecycle (`start_sync`, `apply_sync_update`, …)
-//! - [`td_report`] — `TdReportState` and async TD report fetch/poll
-//!
-//! External callers keep importing from `crate::tui::app::{…}`: the row types,
-//! screen, input mode, td report state, sync state types, and shared constants
-//! are all re-exported from this module.
+//! `App` state, split across submodules by responsibility. Row types, screen,
+//! input mode, TD report state, sync state, and shared constants are
+//! re-exported below so callers can `use crate::tui::app::{…}` directly.
 
 use anyhow::Result;
 use chrono::NaiveDate;
@@ -33,7 +21,7 @@ mod td_report;
 
 pub use constants::WEEKLY_HOURS_OPTIONS;
 pub use screen::{Screen, MAIN_ITEMS};
-pub use td_report::TdReportState;
+pub use td_report::{TdReportState, TD_REPORT_VISIBLE_ROWS};
 
 pub use super::rows::{
     CpListRow, CycleTarget, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, SettingRow,
@@ -45,8 +33,6 @@ pub use super::sync_state::{
 
 use constants::{this_monday, timezone_index};
 use navigation::list_state_at;
-
-// ── Grouped in-memory state ──────────────────────────────────────────────────
 
 pub struct SyncSettings {
     pub use_cache: bool,
@@ -63,8 +49,7 @@ pub struct TimeSettings {
     pub skip_current_week: bool,
     pub use_time_cache: bool,
     pub show_cumulative: bool,
-    /// Lazily populated — a keychain lookup spawns a `security` CLI subprocess
-    /// (~100–300ms) and must not block TUI startup.
+    /// Lazy: each `security` CLI lookup is ~100-300ms; must not block TUI startup.
     pub password_is_set: OnceCell<bool>,
     pub contract_periods: Vec<ContractPeriod>,
 }
@@ -73,8 +58,6 @@ pub struct AddCpForm {
     pub monday: NaiveDate,
     pub hours_idx: usize,
 }
-
-// ── App struct ────────────────────────────────────────────────────────────────
 
 pub struct App {
     pub ctx: crate::ctx::Ctx,
@@ -98,9 +81,7 @@ pub struct App {
 
 impl App {
     pub fn password_is_set(&self) -> bool {
-        // An `Err` here (e.g. user denied keychain access) is reported as
-        // "not set" so the UI still lets them re-enter the password. If the
-        // save path also hits a keychain error it surfaces the real message.
+        // Treat keychain errors as "not set" so the UI lets the user re-enter; the save path surfaces the real error.
         let kc = self.ctx.keychain.clone();
         *self
             .td

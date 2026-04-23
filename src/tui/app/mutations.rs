@@ -7,8 +7,6 @@ use super::screen::Screen;
 use super::App;
 
 impl App {
-    // ── Toggle + settings mutation ────────────────────────────────────────────
-
     pub fn toggle_by_kind(&mut self, kind: ToggleKind) {
         let flag = match kind {
             ToggleKind::UseCache => &mut self.sync.use_cache,
@@ -121,12 +119,10 @@ impl App {
         } else {
             self.td.contract_periods.push(entry);
             self.td.contract_periods.sort_by_key(|p| p.from);
-            // New period added — bump selection to stay on the same row
             let i = self.selected_index(Screen::ContractPeriods);
             self.select(Screen::ContractPeriods, i + 1);
         }
         self.persist_td_settings();
-        // Reset add fields for next entry
         self.add_cp.monday = self
             .td
             .contract_periods
@@ -136,8 +132,6 @@ impl App {
         self.add_cp.hours_idx = 1;
     }
 
-    // ── Repo management ───────────────────────────────────────────────────────
-
     fn normalize_url(url: &str) -> String {
         url.trim()
             .trim_end_matches('/')
@@ -145,23 +139,17 @@ impl App {
             .to_string()
     }
 
-    /// Returns the last path segment, or `None` if the URL has no path part
-    /// (e.g. `https://github.com`). Supports both `https://host/path` and
-    /// `git@host:path` SSH forms.
+    /// Last path segment of an https or `git@host:path` SSH URL, or `None` if
+    /// the URL has no path component.
     fn name_from_url(url: &str) -> Option<String> {
         let normalized = Self::normalize_url(url);
-        // Strip the host prefix so the remaining string *is* the path.
-        // For https URLs: take everything after the first `/` past `://`.
-        // For SSH URLs (git@host:path): take everything after the `:`.
         let path = if let Some(rest) = normalized.strip_prefix("https://") {
             rest.split_once('/').map(|(_host, p)| p)?
         } else if let Some(rest) = normalized.strip_prefix("http://") {
             rest.split_once('/').map(|(_host, p)| p)?
         } else if let Some((_host, p)) = normalized.split_once(':') {
-            // SSH form: git@host:owner/repo
             p
         } else {
-            // Plain relative-looking input; take the last segment.
             normalized.as_str()
         };
         let last = path.rsplit('/').next().unwrap_or("");

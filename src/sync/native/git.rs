@@ -2,27 +2,18 @@ use async_trait::async_trait;
 use std::path::Path;
 use tokio::process::Command;
 
-/// Abstraction over git subprocess + the RDS `./sync` script launcher so
-/// the sync pipeline can be tested without actually spawning processes.
-///
-/// A single trait covers both because both are "execute a command in a repo
-/// and report success/failure with captured output." The production impl
-/// uses `tokio::process::Command`; the test impl returns canned results
-/// from a rules table.
+/// Abstraction over `git` + RDS `./sync` invocation so the sync pipeline can
+/// be tested without spawning real processes.
 #[async_trait]
 pub trait GitExec: Send + Sync {
-    /// Run `git -C <repo> <args...>`. On success returns trimmed stdout;
-    /// on failure returns trimmed stderr (or a stringified exit code).
+    /// `git -C <repo> <args...>` — Ok = trimmed stdout, Err = trimmed stderr or exit code.
     async fn git(&self, repo: &Path, args: &[&str]) -> Result<String, String>;
 
-    /// Run the repo-local `./sync` script. Returns `Ok(())` on exit-0,
-    /// `Err(stderr_or_exit)` otherwise. Callers check `repo.join("sync")`
-    /// existence themselves before calling this so "no script" and "script
-    /// failed" stay distinguishable.
+    /// Run repo-local `./sync`. Callers check `repo.join("sync")` existence
+    /// first so "no script" stays distinguishable from "script failed".
     async fn run_rds_script(&self, repo: &Path) -> Result<(), String>;
 }
 
-/// Production `GitExec` that actually spawns `git` and `./sync`.
 pub struct SubprocessGit;
 
 #[async_trait]
@@ -67,9 +58,6 @@ impl GitExec for SubprocessGit {
     }
 }
 
-/// Back-compat free-fn wrapper used by the rest of the module.
-/// Delegates to `SubprocessGit` — eventually callers should take
-/// `&dyn GitExec` directly.
 pub(super) async fn detect_default_branch(git: &dyn GitExec, repo: &Path) -> Option<String> {
     if let Ok(s) = git
         .git(repo, &["symbolic-ref", "refs/remotes/upstream/HEAD"])

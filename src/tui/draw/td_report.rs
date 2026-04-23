@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::time::compute::{format_hours, format_hours_signed, HOURS_DISPLAY_WIDTH};
-use crate::tui::app::{App, TdReportState};
+use crate::tui::app::{App, TdReportState, TD_REPORT_VISIBLE_ROWS};
 use crate::tui::layout::UI_WIDTH;
 use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
 
@@ -40,18 +40,15 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         hint_spans,
     );
 
-    // Split the list area into scrollable content + total balance + hint row.
     // Clamp to UI_WIDTH so the report doesn't bleed across wide terminals.
     let list_area = clamp_to_ui_width(layout.get("list"), area.x);
-    const MAX_VISIBLE_ROWS: usize = 6;
     let visible_row_count = match &app.td_report {
         TdReportState::Ready { rows, .. } => rows.len(),
         TdReportState::PartialReady { rows, pending, .. } => rows.len() + pending,
         _ => 0,
     };
-    let content_height = 2 + MAX_VISIBLE_ROWS.min(visible_row_count) as u16;
+    let content_height = 2 + TD_REPORT_VISIBLE_ROWS.min(visible_row_count) as u16;
     let (content_area, total_area, hint_area) = split_content_total_hint(list_area, content_height);
-    // Inset content 3 chars on each side
     let content_area = inset_rect(content_area, 3);
 
     let total_area = inset_rect(total_area, 3);
@@ -77,7 +74,6 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
     };
     f.render_widget(Paragraph::new(total_line), total_area);
 
-    // Bottom status hint
     let bottom_hint = match &app.td_report {
         TdReportState::Loading => "Loading...",
         TdReportState::Ready { .. } => HINT_RETURN_TO_MENU,
@@ -317,7 +313,6 @@ fn build_row(
         C_DANGEROUS
     };
 
-    // Flag current (partial) week differently
     let week_color = if row.from_cache { C_TEXT } else { C_WARN };
 
     let worked_str = format!("{:>width$}", format_hours(worked_h), width = num_w);
@@ -329,7 +324,6 @@ fn build_row(
     let target_str = format!("{:>width$}", target_value, width = num_w);
     let balance_str = format!("{:>width$}", format_hours_signed(balance), width = num_w);
 
-    // Index prefix width scales with total (e.g. "9. " = 3, "23. " = 4)
     let idx_w = total.to_string().len() + 2; // digits + ". "
     let date_w = week_w.saturating_sub(idx_w);
     let idx_str = format!("{:>width$}. ", index, width = total.to_string().len());

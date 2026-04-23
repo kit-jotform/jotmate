@@ -10,12 +10,12 @@ use super::constants::TIMEZONES;
 use super::screen::Screen;
 use super::App;
 
-// ── Time Doctor report state ─────────────────────────────────────────────────
+/// Visible week rows; used to anchor initial scroll to the most recent weeks.
+pub const TD_REPORT_VISIBLE_ROWS: usize = 6;
 
 pub enum TdReportState {
     Loading,
-    /// Some weeks loaded from cache and shown immediately; uncached weeks are
-    /// being fetched in the background. `pending` is the count of in-flight weeks.
+    /// Cached weeks shown immediately while `pending` uncached weeks fetch in the background.
     PartialReady {
         rows: Vec<crate::time::compute::WeekRow>,
         pending: usize,
@@ -63,15 +63,19 @@ async fn fetch_parallel(
 }
 
 impl App {
-    /// Navigate to the Time Doctor report screen.
-    ///
-    /// When cache is enabled:
-    ///   - All weeks that are already cached are shown immediately as `PartialReady`.
-    ///   - Only the uncached weeks (missing past weeks + current week) are fetched
-    ///     in parallel in the background.
-    ///
-    /// When cache is disabled: all weeks are fetched in parallel from the start
-    /// (screen stays `Loading` until done).
+    fn reset_cumulative_from(&self) -> Option<NaiveDate> {
+        crate::config::load(&self.ctx.paths)
+            .ok()
+            .and_then(|c| c.time.reset_cumulative_from_date)
+    }
+
+    fn scroll_to_bottom(rows_len: usize) -> usize {
+        rows_len.saturating_sub(TD_REPORT_VISIBLE_ROWS)
+    }
+
+    /// Open the TD report. With cache: cached weeks render via `PartialReady`
+    /// while uncached weeks fetch in the background. Without cache: the screen
+    /// stays `Loading` until all weeks resolve in parallel.
     pub fn launch_td_report(&mut self) {
         self.screen = Screen::TimeDoctorReport;
         self.td_report = TdReportState::Loading;
@@ -108,12 +112,9 @@ impl App {
         );
 
         if !cached_rows.is_empty() {
-            let reset_from = crate::config::load(&self.ctx.paths)
-                .ok()
-                .and_then(|c| c.time.reset_cumulative_from_date);
-            compute_cumulative(&mut cached_rows, reset_from);
+            compute_cumulative(&mut cached_rows, self.reset_cumulative_from());
             cached_rows.sort_by_key(|r| r.monday);
-            self.td_report_scroll = cached_rows.len().saturating_sub(6);
+            self.td_report_scroll = Self::scroll_to_bottom(cached_rows.len());
             let pending = uncached_mondays.len();
             self.td_report = TdReportState::PartialReady {
                 rows: cached_rows,
@@ -132,7 +133,7 @@ impl App {
                 } => (rows.clone(), *show_cumulative),
                 _ => (vec![], true),
             };
-            self.td_report_scroll = rows.len().saturating_sub(6);
+            self.td_report_scroll = Self::scroll_to_bottom(rows.len());
             self.td_report = TdReportState::Ready {
                 rows,
                 show_cumulative,
@@ -153,7 +154,7 @@ impl App {
         });
     }
 
-    /// Poll for completed TD report results. Returns true if state changed.
+    /// Returns true if state changed.
     pub fn poll_td_report(&mut self) -> bool {
         if let Some(rx) = &mut self.td_report_rx {
             match rx.try_recv() {
@@ -169,7 +170,6 @@ impl App {
             }
         }
 
-        // Tick spinner while partial results are showing.
         if let TdReportState::PartialReady { tick, .. } = &mut self.td_report {
             *tick = tick.wrapping_add(1);
             return true;
@@ -179,9 +179,7 @@ impl App {
     }
 
     fn apply_fetch_result(&mut self, result: FetchResult) {
-        let reset_from = crate::config::load(&self.ctx.paths)
-            .ok()
-            .and_then(|c| c.time.reset_cumulative_from_date);
+        let reset_from = self.reset_cumulative_from();
 
         match result {
             Ok(new_rows) => {
@@ -192,7 +190,7 @@ impl App {
                 rows.extend(new_rows);
                 compute_cumulative(&mut rows, reset_from);
                 rows.sort_by_key(|r| r.monday);
-                self.td_report_scroll = rows.len().saturating_sub(6);
+                self.td_report_scroll = Self::scroll_to_bottom(rows.len());
                 self.td_report = TdReportState::Ready {
                     rows,
                     show_cumulative: true,
@@ -216,7 +214,7 @@ impl App {
                     let show_cumulative = *show_cumulative;
                     compute_cumulative(&mut rows, reset_from);
                     rows.sort_by_key(|r| r.monday);
-                    self.td_report_scroll = rows.len().saturating_sub(6);
+                    self.td_report_scroll = Self::scroll_to_bottom(rows.len());
                     self.td_report = TdReportState::Ready {
                         rows,
                         show_cumulative,
@@ -235,13 +233,12 @@ impl App {
         }
     }
 
-    /// Save password to keychain and update in-memory flag.
-    /// Returns true if the password was saved successfully.
+    /// Save password to keychain; returns false on empty input or save failure.
     pub fn set_td_password(&mut self, password: &str) -> bool {
         if password.is_empty() {
             return false;
         }
-        // Delete old session token so a fresh login is triggered with the new password
+        // New password invalidates the cached session.
         let _ = self.ctx.keychain.delete_token();
         match self.ctx.keychain.set_password(password) {
             Ok(()) => {

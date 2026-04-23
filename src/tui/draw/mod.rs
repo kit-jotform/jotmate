@@ -1,8 +1,5 @@
-//! Draw module. Owns the per-frame [`draw`] dispatcher plus a `common` submodule
-//! with every shared helper (hints, item builders, header, confirm dialog, layout).
-//!
-//! Each per-screen renderer lives in its own submodule and imports helpers via
-//! `super::common::*` (re-exported below so sibling files can use `super::*`).
+//! Per-frame [`draw`] dispatcher. Each screen has its own submodule; shared
+//! helpers live in `common` and are re-exported below for `super::*` use.
 
 use crate::tui::app::{App, Screen};
 

@@ -10,8 +10,7 @@ use crate::cli::SyncArgs;
 use crate::config::{Config, UpstreamRepo};
 use crate::ctx::Ctx;
 
-/// Plan produced from `SyncArgs` + `Config` before any filesystem work.
-/// Pure — no I/O — so this is exhaustively unit-testable.
+/// `SyncArgs` + `Config` resolved into a runnable plan. Pure (no I/O).
 #[derive(Debug)]
 pub struct SyncPlan {
     pub repos: Vec<UpstreamRepo>,
@@ -19,8 +18,7 @@ pub struct SyncPlan {
     pub use_cache: bool,
 }
 
-/// Validate args and merge config defaults into a plan. Returns a user-facing
-/// error for any invalid combination or empty repo selection.
+/// Validate args, merge config defaults; user-facing error on bad combinations.
 pub fn plan_sync(mut args: SyncArgs, config: &Config) -> Result<SyncPlan> {
     if args.sync_all && args.only.is_some() {
         anyhow::bail!("--sync-all and --only are mutually exclusive");
@@ -29,7 +27,6 @@ pub fn plan_sync(mut args: SyncArgs, config: &Config) -> Result<SyncPlan> {
         anyhow::bail!("--rds-only and --skip-rds-sync are mutually exclusive");
     }
 
-    // --rds-only implies --skip-fork-sync
     if args.rds_only {
         args.skip_fork_sync = true;
     }
@@ -128,6 +125,11 @@ fn resolve_repo_paths(
     }
 
     let all_repos: Vec<UpstreamRepo> = repos.iter().map(|r| (*r).clone()).collect();
+    println!("Discovering git repositories (this may take a moment)...");
     let discovered = discover::discover_and_cache(paths, &all_repos)?;
+    println!("All repositories located:");
+    for (project, path) in &discovered.paths {
+        println!("  {project}: {}", path.display());
+    }
     Ok(discovered.paths)
 }

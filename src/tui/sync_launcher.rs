@@ -1,6 +1,5 @@
-//! Single source of truth for "can we start a sync?" — every failure path
-//! routes through `App::fail_sync_setup` so the user always sees a
-//! SyncProgress screen with a reason, never a silent no-op on the main menu.
+//! Every failure path routes through `App::fail_sync_setup` so the SyncProgress
+//! screen always shows a reason — never a silent no-op on the main menu.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -71,13 +70,13 @@ fn spawn_discovery(app: &mut App, enabled: Vec<UpstreamRepo>) {
 }
 
 fn discover_blocking(paths: &Paths, enabled: Vec<UpstreamRepo>) -> DiscoveryResult {
-    crate::sync::discover::discover_and_cache_quiet(paths, &enabled)
+    crate::sync::discover::discover_and_cache(paths, &enabled)
         .map(|cache| (enabled, cache.paths))
         .map_err(|e| e.to_string())
 }
 
 fn start_real_sync(app: &mut App, enabled: &[UpstreamRepo], paths: HashMap<String, PathBuf>) {
-    // Preserve config order so the UI list is stable across runs.
+    // Stable UI order = config order.
     let ordered: Vec<(String, PathBuf)> = enabled
         .iter()
         .filter_map(|r| paths.get(&r.name).map(|p| (r.name.clone(), p.clone())))

@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use crate::tui::app::{App, Screen, TdReportState};
+use crate::tui::app::{App, Screen, TdReportState, TD_REPORT_VISIBLE_ROWS};
 
 use super::helpers::clamp_scroll;
 use super::Action;
@@ -18,7 +18,8 @@ pub(super) fn handle_td_report(app: &mut App, code: KeyCode) -> Action {
             } else {
                 1
             };
-            app.td_report_scroll = clamp_scroll(app.td_report_scroll, delta, total, 6);
+            app.td_report_scroll =
+                clamp_scroll(app.td_report_scroll, delta, total, TD_REPORT_VISIBLE_ROWS);
         }
         KeyCode::Enter => match app.td_report {
             TdReportState::NoPeriods => app.screen = Screen::ContractPeriods,

@@ -1,6 +1,5 @@
-//! The TUI's main event loop. Owns the three distinct polling modes used by
-//! different screens (TD-report foreground re-auth, sync-progress animation,
-//! and the default blocking-read mode) so `tui/mod.rs` can stay small.
+//! Main event loop. Per-screen polling modes (TD-report, sync-progress,
+//! main-menu, default blocking) keep `tui/mod.rs` thin.
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};

@@ -16,9 +16,7 @@ pub(super) fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
         |a| a.td_settings_items(),
     ) {
         ControlFlow::Break(a) => {
-            // Nav/back consumed the key — clear stale auth errors. Idle keys
-            // (e.g. random letters) instead return Continue via is_activate=false;
-            // distinguish them so they don't dismiss the error.
+            // Only clear auth_error on real navigation keys; idle keys must not dismiss the error.
             if super::keys::nav_delta(code).is_some()
                 || super::keys::is_back(code)
                 || code == KeyCode::Char('q')
@@ -47,8 +45,7 @@ pub(super) fn handle_td_settings(app: &mut App, code: KeyCode) -> Action {
 }
 
 pub(super) fn handle_td_field_input(app: &mut App, code: KeyCode) -> Action {
-    // Snapshot which field is being edited so the on_enter closure can route to
-    // the matching save path (email validation vs keychain password save).
+    // Snapshot the field so on_enter can route to the right save path.
     let field = match &app.input_mode {
         InputMode::EditingField { field, .. } => *field,
         _ => return Action::Continue,

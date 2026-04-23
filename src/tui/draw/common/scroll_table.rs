@@ -1,7 +1,4 @@
-//! Shared scrollable-table renderer used by the TD report and sync-progress
-//! screens. Renders a 2-row header (content + muted divider), the data rows
-//! clipped to the available height, and a single-column scrollbar on the right
-//! when the data overflows.
+//! Scrollable table: 2-row header, clipped data rows, scrollbar on overflow.
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -27,8 +24,7 @@ pub(in crate::tui::draw) fn draw_scroll_table(
     let header_area = chunks[0];
     let data_area = chunks[1];
 
-    // Header row + muted divider that matches the content width (minus a 2-col
-    // right margin so the divider doesn't run under the scrollbar track).
+    // 2-col right margin keeps the divider clear of the scrollbar track.
     let header_w = header_area.width.saturating_sub(2) as usize;
     let divider = Line::from(Span::styled(
         "─".repeat(header_w),

@@ -1,7 +1,5 @@
-//! Single-line headless CLI output for `jotmate sync`.
-//!
-//! Owns its own spinner + ANSI rendering and consumes [`SyncUpdate`] messages
-//! from the shared sync engine ([`super::run_tui`]).
+//! Single-line headless CLI output for `jotmate sync`; consumes [`SyncUpdate`]
+//! messages from [`super::run_tui`].
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;
@@ -10,6 +8,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 use tokio::sync::mpsc;
 
+use crate::time::display::{hide_cursor, show_cursor};
 use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
 use crate::tui::palette::{
     ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, ANSI_TEXT, ANSI_WARN,
@@ -55,8 +54,7 @@ pub async fn run_headless(
     let mut sync_done = false;
 
     let _ = terminal::enable_raw_mode();
-    print!("\x1b[?25l");
-    let _ = std::io::stdout().flush();
+    hide_cursor();
 
     loop {
         tokio::select! {
@@ -69,7 +67,7 @@ pub async fn run_headless(
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     sync_task.abort();
                     let _ = terminal::disable_raw_mode();
-                    print!("\x1b[?25h");
+                    show_cursor();
                     println!();
                     return;
                 }
@@ -87,7 +85,7 @@ pub async fn run_headless(
         if sync_done || states.iter().all(|r| r.is_complete()) {
             print_line(&states, n, tick, true, elapsed);
             let _ = terminal::disable_raw_mode();
-            print!("\x1b[?25h");
+            show_cursor();
             println!();
             print_errors(&states);
             println!();
