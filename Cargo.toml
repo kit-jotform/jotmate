@@ -1,6 +1,6 @@
 [package]
 name = "jotmate"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Jotform developer productivity CLI"
 
@@ -25,6 +25,7 @@ tempfile    = "3.14"
 futures     = "0.3"
 ratatui     = "0.29"
 crossterm   = { version = "0.28", features = ["event-stream"] }
+ignore      = "0.4"
 
 [profile.release]
 opt-level = 3

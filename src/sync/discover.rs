@@ -1,48 +1,51 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
+use ignore::WalkBuilder;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 
 use super::cache::{self, RepoPathsCache};
 use crate::config::UpstreamRepo;
-use crate::error::AppError;
 
 pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
     let home = dirs::home_dir().context("Cannot determine home directory")?;
-    let home_str = home
-        .to_str()
-        .context("Home directory path contains non-UTF-8 characters")?;
 
-    // Check fd is available
-    match Command::new("fd").arg("--version").output() {
-        Ok(out) if out.status.success() => {}
-        _ => return Err(AppError::FdNotFound.into()),
-    }
+    let repos: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
-    let output = Command::new("fd")
-        .args(["-H", "-t", "d", "^.git$", home_str])
-        .output()
-        .context("Failed to run fd")?;
+    WalkBuilder::new(&home)
+        .hidden(false)
+        .ignore(false)
+        .git_ignore(false)
+        .git_exclude(false)
+        .git_global(false)
+        .follow_links(false)
+        .build_parallel()
+        .run(|| {
+            Box::new(|entry| {
+                use ignore::WalkState;
+                let Ok(entry) = entry else {
+                    return WalkState::Continue;
+                };
+                if entry.file_name() != ".git" {
+                    return WalkState::Continue;
+                }
+                let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+                if !is_dir {
+                    return WalkState::Continue;
+                }
+                if let Some(parent) = entry.path().parent() {
+                    if let Ok(mut v) = repos.lock() {
+                        v.push(parent.to_path_buf());
+                    }
+                }
+                // Don't descend into .git
+                WalkState::Skip
+            })
+        });
 
-    if !output.status.success() {
-        anyhow::bail!(
-            "fd exited with error: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let repos: Vec<PathBuf> = stdout
-        .lines()
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| {
-            let git_dir = PathBuf::from(line.trim());
-            git_dir.parent().map(|p| p.to_path_buf())
-        })
-        .collect();
-
-    Ok(repos)
+    Ok(repos.into_inner().unwrap_or_default())
 }
 
 fn get_remote_url(repo_path: &Path, remote: &str) -> Option<String> {

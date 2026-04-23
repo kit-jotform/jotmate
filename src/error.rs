@@ -25,7 +25,4 @@ pub enum AppError {
 
     #[error("TOML serialization error: {0}")]
     TomlSer(#[from] toml::ser::Error),
-
-    #[error("fd binary not found — install with: brew install fd")]
-    FdNotFound,
 }

@@ -106,7 +106,7 @@ Inline value selectors (dates, hours, timezone, etc.) must **not** enter editing
 
 ### Sync (src/sync/)
 
-`jotmate sync` runs entirely in native Rust — no shell scripts are used. Repos are discovered via `fd -H -t d "^\.git$" ~` matched against upstream URLs, with results cached at `~/.cache/jotmate/repo_paths.json`. The sync engine (`native/`) runs all repos in parallel through two phases (fork sync → RDS sync) and streams progress updates over an unbounded channel. The CLI entry point `run_headless` (in `native/headless.rs`) renders a single overwriting status line to stdout (e.g. `⠧ 3/4 complete  •  2 skipped`) and finalises with a `✓` or `✗` icon.
+`jotmate sync` runs entirely in native Rust — no shell scripts are used. Repos are discovered by walking `~` with the `ignore` crate (parallel, hidden-aware) looking for `.git` directories, matched against upstream URLs, with results cached at `~/.cache/jotmate/repo_paths.json`. The sync engine (`native/`) runs all repos in parallel through two phases (fork sync → RDS sync) and streams progress updates over an unbounded channel. The CLI entry point `run_headless` (in `native/headless.rs`) renders a single overwriting status line to stdout (e.g. `⠧ 3/4 complete  •  2 skipped`) and finalises with a `✓` or `✗` icon.
 
 The `scripts/` folder contains reference examples only and is not used by the binary.
 
