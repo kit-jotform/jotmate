@@ -138,29 +138,45 @@ impl App {
 
     // ── Repo management ───────────────────────────────────────────────────────
 
-    fn name_from_url(url: &str) -> String {
-        url.trim_end_matches('/')
+    fn normalize_url(url: &str) -> String {
+        url.trim()
+            .trim_end_matches('/')
             .trim_end_matches(".git")
+            .to_string()
+    }
+
+    fn name_from_url(url: &str) -> String {
+        Self::normalize_url(url)
             .rsplit('/')
             .next()
-            .unwrap_or(url)
+            .unwrap_or("")
             .to_string()
     }
 
     pub fn add_repo_from_input(&mut self, url: String) {
-        let url = url.trim().to_string();
-        if url.is_empty() {
+        let normalized = Self::normalize_url(&url);
+        if normalized.is_empty() {
             return;
         }
-        let name = Self::name_from_url(&url);
-        if !self.sync.repos.iter().any(|r| r.url == url) {
-            self.sync.repos.push(UpstreamRepo {
-                url,
-                name,
-                enabled: true,
-            });
-            self.persist_settings();
+        let name = Self::name_from_url(&normalized);
+        if name.is_empty() {
+            return;
         }
+        let url_exists = self
+            .sync
+            .repos
+            .iter()
+            .any(|r| Self::normalize_url(&r.url) == normalized);
+        let name_exists = self.sync.repos.iter().any(|r| r.name == name);
+        if url_exists || name_exists {
+            return;
+        }
+        self.sync.repos.push(UpstreamRepo {
+            url: normalized,
+            name,
+            enabled: true,
+        });
+        self.persist_settings();
     }
 }
 

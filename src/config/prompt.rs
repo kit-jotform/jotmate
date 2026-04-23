@@ -9,10 +9,24 @@ use super::types::{Config, DEFAULT_TIMEZONE};
 pub fn ensure_time_credentials(config: &mut Config) -> Result<()> {
     let mut changed = false;
 
-    if config.time.email.is_none() {
-        let email = prompt("TimeDoctor email", None)?;
-        config.time.email = Some(email);
-        changed = true;
+    if config
+        .time
+        .email
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        loop {
+            let email = prompt("TimeDoctor email", None)?;
+            if email.trim().is_empty() {
+                eprintln!("Email cannot be empty.");
+                continue;
+            }
+            config.time.email = Some(email);
+            changed = true;
+            break;
+        }
     }
 
     if config.time.timezone.is_none() {

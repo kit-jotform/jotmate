@@ -93,6 +93,7 @@ impl App {
         let all_mondays = weeks_to_fetch(start_date, self.td.skip_current_week);
         let (mut cached_rows, uncached_mondays) = split_cached_weeks(
             &all_mondays,
+            &opts.timezone,
             &opts.contract_periods,
             !self.td.use_time_cache,
         );

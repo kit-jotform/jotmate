@@ -87,8 +87,10 @@ pub async fn prompt_password(email: &str) -> Result<String> {
 }
 
 pub async fn get_or_refresh_token(email: &str) -> Result<String> {
-    if let Some(token) = blocking_keychain(load_token_from_keychain).await {
-        return Ok(token);
+    match blocking_keychain(load_token_from_keychain).await {
+        Ok(Some(token)) => return Ok(token),
+        Ok(None) => {}
+        Err(e) => return Err(e.context("Could not read session token from keychain")),
     }
     do_login(email).await
 }
@@ -99,10 +101,12 @@ pub async fn reauth(email: &str) -> Result<String> {
 }
 
 async fn do_login(email: &str) -> Result<String> {
-    let password = if let Some(pw) = blocking_keychain(load_password_from_keychain).await {
-        pw
-    } else {
-        prompt_password(email).await?
+    let stored_password = blocking_keychain(load_password_from_keychain)
+        .await
+        .context("Could not read saved password from keychain")?;
+    let password = match stored_password {
+        Some(pw) => pw,
+        None => prompt_password(email).await?,
     };
 
     let cookie = login(email, &password).await?;

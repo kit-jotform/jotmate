@@ -29,7 +29,7 @@ pub async fn fetch_week(
     let past = is_past_week(monday);
 
     if past && !opts.no_cache {
-        if let Some(stats) = cache::read_week_cache(company_id, monday) {
+        if let Some(stats) = cache::read_week_cache(company_id, &opts.timezone, monday) {
             return Ok(build_row(
                 monday,
                 week_label,
@@ -41,7 +41,12 @@ pub async fn fetch_week(
     }
 
     let sunday = get_week_end_sunday(monday);
-    let tz: Tz = opts.timezone.parse().unwrap_or(chrono_tz::UTC);
+    let tz: Tz = opts.timezone.parse().map_err(|_| {
+        anyhow::anyhow!(
+            "Invalid timezone '{}' — set a valid IANA name (e.g. Europe/Istanbul) in Settings → Time Doctor",
+            opts.timezone
+        )
+    })?;
     let monday_midnight = monday
         .and_hms_opt(0, 0, 0)
         .ok_or_else(|| anyhow::anyhow!("Invalid midnight for {monday}"))?;
@@ -67,7 +72,7 @@ pub async fn fetch_week(
         api::get_week_stats(client, cookie, from_dt, to_dt, company_id, &opts.timezone).await?;
 
     if past {
-        cache::write_week_cache(company_id, monday, &stats);
+        cache::write_week_cache(company_id, &opts.timezone, monday, &stats);
     }
 
     Ok(build_row(
@@ -82,6 +87,7 @@ pub async fn fetch_week(
 // Shared by time::run (CLI) and App::launch_td_report (TUI) to prevent the two paths from drifting.
 pub fn split_cached_weeks(
     mondays: &[NaiveDate],
+    timezone: &str,
     contract_periods: &[ContractPeriod],
     no_cache: bool,
 ) -> (Vec<WeekRow>, Vec<NaiveDate>) {
@@ -94,7 +100,7 @@ pub fn split_cached_weeks(
     let mut uncached = Vec::new();
     for &monday in mondays {
         if monday < current_monday {
-            if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, monday) {
+            if let Some(stats) = cache::read_week_cache(TIMEDOCTOR_COMPANY_ID, timezone, monday) {
                 cached.push(build_week_row_from_cache(monday, &stats, contract_periods));
                 continue;
             }

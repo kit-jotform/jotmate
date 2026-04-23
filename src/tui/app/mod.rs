@@ -88,6 +88,7 @@ pub struct App {
     pub add_cp: AddCpForm,
     pub sync_state: Option<SyncScreenState>,
     pub auth_error: Option<String>,
+    pub config_load_error: Option<String>,
     pub td_report_rx:
         Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
     pub td_report_started_at: Option<std::time::Instant>,
@@ -96,14 +97,22 @@ pub struct App {
 
 impl App {
     pub fn password_is_set(&self) -> bool {
-        *self
-            .td
-            .password_is_set
-            .get_or_init(|| crate::time::keychain::load_password_from_keychain().is_some())
+        // An `Err` here (e.g. user denied keychain access) is reported as
+        // "not set" so the UI still lets them re-enter the password. If the
+        // save path also hits a keychain error it surfaces the real message.
+        *self.td.password_is_set.get_or_init(|| {
+            matches!(
+                crate::time::keychain::load_password_from_keychain(),
+                Ok(Some(_))
+            )
+        })
     }
 
     pub fn new() -> Result<Self> {
-        let config = crate::config::load()?;
+        let (config, config_load_error) = match crate::config::load() {
+            Ok(c) => (c, None),
+            Err(e) => (crate::config::Config::default(), Some(format!("{e:#}"))),
+        };
         let list_states: HashMap<Screen, ListState> = [
             Screen::MainMenu,
             Screen::Settings,
@@ -154,6 +163,7 @@ impl App {
             },
             sync_state: None,
             auth_error: None,
+            config_load_error,
             td_report_rx: None,
             td_report_started_at: None,
             td_report_elapsed_secs: None,

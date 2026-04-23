@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::tui::app::{App, Screen, MAIN_ITEMS};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
-use crate::tui::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT};
+use crate::tui::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT, C_WARN};
 use crate::tui::widgets::{IconWidget, LOGO};
 
 use super::DIVIDER_WIDTH;
@@ -202,12 +202,14 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         &mut app.list_state(Screen::MainMenu).clone(),
     );
 
-    // ── Hint ──
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "q/Esc exit",
-            Style::default().fg(C_MUTED),
-        ))),
-        rows.get("hint"),
-    );
+    // ── Hint (or config-load warning) ──
+    let hint_line = if app.config_load_error.is_some() {
+        Line::from(Span::styled(
+            "⚠ config unreadable — using defaults; changes won't persist until fixed",
+            Style::default().fg(C_WARN),
+        ))
+    } else {
+        Line::from(Span::styled("q/Esc exit", Style::default().fg(C_MUTED)))
+    };
+    f.render_widget(Paragraph::new(hint_line), rows.get("hint"));
 }

@@ -13,7 +13,14 @@ const KEY_PASSWORD: &str = "password";
 // after "Always Allow". Items written via the `security` CLI have no
 // trusted-application ACL and never prompt.
 
-fn keychain_get(account: &str) -> Option<String> {
+/// macOS `security` exit code for `errSecItemNotFound`.
+const SECURITY_EXIT_NOT_FOUND: i32 = 44;
+
+/// `Ok(Some(_))` = found, `Ok(None)` = not in keychain, `Err(_)` = access
+/// denied, CLI missing, or other system failure. The distinction matters so
+/// we can re-prompt on "not found" but surface a real error instead of
+/// silently falling through on "denied".
+fn keychain_get(account: &str) -> Result<Option<String>> {
     let out = Command::new("security")
         .args([
             "find-generic-password",
@@ -23,20 +30,39 @@ fn keychain_get(account: &str) -> Option<String> {
             account,
             "-w", // print password only
         ])
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .output()
-        .ok()?;
+        .context("security CLI not found")?;
+
     if out.status.success() {
-        let s = String::from_utf8(out.stdout).ok()?;
+        let s = String::from_utf8(out.stdout).context("keychain returned non-UTF8 data")?;
         let trimmed = s.trim().to_string();
-        if trimmed.is_empty() {
+        return Ok(if trimmed.is_empty() {
             None
         } else {
             Some(trimmed)
-        }
-    } else {
-        None
+        });
     }
+
+    if out.status.code() == Some(SECURITY_EXIT_NOT_FOUND) {
+        return Ok(None);
+    }
+
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    let code = out
+        .status
+        .code()
+        .map(|c| c.to_string())
+        .unwrap_or_else(|| "signal".to_string());
+    anyhow::bail!(
+        "keychain access failed (exit {}): {}",
+        code,
+        if stderr.is_empty() {
+            "no details"
+        } else {
+            stderr.as_str()
+        }
+    )
 }
 
 fn keychain_set(account: &str, password: &str) -> Result<()> {
@@ -85,7 +111,7 @@ fn keychain_delete(account: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn load_token_from_keychain() -> Option<String> {
+pub fn load_token_from_keychain() -> Result<Option<String>> {
     keychain_get(KEY_SESSION)
 }
 
@@ -97,7 +123,7 @@ pub fn delete_token_from_keychain() -> Result<()> {
     keychain_delete(KEY_SESSION).map_err(|e| AppError::Keyring(e.to_string()).into())
 }
 
-pub fn load_password_from_keychain() -> Option<String> {
+pub fn load_password_from_keychain() -> Result<Option<String>> {
     keychain_get(KEY_PASSWORD)
 }
 

@@ -72,6 +72,11 @@ pub async fn run(mut args: SyncArgs) -> Result<()> {
         .iter()
         .filter_map(|r| paths.get(&r.name).map(|p| (r.name.clone(), p.clone())))
         .collect();
+    if repo_list.is_empty() {
+        anyhow::bail!(
+            "Could not locate any enabled repos on disk. Ensure they are cloned under your home directory."
+        );
+    }
     let opts = native::SyncOpts {
         skip_fork_sync: args.skip_fork_sync,
         skip_git_fetch: args.skip_fetch,

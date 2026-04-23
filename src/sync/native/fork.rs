@@ -184,7 +184,15 @@ pub(super) async fn sync_fork(
 
     if dirty {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Unstashing));
-        let _ = git(repo, &["stash", "pop"]).await;
+        if let Err(e) = git(repo, &["stash", "pop"]).await {
+            let _ = tx.send(SyncUpdate::Fork(
+                idx,
+                ForkStatus::Error(format!(
+                    "stash pop conflict — run `git stash list` in this repo: {e}"
+                )),
+            ));
+            return ForkResult::Error("stash pop conflict".into());
+        }
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Done));

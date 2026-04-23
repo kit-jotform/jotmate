@@ -21,8 +21,18 @@ pub async fn run(args: TimeArgs) -> Result<()> {
     config::ensure_time_credentials(&mut cfg)?;
 
     let time_cfg = &cfg.time;
-    let email = time_cfg.email.as_deref().unwrap();
-    let timezone = time_cfg.timezone.as_deref().unwrap();
+    let email = time_cfg
+        .email
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("No TimeDoctor email configured"))?;
+    let timezone = time_cfg
+        .timezone
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("No timezone configured"))?;
     let contract_periods = time_cfg.contract_periods.as_deref().unwrap_or(&[]);
     let start_date = time_cfg
         .start_date
@@ -43,21 +53,26 @@ pub async fn run(args: TimeArgs) -> Result<()> {
         return Ok(());
     }
 
-    let (cached_rows, uncached_mondays) =
-        split_cached_weeks(&mondays, &opts.contract_periods, args.no_cache);
+    let (cached_rows, uncached_mondays) = split_cached_weeks(
+        &mondays,
+        &opts.timezone,
+        &opts.contract_periods,
+        args.no_cache,
+    );
 
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<WeekRow>>>();
-    if uncached_mondays.is_empty() {
+    let fetch_handle: Option<tokio::task::JoinHandle<()>> = if uncached_mondays.is_empty() {
         let _ = tx.send(Ok(vec![]));
+        None
     } else {
         let email_owned = email.to_string();
         let opts_clone = opts.clone();
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             let _ = tx.send(fetch_weeks_parallel(&email_owned, uncached_mondays, opts_clone).await);
-        });
-    }
+        }))
+    };
 
-    let new_rows = run_spinner(rx).await?;
+    let new_rows = run_spinner(rx, fetch_handle).await?;
     if new_rows.is_none() {
         return Ok(());
     }
@@ -77,6 +92,7 @@ pub async fn run(args: TimeArgs) -> Result<()> {
 
 async fn run_spinner(
     rx: tokio::sync::oneshot::Receiver<Result<Vec<WeekRow>>>,
+    fetch_handle: Option<tokio::task::JoinHandle<()>>,
 ) -> Result<Option<(Vec<WeekRow>, f64)>> {
     let start = std::time::Instant::now();
     let _ = terminal::enable_raw_mode();
@@ -90,6 +106,9 @@ async fn run_spinner(
         while event::poll(std::time::Duration::ZERO).unwrap_or(false) {
             if let Ok(Event::Key(key)) = event::read() {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                    if let Some(h) = fetch_handle {
+                        h.abort();
+                    }
                     let _ = terminal::disable_raw_mode();
                     display::show_cursor();
                     println!();
@@ -146,7 +165,7 @@ pub async fn fetch_weeks_parallel(
             {
                 retry_mondays.push(*monday);
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.context(format!("week of {monday}"))),
         }
     }
 
@@ -158,8 +177,8 @@ pub async fn fetch_weeks_parallel(
                 .map(|&m| fetch_week(client, &auth_cookie, m, &opts)),
         )
         .await;
-        for result in retry_results {
-            rows.push(result?);
+        for (monday, result) in retry_mondays.iter().zip(retry_results) {
+            rows.push(result.map_err(|e| e.context(format!("week of {monday}")))?);
         }
     }
 
