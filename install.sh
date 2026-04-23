@@ -37,6 +37,13 @@ done
 # Create install dir if needed
 mkdir -p "$INSTALL_DIR"
 
+# Remove any existing install so we always land on the freshly downloaded binary
+if [ -e "$INSTALL_DIR/${BINARY}" ] || [ -L "$INSTALL_DIR/${BINARY}" ] || \
+   [ -e "$INSTALL_DIR/jf" ] || [ -L "$INSTALL_DIR/jf" ]; then
+    echo "Removing previous installation..."
+    rm -f "$INSTALL_DIR/${BINARY}" "$INSTALL_DIR/jf"
+fi
+
 if [ "$LOCAL" = "1" ]; then
     # Find repo root (directory containing Cargo.toml) relative to this script
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
