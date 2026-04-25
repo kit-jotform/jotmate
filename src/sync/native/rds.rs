@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use crate::tui::app::{RdsStatus, SyncUpdate};
 
 use super::fork::ForkResult;
-use super::git::GitExec;
+use super::git::{detect_default_branch, GitExec};
 
 pub struct RdsOpts {
     pub skip_rds_sync: bool,
@@ -124,9 +124,28 @@ async fn skip_reason(
         return SkipDecision::Proceed;
     }
 
-    if ahead == 0 {
-        SkipDecision::Skip("no changes".into())
-    } else {
-        SkipDecision::Proceed
+    if ahead > 0 {
+        return SkipDecision::Proceed;
     }
+
+    // Branch may be in sync with its own remote yet still carry commits the
+    // default branch hasn't seen — those need to reach RDS too.
+    if let Some(default_branch) = detect_default_branch(git, repo).await {
+        if default_branch != branch {
+            let count = git
+                .git(
+                    repo,
+                    &["rev-list", "--count", &format!("{default_branch}..HEAD")],
+                )
+                .await
+                .ok()
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .unwrap_or(0);
+            if count > 0 {
+                return SkipDecision::Proceed;
+            }
+        }
+    }
+
+    SkipDecision::Skip("no changes".into())
 }

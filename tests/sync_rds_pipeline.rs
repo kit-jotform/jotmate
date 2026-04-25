@@ -250,6 +250,105 @@ async fn smart_sync_proceeds_on_detached_head() {
     matches!(last_terminal(&updates), RdsStatus::Done);
 }
 
+#[tokio::test]
+async fn smart_sync_proceeds_when_branch_ahead_of_default() {
+    // Feature branch is in sync with its own remote (ahead=0, behind=0) but
+    // carries commits the default branch hasn't seen — RDS still needs them.
+    let git = FakeGit::new()
+        .on(
+            &["status"],
+            Ok("# branch.head feature\n# branch.ab +0 -0\n"),
+        )
+        .on(
+            &["symbolic-ref", "refs/remotes/upstream/HEAD"],
+            Ok("refs/remotes/upstream/master"),
+        )
+        .on(&["rev-list", "--count", "master..HEAD"], Ok("1"));
+    let td = fake_repo_dir(true);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    sync_rds(
+        git.as_ref(),
+        0,
+        td.path(),
+        &ForkResult::Unchanged,
+        &tx,
+        &opts(false, true),
+    )
+    .await;
+
+    assert_eq!(git.call_count(&["__rds_script__"]), 1);
+    let updates = collect_rds_updates(&mut rx);
+    matches!(last_terminal(&updates), RdsStatus::Done);
+}
+
+#[tokio::test]
+async fn smart_sync_skips_when_on_default_branch_and_clean() {
+    // On the default branch with ahead=0/behind=0 → "no changes" (no
+    // rev-list comparison needed since branch == default).
+    let git = FakeGit::new()
+        .on(&["status"], Ok("# branch.head master\n# branch.ab +0 -0\n"))
+        .on(
+            &["symbolic-ref", "refs/remotes/upstream/HEAD"],
+            Ok("refs/remotes/upstream/master"),
+        );
+    let td = fake_repo_dir(true);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    sync_rds(
+        git.as_ref(),
+        0,
+        td.path(),
+        &ForkResult::Unchanged,
+        &tx,
+        &opts(false, true),
+    )
+    .await;
+
+    assert_eq!(git.call_count(&["rev-list"]), 0);
+    let updates = collect_rds_updates(&mut rx);
+    match last_terminal(&updates) {
+        RdsStatus::Skipped(msg) => assert_eq!(msg, "no changes"),
+        other => panic!("expected Skipped(no changes), got {other:?}"),
+    }
+    assert_eq!(git.call_count(&["__rds_script__"]), 0);
+}
+
+#[tokio::test]
+async fn smart_sync_skips_when_branch_matches_default_commits() {
+    // Feature branch in sync with its remote AND no commits beyond default
+    // (e.g. just merged) → still "no changes".
+    let git = FakeGit::new()
+        .on(
+            &["status"],
+            Ok("# branch.head feature\n# branch.ab +0 -0\n"),
+        )
+        .on(
+            &["symbolic-ref", "refs/remotes/upstream/HEAD"],
+            Ok("refs/remotes/upstream/master"),
+        )
+        .on(&["rev-list", "--count", "master..HEAD"], Ok("0"));
+    let td = fake_repo_dir(true);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    sync_rds(
+        git.as_ref(),
+        0,
+        td.path(),
+        &ForkResult::Unchanged,
+        &tx,
+        &opts(false, true),
+    )
+    .await;
+
+    let updates = collect_rds_updates(&mut rx);
+    match last_terminal(&updates) {
+        RdsStatus::Skipped(msg) => assert_eq!(msg, "no changes"),
+        other => panic!("expected Skipped(no changes), got {other:?}"),
+    }
+    assert_eq!(git.call_count(&["__rds_script__"]), 0);
+}
+
 // ─── script failure (A13) ──────────────────────────────────────────────────
 
 #[tokio::test]
