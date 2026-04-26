@@ -12,39 +12,28 @@ use crate::tui::draw::draw;
 use crate::tui::input::{handle_key, Action};
 use crate::tui::sync_launcher::{launch_sync, promote_discovery_if_ready};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LoopOutcome {
+    Exit,
+    Restart,
+}
+
 pub(super) async fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
-) -> Result<()> {
+) -> Result<LoopOutcome> {
     loop {
         terminal.draw(|f| draw(f, app))?;
 
-        match app.screen {
-            Screen::TimeDoctorReport => {
-                if handle_td_report_tick(terminal, app).await? {
-                    return Ok(());
-                }
-            }
-            Screen::SyncProgress => {
-                if handle_sync_progress_tick(app)? {
-                    return Ok(());
-                }
-            }
-            Screen::UpdateProgress => {
-                if handle_update_progress_tick(app)? {
-                    return Ok(());
-                }
-            }
-            Screen::MainMenu => {
-                if handle_main_menu_tick(app)? {
-                    return Ok(());
-                }
-            }
-            _ => {
-                if handle_default_tick(app)? {
-                    return Ok(());
-                }
-            }
+        let tick = match app.screen {
+            Screen::TimeDoctorReport => handle_td_report_tick(terminal, app).await?,
+            Screen::SyncProgress => handle_sync_progress_tick(app)?,
+            Screen::UpdateProgress => handle_update_progress_tick(app)?,
+            Screen::MainMenu => handle_main_menu_tick(app)?,
+            _ => handle_default_tick(app)?,
+        };
+        if let Some(outcome) = tick {
+            return Ok(outcome);
         }
     }
 }
@@ -63,36 +52,44 @@ fn poll_key(poll: Option<Duration>) -> Result<Option<KeyEvent>> {
     }
 }
 
-fn dispatch_key(app: &mut App, key: KeyEvent, on_exit: impl FnOnce(&mut App)) -> bool {
+fn dispatch_key(
+    app: &mut App,
+    key: KeyEvent,
+    on_exit: impl FnOnce(&mut App),
+) -> Option<LoopOutcome> {
     if is_ctrl_c(key.code, key.modifiers) {
         on_exit(app);
-        return true;
+        return Some(LoopOutcome::Exit);
     }
     match handle_key(app, key.code) {
         Action::Back => {
             on_exit(app);
-            true
+            Some(LoopOutcome::Exit)
+        }
+        Action::Restart => {
+            on_exit(app);
+            Some(LoopOutcome::Restart)
         }
         Action::StartSync => {
             launch_sync(app);
-            false
+            None
         }
-        Action::Continue => false,
+        Action::Continue => None,
     }
 }
 
 async fn handle_td_report_tick(
     _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
-) -> Result<bool> {
+) -> Result<Option<LoopOutcome>> {
     app.poll_td_report();
     let Some(key) = poll_key(Some(Duration::from_millis(150)))? else {
-        return Ok(false);
+        return Ok(None);
     };
     Ok(dispatch_key(app, key, |_| {}))
 }
 
-fn handle_sync_progress_tick(app: &mut App) -> Result<bool> {
+fn handle_sync_progress_tick(app: &mut App) -> Result<Option<LoopOutcome>> {
     promote_discovery_if_ready(app);
 
     let mut updates = Vec::new();
@@ -111,27 +108,27 @@ fn handle_sync_progress_tick(app: &mut App) -> Result<bool> {
             if let Some(state) = &mut app.sync_state {
                 state.tick = state.tick.wrapping_add(1);
             }
-            Ok(false)
+            Ok(None)
         }
     }
 }
 
-fn handle_default_tick(app: &mut App) -> Result<bool> {
+fn handle_default_tick(app: &mut App) -> Result<Option<LoopOutcome>> {
     let Some(key) = poll_key(None)? else {
-        return Ok(false);
+        return Ok(None);
     };
     Ok(dispatch_key(app, key, |_| {}))
 }
 
-fn handle_main_menu_tick(app: &mut App) -> Result<bool> {
+fn handle_main_menu_tick(app: &mut App) -> Result<Option<LoopOutcome>> {
     app.poll_update_check();
     let Some(key) = poll_key(Some(Duration::from_millis(60)))? else {
-        return Ok(false);
+        return Ok(None);
     };
     Ok(dispatch_key(app, key, |_| {}))
 }
 
-fn handle_update_progress_tick(app: &mut App) -> Result<bool> {
+fn handle_update_progress_tick(app: &mut App) -> Result<Option<LoopOutcome>> {
     let mut events = Vec::new();
     if let Some(state) = &mut app.update_state {
         while let Ok(event) = state.update_rx.try_recv() {
@@ -148,7 +145,7 @@ fn handle_update_progress_tick(app: &mut App) -> Result<bool> {
             if let Some(state) = &mut app.update_state {
                 state.tick = state.tick.wrapping_add(1);
             }
-            Ok(false)
+            Ok(None)
         }
     }
 }

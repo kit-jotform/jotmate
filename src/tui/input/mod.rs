@@ -31,6 +31,7 @@ pub enum Action {
     Continue,
     Back,
     StartSync,
+    Restart,
 }
 
 pub fn handle_key(app: &mut App, code: KeyCode) -> Action {

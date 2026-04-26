@@ -10,16 +10,18 @@ mod sync_state;
 pub(crate) mod update_state;
 mod widgets;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::stdout;
+use std::os::unix::process::CommandExt;
+use std::process::Command;
 
 use app::{App, Screen};
-use event_loop::event_loop;
+use event_loop::{event_loop, LoopOutcome};
 
 pub(super) fn setup_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>> {
     enable_raw_mode()?;
@@ -51,8 +53,19 @@ async fn run_tui(ctx: crate::ctx::Ctx, initial_screen: Screen) -> Result<()> {
         app.select_first_interactive(Screen::Settings);
     }
 
-    event_loop(&mut terminal, &mut app).await?;
+    let outcome = event_loop(&mut terminal, &mut app).await?;
     teardown_terminal(&mut terminal);
+
+    if outcome == LoopOutcome::Restart {
+        // execv replaces the current process, preserving the PID so the parent
+        // shell's job tracking stays intact. Only returns on failure.
+        let exe = std::env::current_exe().context("locating updated executable")?;
+        let err = Command::new(&exe).exec();
+        return Err(anyhow::anyhow!(
+            "failed to relaunch {}: {err}",
+            exe.display()
+        ));
+    }
 
     Ok(())
 }
