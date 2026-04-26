@@ -15,6 +15,8 @@ pub enum Commands {
     Time(TimeArgs),
     /// Edit default flags and credentials
     Settings,
+    /// Check for and install a newer release
+    Update,
 }
 
 #[derive(Args, Clone, Debug, Default)]

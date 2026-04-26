@@ -1,9 +1,18 @@
-pub const MAIN_ITEMS: &[(&str, &str)] = &[
-    ("Sync", "Sync RDS to upstream"),
-    ("Time Doctor", "Track your work hours"),
-    ("Settings", "Configure jotmate"),
-    ("Exit", ""),
-];
+#[derive(Clone, Debug)]
+pub struct MainMenuItem {
+    pub kind: MainMenuKind,
+    pub name: String,
+    pub desc: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainMenuKind {
+    Sync,
+    TimeDoctor,
+    Update,
+    Settings,
+    Exit,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Screen {
@@ -17,4 +26,5 @@ pub enum Screen {
     ContractPeriods,
     SyncProgress,
     TimeDoctorReport,
+    UpdateProgress,
 }

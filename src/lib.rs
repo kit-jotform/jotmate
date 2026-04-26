@@ -8,3 +8,4 @@ pub mod error;
 pub mod sync;
 pub mod time;
 pub mod tui;
+pub mod update;

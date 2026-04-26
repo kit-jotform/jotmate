@@ -7,7 +7,7 @@ use ratatui::{
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::tui::app::{App, Screen, MAIN_ITEMS};
+use crate::tui::app::{App, Screen};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT, C_WARN};
 use crate::tui::widgets::{IconWidget, LOGO};
@@ -58,6 +58,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let engine = LayoutEngine::new(area);
     let show_icon = area.width >= UI_WIDTH;
 
+    let menu_height = app.main_menu_items().len() as u16;
     let rows = ScreenLayout::new()
         .row("header", 7)
         .row("blank1", 1)
@@ -67,7 +68,7 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .row("blank2", 1)
         .row("sel_hdr", 1)
         .row("blank_sel", 1)
-        .row("menu", 4)
+        .row("menu", menu_height)
         .row("blank3", 1)
         .row("hint", 1)
         .margin(1)
@@ -149,13 +150,14 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         engine.place(&Widget::anon(UI_WIDTH, HAlign::Center), rows.get("sel_hdr")),
     );
 
-    let items: Vec<ListItem> = MAIN_ITEMS
+    let menu_items = app.main_menu_items();
+    let items: Vec<ListItem> = menu_items
         .iter()
         .enumerate()
-        .map(|(i, (name, desc))| {
+        .map(|(i, item)| {
             let selected = app.selected_index(Screen::MainMenu) == i;
+            let name_padded = format!("{:<width$}", item.name, width = NAME_COL_W as usize);
             if selected {
-                let name_padded = format!("{:<width$}", name, width = NAME_COL_W as usize);
                 let mut spans = vec![
                     Span::styled("▸ ", Style::default().fg(C_SELECT)),
                     Span::styled(
@@ -163,23 +165,22 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
                         Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD),
                     ),
                 ];
-                if !desc.is_empty() {
+                if !item.desc.is_empty() {
                     spans.push(Span::styled("— ", Style::default().fg(C_SELECT)));
                     spans.push(Span::styled(
-                        *desc,
+                        item.desc.clone(),
                         Style::default().fg(C_SELECT).add_modifier(Modifier::BOLD),
                     ));
                 }
                 ListItem::new(Line::from(spans))
             } else {
-                let name_padded = format!("{:<width$}", name, width = NAME_COL_W as usize);
                 let mut spans = vec![
                     Span::raw("  "),
                     Span::styled(name_padded, Style::default().fg(C_TEXT)),
                 ];
-                if !desc.is_empty() {
+                if !item.desc.is_empty() {
                     spans.push(Span::styled("— ", Style::default().fg(C_MUTED)));
-                    spans.push(Span::styled(*desc, Style::default().fg(C_TEXT)));
+                    spans.push(Span::styled(item.desc.clone(), Style::default().fg(C_TEXT)));
                 }
                 ListItem::new(Line::from(spans))
             }

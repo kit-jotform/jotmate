@@ -13,6 +13,7 @@ mod settings;
 mod sync;
 mod td_report;
 mod time;
+mod update;
 
 use contract::{execute_pending_period_delete, handle_contract_periods};
 use helpers::{handle_cycle, handle_text_input, handle_yes_no};
@@ -24,6 +25,7 @@ use settings::{handle_general_toggles, handle_settings};
 use sync::handle_sync_progress;
 use td_report::handle_td_report;
 use time::{handle_td_field_input, handle_td_settings};
+use update::handle_update_progress;
 
 pub enum Action {
     Continue,
@@ -60,5 +62,6 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
         },
         Screen::SyncProgress => handle_sync_progress(app, code),
         Screen::TimeDoctorReport => handle_td_report(app, code),
+        Screen::UpdateProgress => handle_update_progress(app, code),
     }
 }

@@ -30,6 +30,11 @@ pub(super) async fn event_loop(
                     return Ok(());
                 }
             }
+            Screen::UpdateProgress => {
+                if handle_update_progress_tick(app)? {
+                    return Ok(());
+                }
+            }
             Screen::MainMenu => {
                 if handle_main_menu_tick(app)? {
                     return Ok(());
@@ -119,10 +124,33 @@ fn handle_default_tick(app: &mut App) -> Result<bool> {
 }
 
 fn handle_main_menu_tick(app: &mut App) -> Result<bool> {
+    app.poll_update_check();
     let Some(key) = poll_key(Some(Duration::from_millis(60)))? else {
         return Ok(false);
     };
     Ok(dispatch_key(app, key, |_| {}))
+}
+
+fn handle_update_progress_tick(app: &mut App) -> Result<bool> {
+    let mut events = Vec::new();
+    if let Some(state) = &mut app.update_state {
+        while let Ok(event) = state.update_rx.try_recv() {
+            events.push(event);
+        }
+    }
+    for event in events {
+        app.apply_update_event(event);
+    }
+
+    match poll_key(Some(Duration::from_millis(80)))? {
+        Some(key) => Ok(dispatch_key(app, key, |app| app.cancel_update())),
+        None => {
+            if let Some(state) = &mut app.update_state {
+                state.tick = state.tick.wrapping_add(1);
+            }
+            Ok(false)
+        }
+    }
 }
 
 fn is_ctrl_c(code: KeyCode, modifiers: KeyModifiers) -> bool {

@@ -4,7 +4,7 @@ use crate::tui::rows::{
     CpListRow, GeneralToggleRow, RemoveRepoRow, RepoManagerRow, SettingRow, TimeSettingRow,
 };
 
-use super::screen::{Screen, MAIN_ITEMS};
+use super::screen::Screen;
 use super::App;
 
 pub(super) fn list_state_at(index: usize) -> ListState {
@@ -142,7 +142,7 @@ impl App {
         let next = with_rows!(
             self, screen, rows, is_int => navigate_rows(&rows, cur, delta, is_int);
             match screen {
-                Screen::MainMenu => navigate_simple(MAIN_ITEMS.len(), cur, delta),
+                Screen::MainMenu => navigate_simple(self.main_menu_items().len(), cur, delta),
                 _ => cur,
             }
         );

@@ -18,9 +18,10 @@ mod row_builders;
 mod screen;
 mod sync;
 mod td_report;
+mod update;
 
 pub use constants::WEEKLY_HOURS_OPTIONS;
-pub use screen::{Screen, MAIN_ITEMS};
+pub use screen::{MainMenuItem, MainMenuKind, Screen};
 pub use td_report::{TdReportState, TD_REPORT_VISIBLE_ROWS};
 
 pub use super::rows::{
@@ -71,6 +72,10 @@ pub struct App {
     pub td: TimeSettings,
     pub add_cp: AddCpForm,
     pub sync_state: Option<SyncScreenState>,
+    pub update_state: Option<crate::tui::update_state::UpdateScreenState>,
+    /// `None` = checking; `Some(None)` = up to date; `Some(Some(v))` = newer release `v` available.
+    pub available_update: Option<Option<String>>,
+    pub update_check_rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
     pub auth_error: Option<String>,
     pub config_load_error: Option<String>,
     pub td_report_rx:
@@ -107,6 +112,7 @@ impl App {
         .into_iter()
         .map(|s| (s, list_state_at(0)))
         .collect();
+        let update_check_rx = spawn_update_check();
         let mut contract_periods = config.time.contract_periods.clone().unwrap_or_default();
         contract_periods.sort_by_key(|p| p.from);
         let add_cp_monday = contract_periods
@@ -144,6 +150,9 @@ impl App {
                 hours_idx: 1, // default 20h
             },
             sync_state: None,
+            update_state: None,
+            available_update: None,
+            update_check_rx,
             auth_error: None,
             config_load_error,
             td_report_rx: None,
@@ -151,4 +160,68 @@ impl App {
             td_report_elapsed_secs: None,
         })
     }
+
+    pub fn main_menu_items(&self) -> Vec<MainMenuItem> {
+        let mut items = vec![
+            MainMenuItem {
+                kind: MainMenuKind::Sync,
+                name: "Sync".into(),
+                desc: "Sync RDS to upstream".into(),
+            },
+            MainMenuItem {
+                kind: MainMenuKind::TimeDoctor,
+                name: "Time Doctor".into(),
+                desc: "Track your work hours".into(),
+            },
+        ];
+        if let Some(Some(version)) = &self.available_update {
+            items.push(MainMenuItem {
+                kind: MainMenuKind::Update,
+                name: "Update".into(),
+                desc: format!("New release available — v{version}"),
+            });
+        }
+        items.push(MainMenuItem {
+            kind: MainMenuKind::Settings,
+            name: "Settings".into(),
+            desc: "Configure jotmate".into(),
+        });
+        items.push(MainMenuItem {
+            kind: MainMenuKind::Exit,
+            name: "Exit".into(),
+            desc: String::new(),
+        });
+        items
+    }
+
+    pub fn poll_update_check(&mut self) {
+        let Some(rx) = self.update_check_rx.as_mut() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.available_update = Some(result);
+                self.update_check_rx = None;
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                self.available_update = Some(None);
+                self.update_check_rx = None;
+            }
+        }
+    }
+}
+
+// Returns `None` outside a Tokio runtime (e.g. sync unit tests) so `App::new` stays infallible there.
+fn spawn_update_check() -> Option<tokio::sync::oneshot::Receiver<Option<String>>> {
+    let handle = tokio::runtime::Handle::try_current().ok()?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    handle.spawn(async move {
+        let result = match crate::update::check_for_update().await {
+            Ok(Some(a)) => Some(a.version),
+            _ => None,
+        };
+        let _ = tx.send(result);
+    });
+    Some(rx)
 }

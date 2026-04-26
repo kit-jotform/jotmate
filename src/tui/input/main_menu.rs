@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use crate::tui::app::{App, Screen};
+use crate::tui::app::{App, MainMenuKind, Screen};
 
 use super::helpers::go_to;
 use super::keys::nav_delta;
@@ -14,19 +14,20 @@ pub(super) fn handle_main(app: &mut App, code: KeyCode) -> Action {
     match code {
         KeyCode::Enter => {
             let i = app.selected_index(Screen::MainMenu);
-            match i {
-                0 => return Action::StartSync,
-                1 => enter_time_doctor(app),
-                2 => go_to(app, Screen::Settings),
-                _ => return Action::Back,
+            let items = app.main_menu_items();
+            let Some(item) = items.get(i) else {
+                return Action::Back;
+            };
+            match item.kind {
+                MainMenuKind::Sync => return Action::StartSync,
+                MainMenuKind::TimeDoctor => app.launch_td_report(),
+                MainMenuKind::Update => app.launch_update(),
+                MainMenuKind::Settings => go_to(app, Screen::Settings),
+                MainMenuKind::Exit => return Action::Back,
             }
         }
         KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('q') => return Action::Back,
         _ => {}
     }
     Action::Continue
-}
-
-fn enter_time_doctor(app: &mut App) {
-    app.launch_td_report();
 }

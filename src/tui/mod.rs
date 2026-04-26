@@ -7,6 +7,7 @@ pub(crate) mod palette;
 mod rows;
 mod sync_launcher;
 mod sync_state;
+pub(crate) mod update_state;
 mod widgets;
 
 use anyhow::Result;

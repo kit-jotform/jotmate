@@ -11,6 +11,7 @@ mod settings;
 mod sync;
 mod td_report;
 mod time;
+mod update;
 
 pub(in crate::tui::draw) use common::{
     back_item, blank_item, del_item, divider_item, draw_confirm_dialog, draw_screen_header,
@@ -39,5 +40,6 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::ContractPeriods => draw_contract_periods(f, app),
         Screen::TimeDoctorReport => draw_td_report(f, app),
         Screen::SyncProgress => sync::draw_sync_progress(f, app),
+        Screen::UpdateProgress => update::draw_update_progress(f, app),
     }
 }
