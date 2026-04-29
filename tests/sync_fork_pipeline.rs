@@ -8,8 +8,9 @@
 //!   A18  detect_default_branch fails → skip "no default branch"
 //!   up-to-date: local == upstream sha → UpToDate
 //!   empty upstream ref → "no upstream ref" skip
-//!   A15  stash pop conflict on happy path → Error with hint
-//!   A16  rebase conflict → rebase --abort + stash pop + Error
+//!   A15  final stash pop fails after successful sync → stderr in status
+//!   A15b stash push fails with dirty tree → abort before checkout/merge
+//!   A16  rebase conflict → rebase --abort + stash pop + Error (if stashed)
 
 mod common;
 
@@ -248,11 +249,11 @@ async fn happy_path_on_default_branch_runs_merge_and_push() {
     assert!(git.was_called(&["push", "origin", "main"]));
 }
 
-// ─── stash pop conflict (A15) ──────────────────────────────────────────────
+// ─── stash pop after sync (A15 / A15b) ─────────────────────────────────────
 
 #[tokio::test]
-async fn stash_pop_conflict_on_happy_path_is_surfaced() {
-    // Dirty tree → stashes; merge + push succeed; final stash pop fails.
+async fn stash_pop_failure_on_happy_path_is_surfaced() {
+    // Dirty tree → stash succeeds; merge + push succeed; final stash pop fails.
     let git = FakeGit::new()
         .on(&["remote"], Ok("upstream\n"))
         .on(&["fetch", "upstream"], Ok(""))
@@ -271,14 +272,44 @@ async fn stash_pop_conflict_on_happy_path_is_surfaced() {
 
     let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
 
-    assert_eq!(result, ForkResult::Error("stash pop conflict".into()));
+    assert_eq!(result, ForkResult::Error("stash pop failed".into()));
     let updates = collect_fork_updates(&mut rx);
     match last_terminal(&updates) {
         ForkStatus::Error(msg) => {
-            assert!(msg.contains("stash pop conflict"), "got: {msg}");
-            assert!(msg.contains("git stash list"), "got: {msg}");
+            assert!(msg.contains("`git stash pop` failed"), "got: {msg}");
+            assert!(msg.contains("merge conflict"), "got: {msg}");
         }
-        other => panic!("expected Error(stash pop conflict…), got {other:?}"),
+        other => panic!("expected stash pop Error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn stash_push_failure_aborts_without_merge() {
+    // Dirty flag set but stash push fails — must not checkout/merge upstream.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("bbbb"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("main"))
+        .on(&["diff-index"], Err("dirty"))
+        .on(
+            &["stash", "push"],
+            Err("fatal: Unable to stash (simulated stash push failure)"),
+        );
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+
+    assert_eq!(result, ForkResult::Error("stash push failed".into()));
+    assert_eq!(git.call_count(&["checkout"]), 0);
+    assert_eq!(git.call_count(&["merge"]), 0);
+
+    match last_terminal(&collect_fork_updates(&mut rx)) {
+        ForkStatus::Error(msg) => assert!(msg.contains("stash push failed"), "got: {msg}"),
+        other => panic!("expected stash push Error, got {other:?}"),
     }
 }
 

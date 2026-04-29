@@ -113,27 +113,41 @@ pub async fn sync_fork(
         .git(repo, &["diff-index", "--quiet", "HEAD", "--"])
         .await
         .is_err();
+    // True only after a successful `stash push` — gates every `stash pop`.
+    let mut stashed = false;
     if dirty {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Stashing));
-        let _ = git
+        match git
             .git(
                 repo,
                 &["stash", "push", "-m", "Auto-stash before fork sync"],
             )
-            .await;
+            .await
+        {
+            Ok(_) => stashed = true,
+            Err(e) => {
+                let _ = tx.send(SyncUpdate::Fork(
+                    idx,
+                    ForkStatus::Error(format!(
+                        "stash push failed — fork sync cannot continue with local changes left unstashed: {e}"
+                    )),
+                ));
+                return ForkResult::Error("stash push failed".into());
+            }
+        }
     }
 
-    /// Report an error, pop the stash if dirty, return ForkResult::Error.
+    // Restore stash before reporting earlier-stage failures after a merge/push error.
     async fn fail(
         git: &dyn GitExec,
         idx: usize,
         repo: &Path,
         tx: &mpsc::UnboundedSender<SyncUpdate>,
-        dirty: bool,
+        stashed: bool,
         stage: &str,
         err: String,
     ) -> ForkResult {
-        if dirty {
+        if stashed {
             let _ = git.git(repo, &["stash", "pop"]).await;
         }
         let _ = tx.send(SyncUpdate::Fork(
@@ -145,29 +159,29 @@ pub async fn sync_fork(
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::CheckingOut));
     if let Err(e) = git.git(repo, &["checkout", &default_branch]).await {
-        return fail(git, idx, repo, tx, dirty, "checkout", e).await;
+        return fail(git, idx, repo, tx, stashed, "checkout", e).await;
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Merging));
     if let Err(e) = git.git(repo, &["merge", &upstream_ref, "--no-edit"]).await {
-        return fail(git, idx, repo, tx, dirty, "merge", e).await;
+        return fail(git, idx, repo, tx, stashed, "merge", e).await;
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::PushingDefault));
     if let Err(e) = git.git(repo, &["push", "origin", &default_branch]).await {
-        return fail(git, idx, repo, tx, dirty, "push", e).await;
+        return fail(git, idx, repo, tx, stashed, "push", e).await;
     }
 
     if !current_branch.is_empty() && current_branch != default_branch {
         if let Err(e) = git.git(repo, &["checkout", &current_branch]).await {
-            return fail(git, idx, repo, tx, dirty, "checkout back", e).await;
+            return fail(git, idx, repo, tx, stashed, "checkout back", e).await;
         }
 
         if !opts.skip_rebase {
             let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Rebasing));
             if git.git(repo, &["rebase", &default_branch]).await.is_err() {
                 let _ = git.git(repo, &["rebase", "--abort"]).await;
-                if dirty {
+                if stashed {
                     let _ = git.git(repo, &["stash", "pop"]).await;
                 }
                 let _ = tx.send(SyncUpdate::Fork(
@@ -185,21 +199,21 @@ pub async fn sync_fork(
                 )
                 .await
             {
-                return fail(git, idx, repo, tx, dirty, "push branch", e).await;
+                return fail(git, idx, repo, tx, stashed, "push branch", e).await;
             }
         }
     }
 
-    if dirty {
+    if stashed {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Unstashing));
         if let Err(e) = git.git(repo, &["stash", "pop"]).await {
             let _ = tx.send(SyncUpdate::Fork(
                 idx,
                 ForkStatus::Error(format!(
-                    "stash pop conflict — run `git stash list` in this repo: {e}"
+                    "`git stash pop` failed after sync — restore or resolve conflicts in this repo: {e}"
                 )),
             ));
-            return ForkResult::Error("stash pop conflict".into());
+            return ForkResult::Error("stash pop failed".into());
         }
     }
 
