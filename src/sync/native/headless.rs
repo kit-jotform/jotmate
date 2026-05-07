@@ -156,7 +156,19 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, e
 }
 
 fn print_errors(states: &[RepoSyncState]) {
-    for repo in states.iter().filter(|r| r.has_error()) {
+    let errored: Vec<&RepoSyncState> = states.iter().filter(|r| r.has_error()).collect();
+    if errored.is_empty() {
+        return;
+    }
+    let all_ip_denied = errored.iter().all(|r| {
+        !matches!(r.fork_status, ForkStatus::Error(_))
+            && matches!(r.rds_status, RdsStatus::IpDenied(_))
+    });
+    if all_ip_denied {
+        println!("  {ANSI_DANGEROUS}{IP_DENIED_HINT}{ANSI_RESET}");
+        return;
+    }
+    for repo in errored {
         if let ForkStatus::Error(m) = &repo.fork_status {
             println!(
                 "  {ANSI_DANGEROUS}{}{ANSI_RESET}  {ANSI_MUTED}{m}{ANSI_RESET}",
