@@ -588,3 +588,17 @@ fn detect_ip_denial_matches_kex_exchange() {
     let out = "kex_exchange_identification: read: Connection reset by peer";
     assert!(detect_ip_denial(out).is_some());
 }
+
+#[test]
+fn detect_ip_denial_matches_rsync_unexpected_eof() {
+    let out = "# Uploading ... DONE\nrsync(40706): error: unexpected end of file";
+    let detail = detect_ip_denial(out).expect("should match");
+    assert!(detail.contains("unexpected end of file"), "got: {detail}");
+}
+
+#[test]
+fn detect_ip_denial_matches_bastion_connection_closed() {
+    let out =
+        "rsync(123): error: unexpected end of file\nConnection closed by 34.54.118.193 port 22";
+    assert!(detect_ip_denial(out).is_some());
+}
