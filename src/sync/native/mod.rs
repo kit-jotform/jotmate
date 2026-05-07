@@ -14,7 +14,7 @@ mod headless;
 pub mod rds;
 pub mod rds_state;
 
-pub use git::{GitExec, RdsError, SubprocessGit};
+pub use git::{detect_ip_denial, GitExec, RdsError, SubprocessGit};
 pub use headless::run_headless;
 pub use rds_state::RdsStateCache;
 

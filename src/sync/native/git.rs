@@ -48,12 +48,15 @@ impl GitExec for SubprocessGit {
             .output()
             .await
             .map_err(|e| RdsError::Other(e.to_string()))?;
-        if output.status.success() {
-            return Ok(());
-        }
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let combined = format!("{stderr}\n{stdout}");
+        if output.status.success() {
+            return match detect_ip_denial(&combined) {
+                Some(detail) => Err(RdsError::IpDenied { detail }),
+                None => Ok(()),
+            };
+        }
         Err(classify_rds_stderr(
             &combined,
             output.status.code().unwrap_or(1),
@@ -78,16 +81,21 @@ const IP_DENIED_MARKERS: &[&str] = &[
     "forbidden",
 ];
 
-pub(super) fn classify_rds_stderr(output: &str, exit_code: i32) -> RdsError {
+pub fn detect_ip_denial(output: &str) -> Option<String> {
     let lower = output.to_lowercase();
-    if let Some(marker) = IP_DENIED_MARKERS.iter().find(|m| lower.contains(*m)) {
-        let detail = output
-            .lines()
-            .find(|l| l.to_lowercase().contains(*marker))
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .unwrap_or(*marker)
-            .to_string();
+    let marker = IP_DENIED_MARKERS.iter().find(|m| lower.contains(*m))?;
+    let detail = output
+        .lines()
+        .find(|l| l.to_lowercase().contains(*marker))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(*marker)
+        .to_string();
+    Some(detail)
+}
+
+pub(super) fn classify_rds_stderr(output: &str, exit_code: i32) -> RdsError {
+    if let Some(detail) = detect_ip_denial(output) {
         return RdsError::IpDenied { detail };
     }
     let first = output

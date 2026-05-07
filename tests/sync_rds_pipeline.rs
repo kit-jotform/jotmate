@@ -16,7 +16,7 @@ mod common;
 use common::{fake_repo_dir, FakeGit};
 use jotmate::sync::native::fork::ForkResult;
 use jotmate::sync::native::rds::{sync_rds, RdsOpts};
-use jotmate::sync::native::RdsStateCache;
+use jotmate::sync::native::{detect_ip_denial, RdsStateCache};
 use jotmate::tui::app::{RdsStatus, SyncUpdate};
 use std::path::Path;
 use std::sync::Arc;
@@ -561,4 +561,30 @@ async fn fork_error_still_runs_script_when_smart_sync_enabled() {
     assert_eq!(git.call_count(&["__rds_script__"]), 1);
     let updates = collect_rds_updates(&mut rx);
     matches!(last_terminal(&updates), RdsStatus::Done);
+}
+
+#[test]
+fn detect_ip_denial_matches_ssh_publickey() {
+    let out =
+        "Loading config...\nPermission denied (publickey).\nrsync: connection unexpectedly closed";
+    let detail = detect_ip_denial(out).expect("should match");
+    assert!(detail.contains("Permission denied"), "got: {detail}");
+}
+
+#[test]
+fn detect_ip_denial_matches_connection_timed_out() {
+    let out = "ssh: connect to host rds.example.com port 22: Connection timed out";
+    assert!(detect_ip_denial(out).is_some());
+}
+
+#[test]
+fn detect_ip_denial_returns_none_for_clean_output() {
+    let out = "# Syncing...\n# Uploading ... DONE";
+    assert!(detect_ip_denial(out).is_none());
+}
+
+#[test]
+fn detect_ip_denial_matches_kex_exchange() {
+    let out = "kex_exchange_identification: read: Connection reset by peer";
+    assert!(detect_ip_denial(out).is_some());
 }
