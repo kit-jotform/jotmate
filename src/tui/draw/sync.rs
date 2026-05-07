@@ -135,16 +135,20 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
 
-    let (error_count, repo_count) = app
+    let (error_count, repo_count, all_ip_denied) = app
         .sync_state
         .as_ref()
         .map(|s| {
-            (
-                s.repos.iter().filter(|r| r.has_error()).count() as u16,
-                s.repos.len() as u16,
-            )
+            let errored: Vec<&RepoSyncState> = s.repos.iter().filter(|r| r.has_error()).collect();
+            let all_denied = !errored.is_empty()
+                && errored.iter().all(|r| {
+                    !matches!(r.fork_status, ForkStatus::Error(_))
+                        && matches!(r.rds_status, RdsStatus::IpDenied(_))
+                });
+            (errored.len() as u16, s.repos.len() as u16, all_denied)
         })
-        .unwrap_or((0, 0));
+        .unwrap_or((0, 0, false));
+    let errors_block_height = if all_ip_denied { 1 } else { error_count };
 
     let is_scrollable = repo_count > LIST_VISIBLE;
 
@@ -166,7 +170,7 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
     }
     let rows = layout
         .row("hint", 1)
-        .row("errors", error_count)
+        .row("errors", errors_block_height)
         .margin(1)
         .split(engine.clamp_area(area));
 
@@ -250,18 +254,28 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
         );
 
         if error_count > 0 {
-            let error_items: Vec<ListItem> = state
-                .repos
-                .iter()
-                .filter(|r| r.has_error())
-                .map(|r| {
-                    let msg = error_message(r);
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!("  {} ", r.name), Style::default().fg(C_DANGEROUS)),
-                        Span::styled(msg, Style::default().fg(C_MUTED)),
-                    ]))
-                })
-                .collect();
+            let error_items: Vec<ListItem> = if all_ip_denied {
+                vec![ListItem::new(Line::from(Span::styled(
+                    format!("  {IP_DENIED_HINT}"),
+                    Style::default().fg(C_DANGEROUS),
+                )))]
+            } else {
+                state
+                    .repos
+                    .iter()
+                    .filter(|r| r.has_error())
+                    .map(|r| {
+                        let msg = error_message(r);
+                        ListItem::new(Line::from(vec![
+                            Span::styled(
+                                format!("  {} ", r.name),
+                                Style::default().fg(C_DANGEROUS),
+                            ),
+                            Span::styled(msg, Style::default().fg(C_MUTED)),
+                        ]))
+                    })
+                    .collect()
+            };
             f.render_widget(
                 List::new(error_items),
                 engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("errors")),
