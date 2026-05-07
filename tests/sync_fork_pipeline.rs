@@ -346,6 +346,47 @@ async fn rebase_conflict_aborts_and_reports() {
     assert!(git.was_called(&["rebase", "--abort"]));
 }
 
+// ─── smart-sync regression: fetch advanced upstream while local aligned ───
+
+#[tokio::test]
+async fn fetched_new_commits_returns_updated_even_when_local_aligned() {
+    // Pre-fetch upstream/main = aaaa, local main = bbbb (already pulled
+    // externally), fetch advances upstream/main to bbbb. local==upstream
+    // after fetch, but new commits *did* arrive — must report Updated so
+    // smart sync runs RDS.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on_once(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["rev-parse", "main"], Ok("bbbb"))
+        .on(&["rev-parse", "upstream/main"], Ok("bbbb"));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+    assert_eq!(result, ForkResult::Updated);
+    let updates = collect_fork_updates(&mut rx);
+    matches!(last_terminal(&updates), ForkStatus::UpToDate);
+}
+
+#[tokio::test]
+async fn fetch_brought_nothing_and_aligned_stays_unchanged() {
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["fetch", "upstream"], Ok(""));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+    assert_eq!(result, ForkResult::Unchanged);
+    let updates = collect_fork_updates(&mut rx);
+    matches!(last_terminal(&updates), ForkStatus::UpToDate);
+}
+
 // ─── skip_git_fetch / skip_rebase flags ────────────────────────────────────
 
 #[tokio::test]

@@ -56,6 +56,15 @@ pub async fn sync_fork(
         return ForkResult::Unchanged;
     }
 
+    // External `git pull upstream` would otherwise hide new commits from RDS.
+    let pre_fetch_upstream = if let Some(b) = detect_default_branch(git, repo).await {
+        git.git(repo, &["rev-parse", &format!("upstream/{b}")])
+            .await
+            .ok()
+    } else {
+        None
+    };
+
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::FetchingUpstream));
     if !opts.skip_git_fetch {
         if let Err(e) = git.git(repo, &["fetch", "upstream"]).await {
@@ -101,7 +110,14 @@ pub async fn sync_fork(
 
     if local_commit == upstream_commit {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::UpToDate));
-        return ForkResult::Unchanged;
+        let fetched_new = pre_fetch_upstream
+            .as_deref()
+            .is_some_and(|pre| !pre.is_empty() && pre != upstream_commit);
+        return if fetched_new {
+            ForkResult::Updated
+        } else {
+            ForkResult::Unchanged
+        };
     }
 
     let current_branch = git
