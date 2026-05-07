@@ -103,7 +103,8 @@ pub async fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
         );
     }
     let git: std::sync::Arc<dyn native::GitExec> = std::sync::Arc::new(native::SubprocessGit);
-    native::run_headless(git, repo_list, plan.opts).await;
+    let rds_state = std::sync::Arc::new(native::RdsStateCache::load(ctx.paths.rds_state_cache()));
+    native::run_headless(git, repo_list, plan.opts, rds_state).await;
     Ok(())
 }
 

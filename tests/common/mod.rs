@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use async_trait::async_trait;
 use jotmate::ctx::{Ctx, HttpBase, Paths};
-use jotmate::sync::native::GitExec;
+use jotmate::sync::native::{GitExec, RdsError};
 use jotmate::time::keychain::KeychainStore;
 use tempfile::TempDir;
 
@@ -186,7 +186,7 @@ impl TestCtx {
 /// ```
 pub struct FakeGit {
     rules: Mutex<Vec<Rule>>,
-    rds_result: Mutex<Result<(), String>>,
+    rds_result: Mutex<Result<(), RdsError>>,
     calls: Mutex<Vec<Vec<String>>>,
 }
 
@@ -235,8 +235,18 @@ impl FakeGit {
         self
     }
 
-    pub fn set_rds_result(&self, result: Result<(), String>) {
+    pub fn set_rds_result(&self, result: Result<(), RdsError>) {
         *self.rds_result.lock().unwrap() = result;
+    }
+
+    pub fn set_rds_error(&self, msg: &str) {
+        *self.rds_result.lock().unwrap() = Err(RdsError::Other(msg.to_string()));
+    }
+
+    pub fn set_rds_ip_denied(&self, detail: &str) {
+        *self.rds_result.lock().unwrap() = Err(RdsError::IpDenied {
+            detail: detail.to_string(),
+        });
     }
 
     pub fn log(&self) -> Vec<Vec<String>> {
@@ -292,7 +302,7 @@ impl GitExec for FakeGit {
         ))
     }
 
-    async fn run_rds_script(&self, _repo: &Path) -> std::result::Result<(), String> {
+    async fn run_rds_script(&self, _repo: &Path) -> std::result::Result<(), RdsError> {
         self.calls
             .lock()
             .unwrap()

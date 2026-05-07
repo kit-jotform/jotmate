@@ -49,6 +49,10 @@ impl Paths {
         self.cache_dir.join("repo_paths.json")
     }
 
+    pub fn rds_state_cache(&self) -> PathBuf {
+        self.cache_dir.join("rds_state.json")
+    }
+
     pub fn time_cache_root(&self) -> PathBuf {
         self.cache_dir.join("time")
     }

@@ -1,14 +1,17 @@
 use std::path::Path;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::tui::app::{RdsStatus, SyncUpdate};
 
 use super::fork::ForkResult;
-use super::git::{detect_default_branch, GitExec};
+use super::git::{detect_default_branch, GitExec, RdsError};
+use super::rds_state::RdsStateCache;
 
 pub struct RdsOpts {
     pub skip_rds_sync: bool,
     pub smart_sync: bool,
+    pub rds_state: Arc<RdsStateCache>,
 }
 
 pub async fn sync_rds(
@@ -30,7 +33,7 @@ pub async fn sync_rds(
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Preparing));
 
     if opts.smart_sync && matches!(fork_result, ForkResult::Unchanged) {
-        match skip_reason(git, repo, tx, idx).await {
+        match skip_reason(git, repo, tx, idx, &opts.rds_state).await {
             SkipDecision::Skip(reason) => {
                 let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Skipped(reason)));
                 return;
@@ -48,9 +51,15 @@ pub async fn sync_rds(
     let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Running));
     match git.run_rds_script(repo).await {
         Ok(()) => {
+            if let Ok(sha) = git.git(repo, &["rev-parse", "HEAD"]).await {
+                opts.rds_state.record_synced(repo, &sha);
+            }
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Done));
         }
-        Err(msg) => {
+        Err(RdsError::IpDenied { detail }) => {
+            let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::IpDenied(detail)));
+        }
+        Err(RdsError::Other(msg)) => {
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Error(msg)));
         }
     }
@@ -69,6 +78,7 @@ async fn skip_reason(
     repo: &Path,
     tx: &mpsc::UnboundedSender<SyncUpdate>,
     idx: usize,
+    state: &RdsStateCache,
 ) -> SkipDecision {
     let status = git
         .git(repo, &["status", "--porcelain=v2", "--branch"])
@@ -147,5 +157,15 @@ async fn skip_reason(
         }
     }
 
-    SkipDecision::Skip("no changes".into())
+    let head = git
+        .git(repo, &["rev-parse", "HEAD"])
+        .await
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    match (head, state.last_synced_sha(repo)) {
+        (Some(head), Some(cached)) if head == cached => SkipDecision::Skip("no changes".into()),
+        (None, _) => SkipDecision::Skip("no changes".into()),
+        _ => SkipDecision::Proceed,
+    }
 }

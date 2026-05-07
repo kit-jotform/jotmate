@@ -6,7 +6,7 @@ use ratatui::{
 
 use ratatui::style::Color;
 
-use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState, SyncPhase};
+use crate::tui::app::{App, ForkStatus, RdsStatus, RepoSyncState, SyncPhase, IP_DENIED_HINT};
 use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{
     C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN, SPINNER,
@@ -353,7 +353,7 @@ fn rds_status_color(status: &RdsStatus) -> Color {
         RdsStatus::Pending => C_MUTED,
         RdsStatus::Done => C_SUCCESS,
         RdsStatus::Skipped(_) => C_WARN,
-        RdsStatus::Error(_) => C_DANGEROUS,
+        RdsStatus::Error(_) | RdsStatus::IpDenied(_) => C_DANGEROUS,
         _ => C_ACCENT,
     }
 }
@@ -364,6 +364,7 @@ fn error_message(repo: &RepoSyncState) -> String {
     }
     match &repo.rds_status {
         RdsStatus::Error(msg) => msg.clone(),
+        RdsStatus::IpDenied(detail) => format!("{IP_DENIED_HINT} ({detail})"),
         _ => String::new(),
     }
 }

@@ -29,7 +29,7 @@ pub use super::rows::{
     TimeDoctorField, TimeSettingRow,
 };
 pub use super::sync_state::{
-    ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate,
+    ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate, IP_DENIED_HINT,
 };
 
 use constants::{this_monday, timezone_index};

@@ -9,7 +9,7 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::time::display::{hide_cursor, show_cursor};
-use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate};
+use crate::tui::app::{ForkStatus, RdsStatus, RepoSyncState, SyncUpdate, IP_DENIED_HINT};
 use crate::tui::palette::{
     ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, ANSI_TEXT, ANSI_WARN,
     SPINNER,
@@ -17,12 +17,13 @@ use crate::tui::palette::{
 
 use std::sync::Arc;
 
-use super::{run_tui, GitExec, SyncOpts};
+use super::{run_tui, GitExec, RdsStateCache, SyncOpts};
 
 pub async fn run_headless(
     git: Arc<dyn GitExec>,
     repo_paths: Vec<(String, PathBuf)>,
     opts: SyncOpts,
+    rds_state: Arc<RdsStateCache>,
 ) {
     let n = repo_paths.len();
 
@@ -47,7 +48,7 @@ pub async fn run_headless(
         .collect();
 
     let start = Instant::now();
-    let sync_task = tokio::spawn(run_tui(git, indexed, tx, opts));
+    let sync_task = tokio::spawn(run_tui(git, indexed, tx, opts, rds_state));
     tokio::pin!(sync_task);
 
     let mut tick: usize = 0;
@@ -157,16 +158,28 @@ fn print_line(states: &[RepoSyncState], total: usize, tick: usize, done: bool, e
 
 fn print_errors(states: &[RepoSyncState]) {
     for repo in states.iter().filter(|r| r.has_error()) {
-        let msg = match &repo.fork_status {
-            ForkStatus::Error(m) => m.as_str(),
-            _ => match &repo.rds_status {
-                RdsStatus::Error(m) => m.as_str(),
-                _ => "",
-            },
-        };
-        println!(
-            "  {ANSI_DANGEROUS}{}{ANSI_RESET}  {ANSI_MUTED}{msg}{ANSI_RESET}",
-            repo.name
-        );
+        if let ForkStatus::Error(m) = &repo.fork_status {
+            println!(
+                "  {ANSI_DANGEROUS}{}{ANSI_RESET}  {ANSI_MUTED}{m}{ANSI_RESET}",
+                repo.name
+            );
+            continue;
+        }
+        match &repo.rds_status {
+            RdsStatus::IpDenied(detail) => {
+                println!(
+                    "  {ANSI_DANGEROUS}{}{ANSI_RESET}  {ANSI_DANGEROUS}{IP_DENIED_HINT}{ANSI_RESET}",
+                    repo.name
+                );
+                println!("      {ANSI_MUTED}{detail}{ANSI_RESET}");
+            }
+            RdsStatus::Error(m) => {
+                println!(
+                    "  {ANSI_DANGEROUS}{}{ANSI_RESET}  {ANSI_MUTED}{m}{ANSI_RESET}",
+                    repo.name
+                );
+            }
+            _ => {}
+        }
     }
 }

@@ -67,6 +67,8 @@ pub enum RdsStatus {
     Done,
     Skipped(String),
     Error(String),
+    /// Network/auth-level rejection — usually means not connected to the Jotform VPN.
+    IpDenied(String),
 }
 
 impl RdsStatus {
@@ -79,20 +81,23 @@ impl RdsStatus {
             RdsStatus::Done => "done",
             RdsStatus::Skipped(_) => "skipped",
             RdsStatus::Error(_) => "error",
+            RdsStatus::IpDenied(_) => "denied",
         }
     }
 
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            RdsStatus::Done | RdsStatus::Skipped(_) | RdsStatus::Error(_)
+            RdsStatus::Done | RdsStatus::Skipped(_) | RdsStatus::Error(_) | RdsStatus::IpDenied(_)
         )
     }
 
     pub fn is_error(&self) -> bool {
-        matches!(self, RdsStatus::Error(_))
+        matches!(self, RdsStatus::Error(_) | RdsStatus::IpDenied(_))
     }
 }
+
+pub const IP_DENIED_HINT: &str = "RDS denied — are you connected to the Jotform network or VPN?";
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]

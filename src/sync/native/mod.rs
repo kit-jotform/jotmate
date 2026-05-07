@@ -14,9 +14,11 @@ pub mod fork;
 pub mod git;
 mod headless;
 pub mod rds;
+pub mod rds_state;
 
-pub use git::{GitExec, SubprocessGit};
+pub use git::{GitExec, RdsError, SubprocessGit};
 pub use headless::run_headless;
+pub use rds_state::RdsStateCache;
 
 use elapsed::track_elapsed;
 use fork::{sync_fork, ForkOpts};
@@ -36,6 +38,7 @@ pub async fn run_tui(
     repos: Vec<(usize, PathBuf)>,
     tx: mpsc::UnboundedSender<SyncUpdate>,
     opts: SyncOpts,
+    rds_state: Arc<RdsStateCache>,
 ) {
     let SyncOpts {
         skip_fork_sync,
@@ -55,6 +58,7 @@ pub async fn run_tui(
         let tx = tx.clone();
         let path = path.clone();
         let git = git.clone();
+        let rds_state = rds_state.clone();
         handles.push(tokio::spawn(async move {
             let fork_opts = ForkOpts {
                 skip_fork_sync,
@@ -66,6 +70,7 @@ pub async fn run_tui(
             let rds_opts = RdsOpts {
                 skip_rds_sync,
                 smart_sync,
+                rds_state,
             };
             sync_rds(git.as_ref(), idx, &path, &fork_result, &tx, &rds_opts).await;
         }));
