@@ -8,15 +8,13 @@ pub enum RdsError {
     Other(String),
 }
 
-/// Abstraction over `git` + RDS `./sync` invocation so the sync pipeline can
-/// be tested without spawning real processes.
+/// Injectable `git` and `./sync` (real subprocess vs test doubles).
 #[async_trait]
 pub trait GitExec: Send + Sync {
-    /// `git -C <repo> <args...>` — Ok = trimmed stdout, Err = trimmed stderr or exit code.
+    /// `git -C <repo> …` — success = trimmed stdout; failure = stderr or exit message.
     async fn git(&self, repo: &Path, args: &[&str]) -> Result<String, String>;
 
-    /// Run repo-local `./sync`. Callers check `repo.join("sync")` existence
-    /// first so "no script" stays distinguishable from "script failed".
+    /// `./sync` in the repo root. Distinguish "no script" via `repo.join("sync")` before calling.
     async fn run_rds_script(&self, repo: &Path) -> Result<(), RdsError>;
 }
 

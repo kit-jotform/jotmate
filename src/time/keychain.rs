@@ -13,7 +13,7 @@ const KEY_PASSWORD: &str = "password";
 
 /// Abstracted so tests can substitute an in-memory fake.
 pub trait KeychainStore: Send + Sync {
-    /// `Ok(Some(_))` present · `Ok(None)` absent · `Err(_)` access denied or backend unavailable.
+    /// `Ok(Some(_))` stored · `Ok(None)` absent · `Err` denied or unavailable.
     fn get_token(&self) -> Result<Option<String>>;
     fn set_token(&self, value: &str) -> Result<()>;
     fn delete_token(&self) -> Result<()>;

@@ -1,13 +1,10 @@
-//! Composition root: filesystem roots, keychain, HTTP bases. Production builds
-//! one `Ctx::production()`; tests swap in a temp-dir + fake keychain + mockito.
-//! Prefer narrow leaf args (`&Paths`, `&dyn KeychainStore`) over `&Ctx`.
+//! Paths, keychain, HTTP. Production vs fixtures; narrow args (`Paths`, keychain trait) preferred over threading `Ctx`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::time::keychain::KeychainStore;
 
-/// Production reads `dirs::config_dir()` / `dirs::cache_dir()`; tests pass a `TempDir`.
 #[derive(Debug, Clone)]
 pub struct Paths {
     config_dir: PathBuf,
@@ -58,7 +55,6 @@ impl Paths {
     }
 }
 
-/// TimeDoctor endpoint URLs; tests point these at mockito.
 #[derive(Debug, Clone)]
 pub struct HttpBase {
     pub login: String,
@@ -74,7 +70,6 @@ impl HttpBase {
     }
 }
 
-/// Top-level execution context; built once by `main.rs`, per-test in `tests/common`.
 #[derive(Clone)]
 pub struct Ctx {
     pub paths: Paths,

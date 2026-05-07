@@ -1,6 +1,3 @@
-//! Per-frame [`draw`] dispatcher. Each screen has its own submodule; shared
-//! helpers live in `common` and are re-exported below for `super::*` use.
-
 use crate::tui::app::{App, Screen};
 
 mod common;

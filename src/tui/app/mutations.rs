@@ -139,8 +139,7 @@ impl App {
             .to_string()
     }
 
-    /// Last path segment of an https or `git@host:path` SSH URL, or `None` if
-    /// the URL has no path component.
+    // Short repo label from the last URL path segment (https, scp-style, or bare path).
     fn name_from_url(url: &str) -> Option<String> {
         let normalized = Self::normalize_url(url);
         let path = if let Some(rest) = normalized.strip_prefix("https://") {

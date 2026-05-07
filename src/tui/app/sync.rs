@@ -57,9 +57,7 @@ impl App {
         }
     }
 
-    /// No config filtering here — the launcher is the single source of truth
-    /// for which repos to sync, so drift between `App::sync.repos` and the
-    /// config cannot produce an empty list.
+    /// Launcher supplies the repo list (`App::sync.repos` is UI-only).
     pub fn start_sync(
         &mut self,
         ordered_repos: Vec<(String, PathBuf)>,
@@ -120,9 +118,7 @@ impl App {
         }
     }
 
-    /// Drop the active sync state and abort the spawned task (if any). Called
-    /// from both the sync-progress key handler (Esc/Enter after completion)
-    /// and the event-loop Ctrl-C path.
+    /// Aborts the background task; used from sync keys and Ctrl-C handling.
     pub fn cancel_sync(&mut self) {
         if let Some(state) = self.sync_state.take() {
             if let Some(handle) = state.sync_handle {

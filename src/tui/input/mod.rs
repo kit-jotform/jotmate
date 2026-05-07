@@ -1,5 +1,3 @@
-//! Keyboard dispatcher. Per-screen handlers live in submodules.
-
 use crossterm::event::KeyCode;
 
 use super::app::{App, CycleTarget, InputMode, Screen};

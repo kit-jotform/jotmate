@@ -71,8 +71,7 @@ enum SkipDecision {
     AlreadyReported,
 }
 
-/// One `git status --porcelain=v2 --branch` covers dirty state, branch, and
-/// ahead/behind — replaces 4-6 sequential git calls.
+/// Single `status --porcelain=v2 --branch` replaces several separate git queries.
 async fn skip_reason(
     git: &dyn GitExec,
     repo: &Path,
@@ -104,7 +103,7 @@ async fn skip_reason(
     let ab_line = status.lines().find(|l| l.starts_with("# branch.ab "));
     let (ahead, behind) = match ab_line {
         None => {
-            // Missing `branch.ab` means upstream isn't tracked yet; fetch and proceed.
+            // No `branch.ab` yet — upstream not configured; populate refs then continue.
             let _ = git.git(repo, &["fetch", "origin", &branch]).await;
             return SkipDecision::Proceed;
         }
@@ -138,8 +137,7 @@ async fn skip_reason(
         return SkipDecision::Proceed;
     }
 
-    // Branch may be in sync with its own remote yet still carry commits the
-    // default branch hasn't seen — those need to reach RDS too.
+    // In sync with `origin`/branch AB but HEAD may still be ahead of the default branch RDS tracks.
     if let Some(default_branch) = detect_default_branch(git, repo).await {
         if default_branch != branch {
             let count = git

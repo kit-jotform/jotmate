@@ -1,5 +1,4 @@
-//! Every failure path routes through `App::fail_sync_setup` so the SyncProgress
-//! screen always shows a reason — never a silent no-op on the main menu.
+//! Sync from the main menu: errors become `SyncProgress` messages (no silent failure).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -76,7 +75,7 @@ fn discover_blocking(paths: &Paths, enabled: Vec<UpstreamRepo>) -> DiscoveryResu
 }
 
 fn start_real_sync(app: &mut App, enabled: &[UpstreamRepo], paths: HashMap<String, PathBuf>) {
-    // Stable UI order = config order.
+    // Repo list order mirrors config `upstream_repos` (discovery map is unordered).
     let ordered: Vec<(String, PathBuf)> = enabled
         .iter()
         .filter_map(|r| paths.get(&r.name).map(|p| (r.name.clone(), p.clone())))

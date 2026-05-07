@@ -1,5 +1,4 @@
-//! Single-line headless CLI output for `jotmate sync`; consumes [`SyncUpdate`]
-//! messages from [`super::run_tui`].
+//! Headless CLI progress (`jotmate sync`); feeds off the same engine as [`super::run_tui`].
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;

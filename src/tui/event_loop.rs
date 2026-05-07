@@ -1,5 +1,4 @@
-//! Main event loop. Per-screen polling modes (TD-report, sync-progress,
-//! main-menu, default blocking) keep `tui/mod.rs` thin.
+//! Blocking event loop plus per-screen tick modes.
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};

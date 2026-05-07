@@ -10,12 +10,12 @@ use super::constants::TIMEZONES;
 use super::screen::Screen;
 use super::App;
 
-/// Visible week rows; used to anchor initial scroll to the most recent weeks.
+/// Row count for the TD report viewport (initial scroll anchors to recent weeks).
 pub const TD_REPORT_VISIBLE_ROWS: usize = 6;
 
 pub enum TdReportState {
     Loading,
-    /// Cached weeks shown immediately while `pending` uncached weeks fetch in the background.
+    /// Cached rows now; `pending` counts weeks still fetching.
     PartialReady {
         rows: Vec<crate::time::compute::WeekRow>,
         pending: usize,
@@ -73,9 +73,7 @@ impl App {
         rows_len.saturating_sub(TD_REPORT_VISIBLE_ROWS)
     }
 
-    /// Open the TD report. With cache: cached weeks render via `PartialReady`
-    /// while uncached weeks fetch in the background. Without cache: the screen
-    /// stays `Loading` until all weeks resolve in parallel.
+    /// With week cache may enter `PartialReady` before network fetch completes.
     pub fn launch_td_report(&mut self) {
         self.screen = Screen::TimeDoctorReport;
         self.td_report = TdReportState::Loading;
@@ -154,7 +152,6 @@ impl App {
         });
     }
 
-    /// Returns true if state changed.
     pub fn poll_td_report(&mut self) -> bool {
         if let Some(rx) = &mut self.td_report_rx {
             match rx.try_recv() {
@@ -233,12 +230,11 @@ impl App {
         }
     }
 
-    /// Save password to keychain; returns false on empty input or save failure.
     pub fn set_td_password(&mut self, password: &str) -> bool {
         if password.is_empty() {
             return false;
         }
-        // New password invalidates the cached session.
+        // Clear session cookie; next API use re-authenticates with the new password.
         let _ = self.ctx.keychain.delete_token();
         match self.ctx.keychain.set_password(password) {
             Ok(()) => {

@@ -10,7 +10,7 @@ use crate::cli::SyncArgs;
 use crate::config::{Config, UpstreamRepo};
 use crate::ctx::Ctx;
 
-/// `SyncArgs` + `Config` resolved into a runnable plan. Pure (no I/O).
+/// Resolved plan: args + config, no filesystem or network.
 #[derive(Debug)]
 pub struct SyncPlan {
     pub repos: Vec<UpstreamRepo>,
@@ -18,7 +18,7 @@ pub struct SyncPlan {
     pub use_cache: bool,
 }
 
-/// Validate args, merge config defaults; user-facing error on bad combinations.
+/// Merge CLI overrides with config; returns user-facing validation errors.
 pub fn plan_sync(mut args: SyncArgs, config: &Config) -> Result<SyncPlan> {
     if args.sync_all && args.only.is_some() {
         anyhow::bail!("--sync-all and --only are mutually exclusive");

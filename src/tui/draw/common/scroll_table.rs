@@ -1,5 +1,3 @@
-//! Scrollable table: 2-row header, clipped data rows, scrollbar on overflow.
-
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -24,7 +22,7 @@ pub(in crate::tui::draw) fn draw_scroll_table(
     let header_area = chunks[0];
     let data_area = chunks[1];
 
-    // 2-col right margin keeps the divider clear of the scrollbar track.
+    // Shrink header text width slightly so column rules don't collide with scrollbar padding.
     let header_w = header_area.width.saturating_sub(2) as usize;
     let divider = Line::from(Span::styled(
         "─".repeat(header_w),

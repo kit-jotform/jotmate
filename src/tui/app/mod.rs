@@ -1,6 +1,4 @@
-//! `App` state, split across submodules by responsibility. Row types, screen,
-//! input mode, TD report state, sync state, and shared constants are
-//! re-exported below so callers can `use crate::tui::app::{…}` directly.
+//! Central `App` state and submodule re-exports.
 
 use anyhow::Result;
 use chrono::NaiveDate;
@@ -50,7 +48,7 @@ pub struct TimeSettings {
     pub skip_current_week: bool,
     pub use_time_cache: bool,
     pub show_cumulative: bool,
-    /// Lazy: each `security` CLI lookup is ~100-300ms; must not block TUI startup.
+    /// Deferred: keychain IPC is hundreds of ms; must not block TUI startup.
     pub password_is_set: OnceCell<bool>,
     pub contract_periods: Vec<ContractPeriod>,
 }
@@ -73,7 +71,7 @@ pub struct App {
     pub add_cp: AddCpForm,
     pub sync_state: Option<SyncScreenState>,
     pub update_state: Option<crate::tui::update_state::UpdateScreenState>,
-    /// `None` = checking; `Some(None)` = up to date; `Some(Some(v))` = newer release `v` available.
+    /// `None`: check in flight · `Some(None)`: up to date · `Some(Some(v))`: newer `v`.
     pub available_update: Option<Option<String>>,
     pub update_check_rx: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
     pub auth_error: Option<String>,
@@ -86,7 +84,7 @@ pub struct App {
 
 impl App {
     pub fn password_is_set(&self) -> bool {
-        // Treat keychain errors as "not set" so the UI lets the user re-enter; the save path surfaces the real error.
+        // Keychain errors behave as "unset" here so Settings can recover; saves still surface failures.
         let kc = self.ctx.keychain.clone();
         *self
             .td
@@ -147,7 +145,7 @@ impl App {
             },
             add_cp: AddCpForm {
                 monday: add_cp_monday,
-                hours_idx: 1, // default 20h
+                hours_idx: 1, // default slot in WEEKLY_HOURS_OPTIONS
             },
             sync_state: None,
             update_state: None,
@@ -212,8 +210,8 @@ impl App {
     }
 }
 
-// Returns `None` outside a Tokio runtime (e.g. sync unit tests) so `App::new` stays infallible there.
 fn spawn_update_check() -> Option<tokio::sync::oneshot::Receiver<Option<String>>> {
+    // Outside a Tokio runtime (some tests) skip the spawn so `App::new` stays infallible.
     let handle = tokio::runtime::Handle::try_current().ok()?;
     let (tx, rx) = tokio::sync::oneshot::channel();
     handle.spawn(async move {

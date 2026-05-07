@@ -67,7 +67,7 @@ pub enum RdsStatus {
     Done,
     Skipped(String),
     Error(String),
-    /// Network/auth-level rejection — usually means not connected to the Jotform VPN.
+    /// RDS reachable but rejecting the host (typically network/VPN).
     IpDenied(String),
 }
 
@@ -140,7 +140,7 @@ pub enum SyncUpdate {
     Elapsed(usize, f64),
 }
 
-/// `Failed` carries its reason in `setup_error`.
+/// `Failed`: see `setup_error` on [`SyncScreenState`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyncPhase {
     Discovering,
@@ -148,8 +148,7 @@ pub enum SyncPhase {
     Failed,
 }
 
-/// Discovery returns the enabled-repo list back so the launcher can preserve
-/// config order when building the sync plan.
+/// Carries repos back alongside paths so callers keep config-backed ordering.
 pub type DiscoveryResult = Result<(Vec<UpstreamRepo>, HashMap<String, PathBuf>), String>;
 
 pub struct SyncScreenState {
@@ -159,6 +158,6 @@ pub struct SyncScreenState {
     pub update_rx: mpsc::UnboundedReceiver<SyncUpdate>,
     pub phase: SyncPhase,
     pub setup_error: Option<String>,
-    /// Populated while `phase == Discovering`; resolves into `Syncing` or `Failed`.
+    /// While discovering: completion channel (`Syncing` or `Failed` after promotion).
     pub discovery_rx: Option<oneshot::Receiver<DiscoveryResult>>,
 }

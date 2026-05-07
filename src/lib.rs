@@ -1,5 +1,4 @@
-//! Library surface so integration tests in `tests/` and `src/main.rs` share
-//! one module tree.
+//! Shared crate surface for `main` and integration tests.
 
 pub mod cli;
 pub mod config;

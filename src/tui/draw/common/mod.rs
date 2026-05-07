@@ -1,6 +1,3 @@
-//! Shared draw helpers, all `pub(in crate::tui::draw)` so per-screen renderers
-//! reach them as `super::*` via re-exports in `draw/mod.rs`.
-
 mod dialog;
 mod header;
 mod hints;

@@ -1,4 +1,4 @@
-//! User config at `~/.config/jotmate/config.toml`.
+//! User-facing config (~/.config/jotmate/config.toml).
 
 mod io;
 pub mod parse;
