@@ -8,7 +8,7 @@ use ratatui::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::tui::app::{App, Screen};
-use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
+use crate::tui::layout::{is_compact, HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT, C_WARN};
 use crate::tui::widgets::{IconWidget, LOGO};
 
@@ -56,16 +56,23 @@ fn current_tagline() -> (&'static str, Color) {
 pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
-    let show_icon = area.width >= UI_WIDTH;
+    let compact = is_compact(area);
+    let show_icon = !compact && area.width >= UI_WIDTH;
 
     let menu_height = app.main_menu_items().len() as u16;
+    let header_h = if compact { 0 } else { 7 };
+    let blank1_h = if compact { 0 } else { 1 };
+    let tagline_h = if compact { 0 } else { 1 };
+    let time_ver_h = if compact { 0 } else { 1 };
+    let divider_h = if compact { 0 } else { 1 };
+    let blank2_h = if compact { 0 } else { 1 };
     let rows = ScreenLayout::new()
-        .row("header", 7)
-        .row("blank1", 1)
-        .row("tagline", 1)
-        .row("time_ver", 1)
-        .row("divider", 1)
-        .row("blank2", 1)
+        .row("header", header_h)
+        .row("blank1", blank1_h)
+        .row("tagline", tagline_h)
+        .row("time_ver", time_ver_h)
+        .row("divider", divider_h)
+        .row("blank2", blank2_h)
         .row("sel_hdr", 1)
         .row("blank_sel", 1)
         .row("menu", menu_height)
@@ -75,69 +82,80 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
         .split(engine.clamp_area(area));
 
     let header_row = rows.get("header");
-    let logo_col = if show_icon {
-        let header_cols = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(14),
-                Constraint::Length(2),
-                Constraint::Min(0),
-            ])
-            .split(header_row);
-        f.render_widget(IconWidget, header_cols[0]);
-        header_cols[2]
-    } else {
-        header_row
-    };
+    if header_row.height > 0 {
+        let logo_col = if show_icon {
+            let header_cols = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Length(14),
+                    Constraint::Length(2),
+                    Constraint::Min(0),
+                ])
+                .split(header_row);
+            f.render_widget(IconWidget, header_cols[0]);
+            header_cols[2]
+        } else {
+            header_row
+        };
 
-    let logo_area = Rect {
-        y: logo_col.y + 1,
-        height: 6,
-        ..logo_col
-    };
-    let logo_lines: Vec<Line> = LOGO
-        .iter()
-        .map(|l| {
-            Line::from(Span::styled(
-                *l,
-                Style::default().fg(C_LOGO).add_modifier(Modifier::BOLD),
-            ))
-        })
-        .collect();
-    f.render_widget(Paragraph::new(logo_lines), logo_area);
+        let logo_area = Rect {
+            y: logo_col.y + 1,
+            height: 6,
+            ..logo_col
+        };
+        let logo_lines: Vec<Line> = LOGO
+            .iter()
+            .map(|l| {
+                Line::from(Span::styled(
+                    *l,
+                    Style::default().fg(C_LOGO).add_modifier(Modifier::BOLD),
+                ))
+            })
+            .collect();
+        f.render_widget(Paragraph::new(logo_lines), logo_area);
+    }
 
-    let divider = "─".repeat(DIVIDER_WIDTH as usize);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            divider.clone(),
-            Style::default().fg(C_MUTED),
-        ))),
-        engine.center(DIVIDER_WIDTH, rows.get("divider")),
-    );
+    let divider_row = rows.get("divider");
+    if divider_row.height > 0 {
+        let divider = "─".repeat(DIVIDER_WIDTH as usize);
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                divider,
+                Style::default().fg(C_MUTED),
+            ))),
+            engine.center(DIVIDER_WIDTH, divider_row),
+        );
+    }
 
-    let (tagline, tagline_color) = current_tagline();
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            tagline,
-            Style::default()
-                .fg(tagline_color)
-                .add_modifier(Modifier::ITALIC),
-        ))),
-        engine.center(tagline.chars().count() as u16, rows.get("tagline")),
-    );
+    let tagline_row = rows.get("tagline");
+    if tagline_row.height > 0 {
+        let (tagline, tagline_color) = current_tagline();
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                tagline,
+                Style::default()
+                    .fg(tagline_color)
+                    .add_modifier(Modifier::ITALIC),
+            ))),
+            engine.center(tagline.chars().count() as u16, tagline_row),
+        );
+    }
 
-    let now = Local::now().format("%H:%M").to_string();
-    let version = env!("CARGO_PKG_VERSION");
-    let time_str = format!("{}  |  v{}", now, version);
-    let time_len = time_str.chars().count() as u16;
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(now, Style::default().fg(C_MUTED)),
-            Span::styled("  |  ", Style::default().fg(C_MUTED)),
-            Span::styled(format!("v{version}"), Style::default().fg(C_MUTED)),
-        ])),
-        engine.center(time_len, rows.get("time_ver")),
-    );
+    let time_ver_row = rows.get("time_ver");
+    if time_ver_row.height > 0 {
+        let now = Local::now().format("%H:%M").to_string();
+        let version = env!("CARGO_PKG_VERSION");
+        let time_str = format!("{}  |  v{}", now, version);
+        let time_len = time_str.chars().count() as u16;
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(now, Style::default().fg(C_MUTED)),
+                Span::styled("  |  ", Style::default().fg(C_MUTED)),
+                Span::styled(format!("v{version}"), Style::default().fg(C_MUTED)),
+            ])),
+            engine.center(time_len, time_ver_row),
+        );
+    }
 
     f.render_widget(
         Paragraph::new(Line::from(vec![

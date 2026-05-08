@@ -3,6 +3,14 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 /// Icon (14) + gap (2) + logo (63).
 pub const UI_WIDTH: u16 = 79;
 
+/// Below this terminal height we drop decorative chrome (logos, taglines)
+/// to keep the actual content visible.
+pub const COMPACT_HEIGHT: u16 = 24;
+
+pub fn is_compact(area: Rect) -> bool {
+    area.height < COMPACT_HEIGHT
+}
+
 pub enum HAlign {
     Left,
     Center,
@@ -68,7 +76,7 @@ impl LayoutEngine {
 }
 
 pub struct ScreenLayout {
-    rows: Vec<(&'static str, u16)>, // (name, height); 0 → Min(0)
+    rows: Vec<(&'static str, Constraint)>,
     margin: u16,
 }
 
@@ -80,8 +88,17 @@ impl ScreenLayout {
         }
     }
 
+    /// Add a row with a fixed height. A height of 0 collapses the row entirely
+    /// (so screens can hide chrome conditionally without changing row names).
+    /// To make a row fill remaining space, use [`ScreenLayout::fill`].
     pub fn row(mut self, name: &'static str, height: u16) -> Self {
-        self.rows.push((name, height));
+        self.rows.push((name, Constraint::Length(height)));
+        self
+    }
+
+    /// Add a row that fills the remaining vertical space.
+    pub fn fill(mut self, name: &'static str) -> Self {
+        self.rows.push((name, Constraint::Min(0)));
         self
     }
 
@@ -91,17 +108,7 @@ impl ScreenLayout {
     }
 
     pub fn split(&self, area: Rect) -> RowMap {
-        let constraints: Vec<Constraint> = self
-            .rows
-            .iter()
-            .map(|&(_, h)| {
-                if h == 0 {
-                    Constraint::Min(0)
-                } else {
-                    Constraint::Length(h)
-                }
-            })
-            .collect();
+        let constraints: Vec<Constraint> = self.rows.iter().map(|(_, c)| *c).collect();
 
         let rects = Layout::default()
             .direction(Direction::Vertical)
@@ -113,7 +120,7 @@ impl ScreenLayout {
             .rows
             .iter()
             .zip(rects.iter())
-            .map(|(&(name, _), &r)| (name, r))
+            .map(|((name, _), r)| (*name, *r))
             .collect();
 
         RowMap(named)

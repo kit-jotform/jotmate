@@ -18,17 +18,19 @@ pub(in crate::tui::draw) fn draw_screen_header(
     title: &str,
     hint_spans: Vec<Span<'static>>,
 ) {
-    let logo_w = LOGO_SMALL[0].chars().count() as u16;
-    let logo_lines: Vec<Line> = LOGO_SMALL
-        .iter()
-        .map(|l| {
-            Line::from(Span::styled(
-                *l,
-                Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD),
-            ))
-        })
-        .collect();
-    f.render_widget(Paragraph::new(logo_lines), engine.center(logo_w, logo_area));
+    if logo_area.height > 0 {
+        let logo_w = LOGO_SMALL[0].chars().count() as u16;
+        let logo_lines: Vec<Line> = LOGO_SMALL
+            .iter()
+            .map(|l| {
+                Line::from(Span::styled(
+                    *l,
+                    Style::default().fg(C_PRIMARY).add_modifier(Modifier::BOLD),
+                ))
+            })
+            .collect();
+        f.render_widget(Paragraph::new(logo_lines), engine.center(logo_w, logo_area));
+    }
 
     let title_row = engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), title_area);
     f.render_widget(
