@@ -3,12 +3,20 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 /// Icon (14) + gap (2) + logo (63).
 pub const UI_WIDTH: u16 = 79;
 
-/// Below this terminal height we drop decorative chrome (logos, taglines)
-/// to keep the actual content visible.
-pub const COMPACT_HEIGHT: u16 = 24;
+/// Below this terminal height we drop secondary chrome (tagline,
+/// time/version, divider on the main menu; small logo on sub-screens).
+pub const COMPACT_HEIGHT: u16 = 22;
+
+/// Below this terminal height we additionally drop the main menu's big
+/// logo + icon header so the menu itself stays visible.
+pub const TIGHT_HEIGHT: u16 = 20;
 
 pub fn is_compact(area: Rect) -> bool {
     area.height < COMPACT_HEIGHT
+}
+
+pub fn is_tight(area: Rect) -> bool {
+    area.height < TIGHT_HEIGHT
 }
 
 pub enum HAlign {

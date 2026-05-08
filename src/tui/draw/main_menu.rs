@@ -8,7 +8,9 @@ use ratatui::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::tui::app::{App, Screen};
-use crate::tui::layout::{is_compact, HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
+use crate::tui::layout::{
+    is_compact, is_tight, HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH,
+};
 use crate::tui::palette::{C_ACCENT, C_LOGO, C_MUTED, C_SELECT, C_TEXT, C_WARN};
 use crate::tui::widgets::{IconWidget, LOGO};
 
@@ -57,15 +59,16 @@ pub fn draw_main_menu(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
     let compact = is_compact(area);
-    let show_icon = !compact && area.width >= UI_WIDTH;
+    let tight = is_tight(area);
+    let show_icon = !tight && area.width >= UI_WIDTH;
 
     let menu_height = app.main_menu_items().len() as u16;
-    let header_h = if compact { 0 } else { 7 };
-    let blank1_h = if compact { 0 } else { 1 };
+    let header_h = if tight { 0 } else { 7 };
+    let blank1_h = if tight { 0 } else { 1 };
     let tagline_h = if compact { 0 } else { 1 };
     let time_ver_h = if compact { 0 } else { 1 };
     let divider_h = if compact { 0 } else { 1 };
-    let blank2_h = if compact { 0 } else { 1 };
+    let blank2_h = if tight { 0 } else { 1 };
     let rows = ScreenLayout::new()
         .row("header", header_h)
         .row("blank1", blank1_h)
