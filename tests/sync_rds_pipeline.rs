@@ -237,6 +237,54 @@ async fn rds_failure_does_not_record_cache() {
 }
 
 #[tokio::test]
+async fn rds_error_invalidates_prior_cache_so_next_run_retries() {
+    let git = FakeGit::new();
+    git.set_rds_error("transient");
+    let td = fake_repo_dir(true);
+    let (_state_td, state) = state_with(td.path(), "previously_synced_sha");
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    sync_rds(
+        git.as_ref(),
+        0,
+        td.path(),
+        &ForkResult::Updated,
+        &tx,
+        &opts(false, true, state.clone()),
+    )
+    .await;
+
+    let _ = collect_rds_updates(&mut rx);
+    assert_eq!(
+        state.last_synced_sha(td.path()),
+        None,
+        "an RDS error must invalidate the prior cached SHA so smart-sync proceeds next run"
+    );
+}
+
+#[tokio::test]
+async fn rds_ip_denied_invalidates_prior_cache() {
+    let git = FakeGit::new();
+    git.set_rds_ip_denied("Permission denied (publickey).");
+    let td = fake_repo_dir(true);
+    let (_state_td, state) = state_with(td.path(), "previously_synced_sha");
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    sync_rds(
+        git.as_ref(),
+        0,
+        td.path(),
+        &ForkResult::Updated,
+        &tx,
+        &opts(false, true, state.clone()),
+    )
+    .await;
+
+    let _ = collect_rds_updates(&mut rx);
+    assert_eq!(state.last_synced_sha(td.path()), None);
+}
+
+#[tokio::test]
 async fn smart_sync_proceeds_when_dirty() {
     let git = FakeGit::new().on(
         &["status"],
@@ -581,12 +629,6 @@ fn detect_ip_denial_matches_connection_timed_out() {
 fn detect_ip_denial_returns_none_for_clean_output() {
     let out = "# Syncing...\n# Uploading ... DONE";
     assert!(detect_ip_denial(out).is_none());
-}
-
-#[test]
-fn detect_ip_denial_matches_kex_exchange() {
-    let out = "kex_exchange_identification: read: Connection reset by peer";
-    assert!(detect_ip_denial(out).is_some());
 }
 
 #[test]

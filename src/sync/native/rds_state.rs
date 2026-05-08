@@ -44,6 +44,14 @@ impl RdsStateCache {
         self.save();
     }
 
+    pub fn forget(&self, repo: &Path) {
+        let key = repo.to_string_lossy().to_string();
+        let removed = self.inner.lock().unwrap().remove(&key).is_some();
+        if removed {
+            self.save();
+        }
+    }
+
     fn save(&self) {
         if let Some(parent) = self.path.parent() {
             let _ = std::fs::create_dir_all(parent);

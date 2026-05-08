@@ -48,40 +48,36 @@ impl GitExec for SubprocessGit {
             .output()
             .await
             .map_err(|e| RdsError::Other(e.to_string()))?;
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let combined = format!("{stderr}\n{stdout}");
-        if output.status.success() {
-            return match detect_ip_denial(&combined) {
-                Some(detail) => Err(RdsError::IpDenied { detail }),
-                None => Ok(()),
-            };
+        // The repo ./sync scripts always exit 0 even when ssh/rsync fails, so we
+        // must inspect output regardless of exit code.
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout),
+        );
+        if let Some(detail) = detect_ip_denial(&combined) {
+            return Err(RdsError::IpDenied { detail });
         }
-        Err(classify_rds_stderr(
-            &combined,
-            output.status.code().unwrap_or(1),
-        ))
+        if output.status.success() {
+            return Ok(());
+        }
+        let first = combined
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("exit {}", output.status.code().unwrap_or(1)));
+        Err(RdsError::Other(first))
     }
 }
 
 const IP_DENIED_MARKERS: &[&str] = &[
+    "unexpected end of file",
+    "connection closed by",
+    "rsync error:",
     "connection timed out",
     "connection refused",
-    "no route to host",
-    "network is unreachable",
-    "connection reset by peer",
-    "connection closed by",
     "permission denied (publickey",
-    "kex_exchange_identification",
-    "host key verification failed",
-    "unexpected end of file",
-    "rsync error:",
-    "ip not allowed",
-    "ip is not allowed",
-    "access denied",
-    "not authorized",
-    "403 forbidden",
-    "forbidden",
 ];
 
 pub fn detect_ip_denial(output: &str) -> Option<String> {
@@ -95,19 +91,6 @@ pub fn detect_ip_denial(output: &str) -> Option<String> {
         .unwrap_or(*marker)
         .to_string();
     Some(detail)
-}
-
-pub(super) fn classify_rds_stderr(output: &str, exit_code: i32) -> RdsError {
-    if let Some(detail) = detect_ip_denial(output) {
-        return RdsError::IpDenied { detail };
-    }
-    let first = output
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("exit {exit_code}"));
-    RdsError::Other(first)
 }
 
 pub(super) async fn detect_default_branch(git: &dyn GitExec, repo: &Path) -> Option<String> {

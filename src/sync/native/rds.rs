@@ -57,9 +57,11 @@ pub async fn sync_rds(
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Done));
         }
         Err(RdsError::IpDenied { detail }) => {
+            opts.rds_state.forget(repo);
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::IpDenied(detail)));
         }
         Err(RdsError::Other(msg)) => {
+            opts.rds_state.forget(repo);
             let _ = tx.send(SyncUpdate::Rds(idx, RdsStatus::Error(msg)));
         }
     }
