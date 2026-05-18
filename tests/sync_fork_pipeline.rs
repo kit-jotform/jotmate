@@ -313,6 +313,35 @@ async fn stash_push_failure_aborts_without_merge() {
     }
 }
 
+#[tokio::test]
+async fn stash_push_no_local_changes_skips_pop() {
+    // `diff-index` reports dirty (e.g. stale index / submodule drift) but `stash push`
+    // creates no entry. We must not attempt `stash pop` afterwards.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("bbbb"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("main"))
+        .on(&["diff-index"], Err("dirty"))
+        .on(&["stash", "push"], Ok("No local changes to save"))
+        .on(&["checkout", "main"], Ok(""))
+        .on(&["merge"], Ok(""))
+        .on(&["push", "origin", "main"], Ok(""));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+
+    assert!(matches!(result, ForkResult::Updated));
+    assert_eq!(git.call_count(&["stash", "pop"]), 0);
+    matches!(
+        last_terminal(&collect_fork_updates(&mut rx)),
+        ForkStatus::Done
+    );
+}
+
 // ─── rebase conflict (A16) ─────────────────────────────────────────────────
 
 #[tokio::test]

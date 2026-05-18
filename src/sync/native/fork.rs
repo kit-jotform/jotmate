@@ -129,7 +129,9 @@ pub async fn sync_fork(
         .git(repo, &["diff-index", "--quiet", "HEAD", "--"])
         .await
         .is_err();
-    // True only after a successful `stash push` — gates every `stash pop`.
+    // True only after a `stash push` that actually created an entry — gates every `stash pop`.
+    // `git stash push` exits 0 even when there's nothing to save (e.g. only submodule drift or
+    // stale-index dirtiness that `diff-index` flags but `stash` ignores), so check stdout too.
     let mut stashed = false;
     if dirty {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Stashing));
@@ -140,7 +142,7 @@ pub async fn sync_fork(
             )
             .await
         {
-            Ok(_) => stashed = true,
+            Ok(out) => stashed = !out.contains("No local changes to save"),
             Err(e) => {
                 let _ = tx.send(SyncUpdate::Fork(
                     idx,
