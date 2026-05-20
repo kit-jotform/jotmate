@@ -432,6 +432,139 @@ async fn skip_git_fetch_omits_fetch_call() {
     assert_eq!(git.call_count(&["fetch", "upstream"]), 0);
 }
 
+// ─── feature branch trails master while default == upstream ───────────────
+
+#[tokio::test]
+async fn feature_branch_behind_master_is_rebased_when_default_aligned() {
+    // Default branch already matches upstream, but the user is on a feature
+    // branch whose tip predates master — must rebase + force-push instead of
+    // returning UpToDate.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("my-feature"))
+        .on(&["merge-base", "--is-ancestor", "main", "HEAD"], Err("1"))
+        .on(&["diff-index"], Ok(""))
+        .on(&["rebase", "main"], Ok(""))
+        .on(
+            &["push", "--force-with-lease", "origin", "my-feature"],
+            Ok(""),
+        );
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+    assert!(matches!(result, ForkResult::Updated));
+    let updates = collect_fork_updates(&mut rx);
+    matches!(last_terminal(&updates), ForkStatus::Done);
+    assert!(git.was_called(&["rebase", "main"]));
+    assert!(git.was_called(&["push", "--force-with-lease", "origin", "my-feature"]));
+    // Must NOT touch the default branch when it's already aligned.
+    assert_eq!(git.call_count(&["checkout", "main"]), 0);
+    assert_eq!(git.call_count(&["merge"]), 0);
+}
+
+#[tokio::test]
+async fn feature_branch_up_to_date_with_master_stays_unchanged() {
+    // Default == upstream, feature branch already contains master (master is
+    // an ancestor of HEAD) → no rebase, no push.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("my-feature"))
+        .on(&["merge-base", "--is-ancestor", "main", "HEAD"], Ok(""));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+    assert!(matches!(result, ForkResult::Unchanged));
+    let updates = collect_fork_updates(&mut rx);
+    matches!(last_terminal(&updates), ForkStatus::UpToDate);
+    assert_eq!(git.call_count(&["rebase"]), 0);
+    assert_eq!(git.call_count(&["push", "--force-with-lease"]), 0);
+}
+
+#[tokio::test]
+async fn skip_rebase_prevents_rebase_when_default_aligned() {
+    // Default == upstream, feature behind master, but --skip-rebase set:
+    // must not invoke merge-base or rebase.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("my-feature"));
+    let td = fake_repo_dir(false);
+    let (tx, _rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, true)).await;
+    assert!(matches!(result, ForkResult::Unchanged));
+    assert_eq!(git.call_count(&["merge-base"]), 0);
+    assert_eq!(git.call_count(&["rebase"]), 0);
+}
+
+#[tokio::test]
+async fn aligned_default_rebase_conflict_aborts_and_reports() {
+    // Default == upstream, feature trails master, rebase hits a conflict →
+    // abort + Error("rebase conflict"), no push.
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("my-feature"))
+        .on(&["merge-base", "--is-ancestor", "main", "HEAD"], Err("1"))
+        .on(&["diff-index"], Ok(""))
+        .on(&["rebase", "main"], Err("CONFLICT in foo.rs"))
+        .on(&["rebase", "--abort"], Ok(""));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+    assert_eq!(result, ForkResult::Error("rebase conflict".into()));
+    let updates = collect_fork_updates(&mut rx);
+    match last_terminal(&updates) {
+        ForkStatus::Error(msg) => assert_eq!(msg, "rebase conflict"),
+        other => panic!("expected Error(rebase conflict), got {other:?}"),
+    }
+    assert!(git.was_called(&["rebase", "--abort"]));
+    assert_eq!(git.call_count(&["push", "--force-with-lease"]), 0);
+}
+
+#[tokio::test]
+async fn aligned_default_dirty_tree_skips_rebase() {
+    // Default == upstream, feature trails master, but working tree is dirty:
+    // skip rebase (no stash dance here — leave the user's changes alone).
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("upstream\n"))
+        .on(&["fetch", "upstream"], Ok(""))
+        .on(&["symbolic-ref"], Ok("refs/remotes/upstream/main"))
+        .on(&["rev-parse", "main"], Ok("aaaa"))
+        .on(&["rev-parse", "upstream/main"], Ok("aaaa"))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("my-feature"))
+        .on(&["merge-base", "--is-ancestor", "main", "HEAD"], Err("1"))
+        .on(&["diff-index"], Err("dirty"));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+    assert!(matches!(result, ForkResult::Unchanged));
+    let updates = collect_fork_updates(&mut rx);
+    match last_terminal(&updates) {
+        ForkStatus::Skipped(msg) => assert!(msg.contains("dirty"), "got: {msg}"),
+        other => panic!("expected Skipped(dirty…), got {other:?}"),
+    }
+    assert_eq!(git.call_count(&["rebase"]), 0);
+}
+
 #[tokio::test]
 async fn skip_rebase_omits_rebase_call() {
     let git = FakeGit::new()

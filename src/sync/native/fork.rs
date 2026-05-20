@@ -108,22 +108,48 @@ pub async fn sync_fork(
         return ForkResult::Unchanged;
     }
 
+    let current_branch = git
+        .git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .await
+        .unwrap_or_default();
+
     if local_commit == upstream_commit {
         let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::UpToDate));
         let fetched_new = pre_fetch_upstream
             .as_deref()
             .is_some_and(|pre| !pre.is_empty() && pre != upstream_commit);
+
+        // Default branch is aligned with upstream, but the checked-out feature
+        // branch may still trail master — rebase it forward so `jf sync` doesn't
+        // silently leave the user behind.
+        let on_feature_branch = !current_branch.is_empty() && current_branch != default_branch;
+        if on_feature_branch && !opts.skip_rebase {
+            let needs_rebase = git
+                .git(
+                    repo,
+                    &["merge-base", "--is-ancestor", &default_branch, "HEAD"],
+                )
+                .await
+                .is_err();
+            if needs_rebase {
+                return rebase_feature_onto_default(
+                    git,
+                    idx,
+                    repo,
+                    tx,
+                    &default_branch,
+                    &current_branch,
+                )
+                .await;
+            }
+        }
+
         return if fetched_new {
             ForkResult::Updated
         } else {
             ForkResult::Unchanged
         };
     }
-
-    let current_branch = git
-        .git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])
-        .await
-        .unwrap_or_default();
 
     let dirty = git
         .git(repo, &["diff-index", "--quiet", "HEAD", "--"])
@@ -233,6 +259,59 @@ pub async fn sync_fork(
             ));
             return ForkResult::Error("stash pop failed".into());
         }
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Done));
+    ForkResult::Updated
+}
+
+/// Rebase the currently checked-out feature branch onto the default branch.
+/// Called when the default branch is already aligned with upstream but the
+/// feature branch trails it; bails out on a dirty tree so the user's
+/// in-progress work is left untouched.
+async fn rebase_feature_onto_default(
+    git: &dyn GitExec,
+    idx: usize,
+    repo: &Path,
+    tx: &mpsc::UnboundedSender<SyncUpdate>,
+    default_branch: &str,
+    current_branch: &str,
+) -> ForkResult {
+    let dirty = git
+        .git(repo, &["diff-index", "--quiet", "HEAD", "--"])
+        .await
+        .is_err();
+    if dirty {
+        let _ = tx.send(SyncUpdate::Fork(
+            idx,
+            ForkStatus::Skipped("dirty tree — rebase skipped".into()),
+        ));
+        return ForkResult::Unchanged;
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Rebasing));
+    if git.git(repo, &["rebase", default_branch]).await.is_err() {
+        let _ = git.git(repo, &["rebase", "--abort"]).await;
+        let _ = tx.send(SyncUpdate::Fork(
+            idx,
+            ForkStatus::Error("rebase conflict".into()),
+        ));
+        return ForkResult::Error("rebase conflict".into());
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::PushingBranch));
+    if let Err(e) = git
+        .git(
+            repo,
+            &["push", "--force-with-lease", "origin", current_branch],
+        )
+        .await
+    {
+        let _ = tx.send(SyncUpdate::Fork(
+            idx,
+            ForkStatus::Error(format!("push branch: {e}")),
+        ));
+        return ForkResult::Error(e);
     }
 
     let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Done));
