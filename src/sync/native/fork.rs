@@ -11,7 +11,6 @@ pub struct ForkOpts {
     pub skip_rebase: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum ForkResult {
     Updated,

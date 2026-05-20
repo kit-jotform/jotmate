@@ -21,9 +21,10 @@ pub const LOGO_SMALL: [&str; 3] = [
 ];
 
 // (col, row, char, fg_256, bg_256) — None = terminal default
+type IconCell = (u16, u16, char, Option<u8>, Option<u8>);
+
 #[rustfmt::skip]
-#[allow(clippy::type_complexity)]
-const ICON_CELLS: &[(u16, u16, char, Option<u8>, Option<u8>)] = &[
+const ICON_CELLS: &[IconCell] = &[
     (0,0,'▗',Some(102),None),(1,0,'▅',Some(244),None),(2,0,'▅',Some(243),None),
     (3,0,'▃',Some(244),None),(4,0,' ',Some(244),None),(5,0,' ',Some(244),None),
     (6,0,' ',Some(244),None),(7,0,' ',Some(244),None),(8,0,' ',Some(244),None),

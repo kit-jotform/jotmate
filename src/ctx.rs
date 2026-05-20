@@ -12,7 +12,6 @@ pub struct Paths {
 }
 
 impl Paths {
-    #[allow(dead_code)] // used by integration tests
     pub fn new(config_dir: PathBuf, cache_dir: PathBuf) -> Self {
         Self {
             config_dir,
@@ -37,7 +36,6 @@ impl Paths {
         self.config_dir.join("config.toml")
     }
 
-    #[allow(dead_code)] // used by integration tests
     pub fn cache_root(&self) -> &Path {
         &self.cache_dir
     }

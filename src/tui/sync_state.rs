@@ -7,7 +7,6 @@ use tokio::task::JoinHandle;
 use crate::config::UpstreamRepo;
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub enum ForkStatus {
     Pending,
     FetchingUpstream,
@@ -58,7 +57,6 @@ impl ForkStatus {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub enum RdsStatus {
     Pending,
     Preparing,
@@ -100,7 +98,6 @@ impl RdsStatus {
 pub const IP_DENIED_HINT: &str = "RDS denied — are you connected to the Jotform network or VPN?";
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct RepoSyncState {
     pub name: String,
     pub path: PathBuf,

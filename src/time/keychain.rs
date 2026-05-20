@@ -20,7 +20,6 @@ pub trait KeychainStore: Send + Sync {
 
     fn get_password(&self) -> Result<Option<String>>;
     fn set_password(&self, value: &str) -> Result<()>;
-    #[allow(dead_code)]
     fn delete_password(&self) -> Result<()>;
 }
 
