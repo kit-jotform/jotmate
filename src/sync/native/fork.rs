@@ -119,9 +119,7 @@ pub async fn sync_fork(
             .as_deref()
             .is_some_and(|pre| !pre.is_empty() && pre != upstream_commit);
 
-        // Default branch is aligned with upstream, but the checked-out feature
-        // branch may still trail master — rebase it forward so `jf sync` doesn't
-        // silently leave the user behind.
+        // Default is aligned but a checked-out feature branch may still trail it.
         let on_feature_branch = !current_branch.is_empty() && current_branch != default_branch;
         if on_feature_branch && !opts.skip_rebase {
             let needs_rebase = git
@@ -265,10 +263,7 @@ pub async fn sync_fork(
     ForkResult::Updated
 }
 
-/// Rebase the currently checked-out feature branch onto the default branch.
-/// Called when the default branch is already aligned with upstream but the
-/// feature branch trails it; bails out on a dirty tree so the user's
-/// in-progress work is left untouched.
+/// Bails out on a dirty tree to keep the user's in-progress work intact.
 async fn rebase_feature_onto_default(
     git: &dyn GitExec,
     idx: usize,
