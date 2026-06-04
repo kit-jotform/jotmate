@@ -34,18 +34,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
 
                 SettingRow::Divider => divider_item(),
 
-                SettingRow::Separator => {
-                    let sep_count = setting_rows[..i]
-                        .iter()
-                        .filter(|r| matches!(r, SettingRow::Separator))
-                        .count();
-                    let label = if sep_count == 0 {
-                        "RDS Sync"
-                    } else {
-                        "Time Doctor"
-                    };
-                    separator_item(label)
-                }
+                SettingRow::Separator(label) => separator_item(label),
 
                 SettingRow::Back => back_item(is_sel),
                 SettingRow::SyncGeneralLink => link_item(is_sel, "→ General settings"),

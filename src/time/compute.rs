@@ -80,9 +80,8 @@ pub fn weeks_to_fetch(start_date: NaiveDate, skip_current_week: bool) -> Vec<Nai
     let mut current = this_week_monday;
 
     loop {
-        if skip_current_week && current >= this_week_monday {
-            // skip
-        } else if current >= start_date {
+        let is_skipped_current = skip_current_week && current >= this_week_monday;
+        if !is_skipped_current && current >= start_date {
             weeks.push(current);
         }
 

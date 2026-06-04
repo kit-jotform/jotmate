@@ -9,7 +9,7 @@ use crate::tui::layout::{HAlign, LayoutEngine, ScreenLayout, Widget, UI_WIDTH};
 use crate::tui::palette::{C_ACCENT, C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, SPINNER};
 use crate::update::{api::current_version, UpdatePhase};
 
-use super::{draw_screen_header, hint_muted, HINT_RETURN_TO_MENU};
+use super::{draw_screen_header, hint_cancel, hint_enter_back, hint_muted, HINT_RETURN_TO_MENU};
 
 pub fn draw_update_progress(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
@@ -84,9 +84,9 @@ pub fn draw_update_progress(f: &mut ratatui::Frame, app: &App) {
 fn title_and_hint(phase: &UpdatePhase) -> (&'static str, Vec<Span<'static>>) {
     match phase {
         UpdatePhase::Done(_) => ("Update Complete", hint_muted(&["↵", " relaunch"])),
-        UpdatePhase::UpToDate => ("No Update Needed", hint_muted(&["↵", " back"])),
-        UpdatePhase::Failed(_) => ("Update Failed", hint_muted(&["↵", " back"])),
-        _ => ("Updating JotMate", hint_muted(&["⌫/Esc", " cancel"])),
+        UpdatePhase::UpToDate => ("No Update Needed", hint_enter_back()),
+        UpdatePhase::Failed(_) => ("Update Failed", hint_enter_back()),
+        _ => ("Updating JotMate", hint_cancel()),
     }
 }
 

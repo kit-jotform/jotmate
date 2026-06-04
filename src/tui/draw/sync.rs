@@ -12,7 +12,10 @@ use crate::tui::palette::{
     C_ACCENT, C_DANGEROUS, C_MUTED, C_PRIMARY, C_SUCCESS, C_TEXT, C_WARN, SPINNER,
 };
 
-use super::{draw_screen_header, draw_scroll_table, hint_muted, inset_rect, HINT_RETURN_TO_MENU};
+use super::{
+    draw_screen_header, draw_scroll_table, hint_cancel, hint_enter_back, hint_muted, inset_rect,
+    HINT_RETURN_TO_MENU,
+};
 
 const NAME_W: usize = 14;
 const FORK_W: usize = 22;
@@ -54,7 +57,7 @@ fn draw_discovering(f: &mut ratatui::Frame, app: &App) {
         rows.get("title"),
         rows.get("divider"),
         "Preparing Sync",
-        hint_muted(&["⌫/Esc", " cancel"]),
+        hint_cancel(),
     );
 
     let tick = app
@@ -110,7 +113,7 @@ fn draw_failed(f: &mut ratatui::Frame, app: &App) {
         rows.get("title"),
         rows.get("divider"),
         "Sync Unavailable",
-        hint_muted(&["↵", " back"]),
+        hint_enter_back(),
     );
 
     f.render_widget(
@@ -187,7 +190,7 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
         rows.get("title"),
         rows.get("divider"),
         title,
-        hint_muted(&["⌫/Esc", " cancel"]),
+        hint_cancel(),
     );
 
     if let Some(state) = &app.sync_state {

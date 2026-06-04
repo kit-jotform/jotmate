@@ -23,6 +23,8 @@ pub const TIMEZONES: &[&str] = &[
 
 pub const WEEKLY_HOURS_OPTIONS: &[f64] = &[16.0, 20.0, 24.0, 28.0];
 
+pub const DEFAULT_HOURS_IDX: usize = 1;
+
 pub(super) fn timezone_index(tz: &str) -> usize {
     TIMEZONES
         .iter()

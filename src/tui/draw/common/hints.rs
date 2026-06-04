@@ -32,3 +32,11 @@ pub(in crate::tui::draw) fn hint_confirm_cancel() -> Vec<Span<'static>> {
 pub(in crate::tui::draw) fn hint_input_confirm() -> Vec<Span<'static>> {
     hint_muted(&["↵", " confirm  •  ", "Esc", " cancel"])
 }
+
+pub(in crate::tui::draw) fn hint_cancel() -> Vec<Span<'static>> {
+    hint_muted(&["⌫/Esc", " cancel"])
+}
+
+pub(in crate::tui::draw) fn hint_enter_back() -> Vec<Span<'static>> {
+    hint_muted(&["↵", " back"])
+}

@@ -27,6 +27,13 @@ impl UpstreamRepo {
     }
 }
 
+pub fn normalize_repo_url(url: &str) -> String {
+    url.trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .to_string()
+}
+
 fn default_upstream_repos() -> Vec<UpstreamRepo> {
     vec![
         UpstreamRepo::new("https://github.com/jotform/frontend.git", "frontend"),
@@ -67,6 +74,7 @@ impl Default for SyncConfig {
 
 pub const TIMEDOCTOR_COMPANY_ID: &str = "Xms4iFqBgQAEjLy2";
 pub const DEFAULT_TIMEZONE: &str = "Europe/Istanbul";
+pub const DATE_FORMAT: &str = "%Y-%m-%d";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TimeConfig {

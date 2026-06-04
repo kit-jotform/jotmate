@@ -4,7 +4,7 @@ use std::io::{self, Write};
 
 use super::io::save;
 use super::parse::parse_contract_periods;
-use super::types::{Config, DEFAULT_TIMEZONE};
+use super::types::{Config, DATE_FORMAT, DEFAULT_TIMEZONE};
 use crate::ctx::Paths;
 
 pub fn ensure_time_credentials(paths: &Paths, config: &mut Config) -> Result<()> {
@@ -39,7 +39,7 @@ pub fn ensure_time_credentials(paths: &Paths, config: &mut Config) -> Result<()>
     if config.time.start_date.is_none() {
         loop {
             let s = prompt("Start date (YYYY-MM-DD)", None)?;
-            match NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
+            match NaiveDate::parse_from_str(&s, DATE_FORMAT) {
                 Ok(d) => {
                     config.time.start_date = Some(d);
                     changed = true;

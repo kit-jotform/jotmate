@@ -1,7 +1,7 @@
-use crate::config::{ContractPeriod, UpstreamRepo};
+use crate::config::{normalize_repo_url, ContractPeriod, UpstreamRepo};
 use crate::tui::rows::{CpListRow, CycleTarget, InputMode, OwListRow, RemoveRepoRow, ToggleKind};
 
-use super::constants::{this_monday, TIMEZONES, WEEKLY_HOURS_OPTIONS};
+use super::constants::{this_monday, DEFAULT_HOURS_IDX, TIMEZONES, WEEKLY_HOURS_OPTIONS};
 use super::navigation::clamp_to_last_interactive;
 use super::screen::Screen;
 use super::App;
@@ -86,7 +86,7 @@ impl App {
         self.input_mode = InputMode::ConfirmDelete(name);
     }
 
-    pub fn execute_delete_repo(&mut self, name: &str) {
+    pub fn execute_delete_repo(&mut self, name: String) {
         self.sync.repos.retain(|r| r.name != name);
         self.persist_settings();
         self.input_mode = InputMode::Normal;
@@ -165,19 +165,12 @@ impl App {
             .last()
             .map(|p| p.from)
             .unwrap_or_else(this_monday);
-        self.add_cp.hours_idx = 1;
-    }
-
-    fn normalize_url(url: &str) -> String {
-        url.trim()
-            .trim_end_matches('/')
-            .trim_end_matches(".git")
-            .to_string()
+        self.add_cp.hours_idx = DEFAULT_HOURS_IDX;
     }
 
     // Short repo label from the last URL path segment (https, scp-style, or bare path).
     fn name_from_url(url: &str) -> Option<String> {
-        let normalized = Self::normalize_url(url);
+        let normalized = normalize_repo_url(url);
         let path = if let Some(rest) = normalized.strip_prefix("https://") {
             rest.split_once('/').map(|(_host, p)| p)?
         } else if let Some(rest) = normalized.strip_prefix("http://") {
@@ -196,7 +189,7 @@ impl App {
     }
 
     pub fn add_repo_from_input(&mut self, url: String) {
-        let normalized = Self::normalize_url(&url);
+        let normalized = normalize_repo_url(&url);
         if normalized.is_empty() {
             return;
         }
@@ -207,7 +200,7 @@ impl App {
             .sync
             .repos
             .iter()
-            .any(|r| Self::normalize_url(&r.url) == normalized);
+            .any(|r| normalize_repo_url(&r.url) == normalized);
         let name_exists = self.sync.repos.iter().any(|r| r.name == name);
         if url_exists || name_exists {
             return;

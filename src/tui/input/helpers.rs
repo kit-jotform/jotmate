@@ -63,6 +63,22 @@ pub(super) fn execute_if_confirmed<T: Clone>(
     }
 }
 
+macro_rules! pending_delete {
+    ($name:ident, $variant:ident, $method:ident) => {
+        pub(in crate::tui::input) fn $name(app: &mut crate::tui::app::App) {
+            $crate::tui::input::helpers::execute_if_confirmed(
+                app,
+                |m| match m {
+                    crate::tui::app::InputMode::$variant(v) => Some(v.clone()),
+                    _ => None,
+                },
+                |a, v| a.$method(v),
+            );
+        }
+    };
+}
+pub(super) use pending_delete;
+
 pub(super) fn clamp_scroll(current: usize, delta: i32, total: usize, visible: usize) -> usize {
     let max = total.saturating_sub(visible);
     if delta < 0 {

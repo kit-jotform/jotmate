@@ -13,10 +13,10 @@ mod update;
 
 pub(in crate::tui::draw) use common::{
     back_item, blank_item, del_item, divider_item, draw_confirm_dialog, draw_screen_header,
-    draw_scroll_table, field_state, fmt_date, fmt_hours, hint_confirm_cancel, hint_input_confirm,
-    hint_muted, hint_navigate_action, inline_field_item, inset_rect, link_item, separator_item,
-    sub_link_item, sub_screen_setup, toggle_item, FieldState, DIVIDER_WIDTH, FIELD_LABEL_W,
-    FIELD_LABEL_W_TZ, HINT_RETURN_TO_MENU,
+    draw_scroll_table, field_state, fmt_date, fmt_hours, hint_cancel, hint_confirm_cancel,
+    hint_enter_back, hint_input_confirm, hint_muted, hint_navigate_action, inline_field_item,
+    inset_rect, link_item, separator_item, sub_link_item, sub_screen_setup, toggle_item,
+    FieldState, DIVIDER_WIDTH, FIELD_LABEL_W, FIELD_LABEL_W_TZ, HINT_RETURN_TO_MENU,
 };
 
 use contract::draw_contract_periods;

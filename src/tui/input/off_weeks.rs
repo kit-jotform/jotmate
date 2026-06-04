@@ -2,9 +2,9 @@ use std::ops::ControlFlow;
 
 use crossterm::event::KeyCode;
 
-use crate::tui::app::{App, CycleTarget, InputMode, OwListRow, Screen};
+use crate::tui::app::{App, CycleTarget, OwListRow, Screen};
 
-use super::helpers::{execute_if_confirmed, list_activate_row};
+use super::helpers::{list_activate_row, pending_delete};
 use super::Action;
 
 pub(super) fn handle_off_weeks(app: &mut App, code: KeyCode) -> Action {
@@ -24,16 +24,8 @@ pub(super) fn handle_off_weeks(app: &mut App, code: KeyCode) -> Action {
     Action::Continue
 }
 
-pub(super) fn execute_pending_off_week_delete(app: &mut App) {
-    execute_if_confirmed(
-        app,
-        |m| {
-            if let InputMode::ConfirmDeleteOffWeek(i) = m {
-                Some(*i)
-            } else {
-                None
-            }
-        },
-        |a, idx| a.execute_delete_off_week(idx),
-    );
-}
+pending_delete!(
+    execute_pending_off_week_delete,
+    ConfirmDeleteOffWeek,
+    execute_delete_off_week
+);

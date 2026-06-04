@@ -8,10 +8,10 @@ use ratatui::{
 use crate::time::compute::{format_hours, format_hours_signed, HOURS_DISPLAY_WIDTH};
 use crate::tui::app::{App, TdReportState, TD_REPORT_VISIBLE_ROWS};
 use crate::tui::layout::UI_WIDTH;
-use crate::tui::palette::{C_DANGEROUS, C_MUTED, C_SUCCESS, C_TEXT, C_WARN};
+use crate::tui::palette::{balance_color, C_DANGEROUS, C_MUTED, C_TEXT, C_WARN};
 
 use super::{
-    draw_screen_header, draw_scroll_table, hint_muted, inset_rect, sub_screen_setup,
+    draw_screen_header, draw_scroll_table, hint_cancel, hint_muted, inset_rect, sub_screen_setup,
     HINT_RETURN_TO_MENU,
 };
 
@@ -27,7 +27,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         TdReportState::NoCredentials(_) | TdReportState::NoPeriods => {
             hint_muted(&["↵", " configure  •  ", "⌫/Esc", " cancel"])
         }
-        _ => hint_muted(&["⌫/Esc", " cancel"]),
+        _ => hint_cancel(),
     };
 
     draw_screen_header(
@@ -63,7 +63,7 @@ pub fn draw_td_report(f: &mut ratatui::Frame, app: &App) {
         }
         TdReportState::Ready { rows, .. } => {
             let total: f64 = rows.iter().map(|r| r.balance_hours).sum();
-            let color = if total >= 0.0 { C_SUCCESS } else { C_DANGEROUS };
+            let color = balance_color(total);
             total_weekly_line(
                 &format_hours_signed(total),
                 color,
@@ -248,13 +248,13 @@ fn split_content_total_hint(area: Rect, content_height: u16) -> (Rect, Rect, Rec
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(content_height),
-            Constraint::Length(1), // blank
-            Constraint::Length(1), // total
-            Constraint::Length(1), // blank
-            Constraint::Length(1), // hint
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
         ])
         .split(area);
-    (chunks[0], chunks[2], chunks[4])
+    (chunks[0], chunks[2], chunks[4]) // content, total, hint (blank rows between)
 }
 
 const WEEK_W: usize = 26; // 4-char index prefix + 22-char date range
@@ -302,29 +302,24 @@ fn build_row(
     let balance = row.balance_hours;
     let cumulative = row.cumulative_hours;
 
-    let balance_color = if balance >= 0.0 {
-        C_SUCCESS
-    } else {
-        C_DANGEROUS
-    };
-    let cum_color = if cumulative >= 0.0 {
-        C_SUCCESS
-    } else {
-        C_DANGEROUS
-    };
+    let balance_fg = balance_color(balance);
+    let cum_fg = balance_color(cumulative);
 
     let week_color = if row.from_cache { C_TEXT } else { C_WARN };
 
     let worked_str = format!("{:>width$}", format_hours(worked_h), width = num_w);
-    let target_value = if row.from_cache {
-        format!("• {}", format_hours(row.target_hours))
+    let target_hours_str = format_hours(row.target_hours);
+    let target_padded = if target_hours_str == "0h" {
+        format!(" {target_hours_str}")
     } else {
-        format_hours(row.target_hours)
+        target_hours_str
     };
-    let target_str = format!("{:>width$}", target_value, width = num_w);
+    let bullet_prefix = if row.from_cache { "• " } else { "  " };
+    let target_combined = format!("{bullet_prefix}{target_padded}");
+    let target_str = format!("{:>width$}", target_combined, width = num_w);
     let balance_str = format!("{:>width$}", format_hours_signed(balance), width = num_w);
 
-    let idx_w = total.to_string().len() + 2; // digits + ". "
+    let idx_w = total.to_string().len() + 2;
     let date_w = week_w.saturating_sub(idx_w);
     let idx_str = format!("{:>width$}. ", index, width = total.to_string().len());
     let date_label = if row.week_label.len() > date_w {
@@ -338,12 +333,12 @@ fn build_row(
         Span::styled(date_label, Style::default().fg(week_color)),
         Span::styled(worked_str, Style::default().fg(C_TEXT)),
         Span::styled(target_str, Style::default().fg(C_MUTED)),
-        Span::styled(balance_str, Style::default().fg(balance_color)),
+        Span::styled(balance_str, Style::default().fg(balance_fg)),
     ];
 
     if show_cumulative {
         let cum_str = format!("{:>width$}", format_hours_signed(cumulative), width = num_w);
-        spans.push(Span::styled(cum_str, Style::default().fg(cum_color)));
+        spans.push(Span::styled(cum_str, Style::default().fg(cum_fg)));
     }
 
     Line::from(spans)

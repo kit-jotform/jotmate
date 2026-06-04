@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 
-use super::types::ContractPeriod;
+use super::types::{ContractPeriod, DATE_FORMAT};
 
 pub fn parse_contract_periods(s: &str) -> Result<Vec<ContractPeriod>> {
     let mut periods = Vec::new();
@@ -14,7 +14,7 @@ pub fn parse_contract_periods(s: &str) -> Result<Vec<ContractPeriod>> {
                 entry
             );
         }
-        let from = NaiveDate::parse_from_str(parts[0].trim(), "%Y-%m-%d")
+        let from = NaiveDate::parse_from_str(parts[0].trim(), DATE_FORMAT)
             .with_context(|| format!("Invalid date '{}'", parts[0]))?;
         let weekly_hours: f64 = parts[1]
             .trim()

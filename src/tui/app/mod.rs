@@ -30,7 +30,7 @@ pub use super::sync_state::{
     ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate, IP_DENIED_HINT,
 };
 
-use constants::{this_monday, timezone_index};
+use constants::{this_monday, timezone_index, DEFAULT_HOURS_IDX};
 use navigation::list_state_at;
 
 pub struct SyncSettings {
@@ -161,7 +161,7 @@ impl App {
             },
             add_cp: AddCpForm {
                 monday: add_cp_monday,
-                hours_idx: 1, // default slot in WEEKLY_HOURS_OPTIONS
+                hours_idx: DEFAULT_HOURS_IDX,
             },
             add_ow: AddOwForm {
                 monday: this_monday(),

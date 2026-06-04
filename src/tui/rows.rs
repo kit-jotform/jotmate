@@ -3,14 +3,14 @@ use chrono::NaiveDate;
 #[derive(Clone, PartialEq)]
 pub enum InputMode {
     Normal,
-    AddingRepo(String),          // buffer holds URL being typed
-    ConfirmDelete(String),       // holds the repo name pending deletion
-    ConfirmDeletePeriod(usize),  // holds the period index pending deletion
-    ConfirmDeleteOffWeek(usize), // holds the off-week index pending deletion
-    SelectingTimezone(usize),    // ↑↓ cycles timezone; stored value = snapshot for cancel
-    EditingCpMonday(NaiveDate),  // ↑↓ cycles monday date; stored value = snapshot for cancel
-    EditingCpHours(usize),       // ↑↓ cycles hours option; stored value = snapshot for cancel
-    EditingOwMonday(NaiveDate),  // ↑↓ cycles off-week monday; stored value = snapshot for cancel
+    AddingRepo(String),
+    ConfirmDelete(String),
+    ConfirmDeletePeriod(usize),
+    ConfirmDeleteOffWeek(usize),
+    SelectingTimezone(usize),
+    EditingCpMonday(NaiveDate),
+    EditingCpHours(usize),
+    EditingOwMonday(NaiveDate),
     EditingField { field: TimeDoctorField, buf: String },
 }
 
@@ -52,9 +52,12 @@ impl ToggleKind {
     }
 }
 
+pub const SECTION_RDS_SYNC: &str = "RDS Sync";
+pub const SECTION_TIME_DOCTOR: &str = "Time Doctor";
+
 #[derive(Clone)]
 pub enum SettingRow {
-    Separator,
+    Separator(&'static str),
     Divider,
     Blank,
     SyncGeneralLink,

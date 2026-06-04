@@ -22,3 +22,19 @@ pub const C_LOGO: Color = C_TEXT;
 pub const ANSI_RESET: &str = "\x1b[0m";
 
 pub const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+
+pub fn balance_color(hours: f64) -> Color {
+    if hours >= 0.0 {
+        C_SUCCESS
+    } else {
+        C_DANGEROUS
+    }
+}
+
+pub fn ansi_balance_color(hours: f64) -> &'static str {
+    if hours >= 0.0 {
+        ANSI_SUCCESS
+    } else {
+        ANSI_DANGEROUS
+    }
+}

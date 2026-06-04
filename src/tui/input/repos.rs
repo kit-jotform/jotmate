@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 
 use crate::tui::app::{App, InputMode, RemoveRepoRow, RepoManagerRow, Screen};
 
-use super::helpers::{execute_if_confirmed, go_to, list_activate_row};
+use super::helpers::{go_to, list_activate_row, pending_delete};
 use super::Action;
 
 pub(super) fn handle_repo_manager(app: &mut App, code: KeyCode) -> Action {
@@ -39,19 +39,11 @@ pub(super) fn handle_remove_repos(app: &mut App, code: KeyCode) -> Action {
     Action::Continue
 }
 
-pub(super) fn execute_pending_repo_delete(app: &mut App) {
-    execute_if_confirmed(
-        app,
-        |m| {
-            if let InputMode::ConfirmDelete(n) = m {
-                Some(n.clone())
-            } else {
-                None
-            }
-        },
-        |a, name| a.execute_delete_repo(&name),
-    );
-}
+pending_delete!(
+    execute_pending_repo_delete,
+    ConfirmDelete,
+    execute_delete_repo
+);
 
 pub(super) fn apply_new_repo_url(app: &mut App, url: String) {
     app.add_repo_from_input(url);

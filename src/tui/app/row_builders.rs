@@ -1,6 +1,6 @@
 use crate::tui::rows::{
     CpListRow, GeneralToggleRow, OwListRow, RemoveRepoRow, RepoManagerRow, SettingRow,
-    TimeDoctorField, TimeSettingRow, ToggleKind,
+    TimeDoctorField, TimeSettingRow, ToggleKind, SECTION_RDS_SYNC, SECTION_TIME_DOCTOR,
 };
 
 use super::constants::TIMEZONES;
@@ -9,12 +9,12 @@ use super::App;
 impl App {
     pub fn settings_items(&self) -> Vec<SettingRow> {
         vec![
-            SettingRow::Separator, // "RDS Sync"
+            SettingRow::Separator(SECTION_RDS_SYNC),
             SettingRow::Blank,
             SettingRow::SyncGeneralLink,
             SettingRow::ManageRepos,
             SettingRow::Blank,
-            SettingRow::Separator, // "Time Doctor"
+            SettingRow::Separator(SECTION_TIME_DOCTOR),
             SettingRow::Blank,
             SettingRow::TdGeneralLink,
             SettingRow::TimeDoctorSettings,

@@ -1,9 +1,7 @@
 use std::io::Write;
 
 use crate::time::compute::HOURS_DISPLAY_WIDTH;
-use crate::tui::palette::{
-    ANSI_ACCENT, ANSI_DANGEROUS, ANSI_MUTED, ANSI_RESET, ANSI_SUCCESS, SPINNER,
-};
+use crate::tui::palette::{ansi_balance_color, ANSI_ACCENT, ANSI_MUTED, ANSI_RESET, SPINNER};
 
 pub fn hide_cursor() {
     print!("\x1b[?25l");
@@ -25,16 +23,8 @@ pub fn print_progress(tick: usize, elapsed_secs: f64) {
 }
 
 pub fn print_final(weekly: f64, cumulative: f64, elapsed_secs: f64) {
-    let weekly_color = if weekly >= 0.0 {
-        ANSI_SUCCESS
-    } else {
-        ANSI_DANGEROUS
-    };
-    let cum_color = if cumulative >= 0.0 {
-        ANSI_SUCCESS
-    } else {
-        ANSI_DANGEROUS
-    };
+    let weekly_color = ansi_balance_color(weekly);
+    let cum_color = ansi_balance_color(cumulative);
     let weekly_val = super::compute::format_hours_signed(weekly);
     let cum_val = super::compute::format_hours_signed(cumulative);
     let weekly_padded = format!("{weekly_val:<HOURS_DISPLAY_WIDTH$}");

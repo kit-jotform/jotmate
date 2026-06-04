@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::Mutex;
 
 use super::cache::{self, RepoPathsCache};
-use crate::config::UpstreamRepo;
+use crate::config::{normalize_repo_url, UpstreamRepo};
 use crate::ctx::Paths;
 
 pub fn discover_all_git_repos() -> Result<Vec<PathBuf>> {
@@ -69,16 +69,14 @@ pub fn get_upstream_url(repo_path: &Path) -> Option<String> {
 pub fn build_upstream_map(repos: &[UpstreamRepo]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for repo in repos.iter().filter(|r| r.enabled) {
-        let url = repo.url.trim_end_matches('/').trim_end_matches(".git");
+        let url = normalize_repo_url(&repo.url);
         map.insert(format!("{}.git", url), repo.name.clone());
-        map.insert(url.to_string(), repo.name.clone());
+        map.insert(url.clone(), repo.name.clone());
 
         if let Some(rest) = repo.url.strip_prefix("https://") {
             if let Some(slash) = rest.find('/') {
                 let host = &rest[..slash];
-                let path = rest[slash + 1..]
-                    .trim_end_matches('/')
-                    .trim_end_matches(".git");
+                let path = normalize_repo_url(&rest[slash + 1..]);
                 let ssh = format!("git@{}:{}", host, path);
                 map.insert(format!("{}.git", ssh), repo.name.clone());
                 map.insert(ssh, repo.name.clone());
