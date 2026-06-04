@@ -21,6 +21,7 @@ pub(super) fn handle_settings(app: &mut App, code: KeyCode) -> Action {
         Some(SettingRow::TdGeneralLink) => go_to(app, Screen::TdGeneralSettings),
         Some(SettingRow::TimeDoctorSettings) => go_to(app, Screen::TimeDoctorSettings),
         Some(SettingRow::ContractPeriodsLink) => go_to(app, Screen::ContractPeriods),
+        Some(SettingRow::OffWeeksLink) => go_to(app, Screen::OffWeeks),
         _ => {}
     }
     Action::Continue

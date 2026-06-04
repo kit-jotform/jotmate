@@ -15,6 +15,7 @@ use super::compute::{
 pub struct FetchOpts {
     pub timezone: String,
     pub contract_periods: Vec<ContractPeriod>,
+    pub off_weeks: Vec<NaiveDate>,
     pub no_cache: bool,
     pub stats_url: String,
 }
@@ -31,7 +32,13 @@ pub async fn fetch_week(
 
     if past && !opts.no_cache {
         if let Some(stats) = cache::read_week_cache(paths, company_id, &opts.timezone, monday) {
-            return Ok(build_week_row(monday, &stats, &opts.contract_periods, true));
+            return Ok(build_week_row(
+                monday,
+                &stats,
+                &opts.contract_periods,
+                &opts.off_weeks,
+                true,
+            ));
         }
     }
 
@@ -82,6 +89,7 @@ pub async fn fetch_week(
         monday,
         &stats,
         &opts.contract_periods,
+        &opts.off_weeks,
         false,
     ))
 }
@@ -92,6 +100,7 @@ pub fn split_cached_weeks(
     mondays: &[NaiveDate],
     timezone: &str,
     contract_periods: &[ContractPeriod],
+    off_weeks: &[NaiveDate],
     no_cache: bool,
 ) -> (Vec<WeekRow>, Vec<NaiveDate>) {
     if no_cache {
@@ -106,7 +115,13 @@ pub fn split_cached_weeks(
             if let Some(stats) =
                 cache::read_week_cache(paths, TIMEDOCTOR_COMPANY_ID, timezone, monday)
             {
-                cached.push(build_week_row(monday, &stats, contract_periods, true));
+                cached.push(build_week_row(
+                    monday,
+                    &stats,
+                    contract_periods,
+                    off_weeks,
+                    true,
+                ));
                 continue;
             }
         }

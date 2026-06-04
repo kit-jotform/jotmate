@@ -6,6 +6,7 @@ mod contract;
 mod helpers;
 mod keys;
 mod main_menu;
+mod off_weeks;
 mod repos;
 mod settings;
 mod sync;
@@ -16,6 +17,7 @@ mod update;
 use contract::{execute_pending_period_delete, handle_contract_periods};
 use helpers::{handle_cycle, handle_text_input, handle_yes_no};
 use main_menu::handle_main;
+use off_weeks::{execute_pending_off_week_delete, handle_off_weeks};
 use repos::{
     apply_new_repo_url, execute_pending_repo_delete, handle_remove_repos, handle_repo_manager,
 };
@@ -58,6 +60,13 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
             InputMode::EditingCpMonday(_) => handle_cycle(app, code, CycleTarget::CpMonday),
             InputMode::EditingCpHours(_) => handle_cycle(app, code, CycleTarget::CpHours),
             _ => handle_contract_periods(app, code),
+        },
+        Screen::OffWeeks => match &app.input_mode {
+            InputMode::ConfirmDeleteOffWeek(_) => {
+                handle_yes_no(app, code, execute_pending_off_week_delete)
+            }
+            InputMode::EditingOwMonday(_) => handle_cycle(app, code, CycleTarget::OwMonday),
+            _ => handle_off_weeks(app, code),
         },
         Screen::SyncProgress => handle_sync_progress(app, code),
         Screen::TimeDoctorReport => handle_td_report(app, code),

@@ -1,6 +1,6 @@
 use crate::tui::rows::{
-    CpListRow, GeneralToggleRow, RemoveRepoRow, RepoManagerRow, SettingRow, TimeDoctorField,
-    TimeSettingRow, ToggleKind,
+    CpListRow, GeneralToggleRow, OwListRow, RemoveRepoRow, RepoManagerRow, SettingRow,
+    TimeDoctorField, TimeSettingRow, ToggleKind,
 };
 
 use super::constants::TIMEZONES;
@@ -19,6 +19,7 @@ impl App {
             SettingRow::TdGeneralLink,
             SettingRow::TimeDoctorSettings,
             SettingRow::ContractPeriodsLink,
+            SettingRow::OffWeeksLink,
             SettingRow::Blank,
             SettingRow::Divider,
             SettingRow::Back,
@@ -146,6 +147,31 @@ impl App {
             CpListRow::Separator,
             CpListRow::Blank,
             CpListRow::Back,
+        ]);
+        rows
+    }
+
+    pub fn ow_list_items(&self) -> Vec<OwListRow> {
+        let off_weeks =
+            self.td
+                .off_weeks
+                .iter()
+                .enumerate()
+                .map(|(i, monday)| OwListRow::OffWeek {
+                    index: i,
+                    monday: *monday,
+                });
+        let mut rows = vec![OwListRow::SectionTitle("Off Weeks"), OwListRow::Blank];
+        rows.extend(off_weeks);
+        rows.extend([
+            OwListRow::Blank,
+            OwListRow::Separator,
+            OwListRow::MondayField,
+            OwListRow::Blank,
+            OwListRow::SaveOffWeek,
+            OwListRow::Separator,
+            OwListRow::Blank,
+            OwListRow::Back,
         ]);
         rows
     }

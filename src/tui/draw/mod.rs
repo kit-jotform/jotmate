@@ -3,6 +3,7 @@ use crate::tui::app::{App, Screen};
 mod common;
 mod contract;
 mod main_menu;
+mod off_weeks;
 mod repos;
 mod settings;
 mod sync;
@@ -20,6 +21,7 @@ pub(in crate::tui::draw) use common::{
 
 use contract::draw_contract_periods;
 use main_menu::draw_main_menu;
+use off_weeks::draw_off_weeks;
 use repos::{draw_remove_repos, draw_repo_manager};
 use settings::{draw_general_toggles, draw_settings};
 use td_report::draw_td_report;
@@ -35,6 +37,7 @@ pub fn draw(f: &mut ratatui::Frame, app: &App) {
         Screen::TdGeneralSettings => draw_general_toggles(f, app, "Time Doctor", false),
         Screen::TimeDoctorSettings => draw_td_settings(f, app),
         Screen::ContractPeriods => draw_contract_periods(f, app),
+        Screen::OffWeeks => draw_off_weeks(f, app),
         Screen::TimeDoctorReport => draw_td_report(f, app),
         Screen::SyncProgress => sync::draw_sync_progress(f, app),
         Screen::UpdateProgress => update::draw_update_progress(f, app),

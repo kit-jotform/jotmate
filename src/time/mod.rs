@@ -43,10 +43,18 @@ pub async fn run(ctx: &Ctx, args: TimeArgs) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("No start date or contract periods configured"))?;
     let skip_current = args.skip_current_week || time_cfg.skip_current_week;
     let reset_from = time_cfg.reset_cumulative_from_date;
+    let off_weeks: Vec<chrono::NaiveDate> = time_cfg
+        .off_weeks
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|d| compute::get_week_start_monday(*d))
+        .collect();
 
     let opts = FetchOpts {
         timezone: timezone.to_string(),
         contract_periods: contract_periods.to_vec(),
+        off_weeks: off_weeks.clone(),
         no_cache: args.no_cache,
         stats_url: ctx.http.stats.clone(),
     };
@@ -62,6 +70,7 @@ pub async fn run(ctx: &Ctx, args: TimeArgs) -> Result<()> {
         &mondays,
         &opts.timezone,
         &opts.contract_periods,
+        &opts.off_weeks,
         args.no_cache,
     );
 

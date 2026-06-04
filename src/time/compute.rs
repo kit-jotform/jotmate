@@ -127,10 +127,15 @@ pub fn build_week_row(
     monday: NaiveDate,
     stats: &crate::time::api::StatsResponse,
     contract_periods: &[ContractPeriod],
+    off_weeks: &[NaiveDate],
     from_cache: bool,
 ) -> WeekRow {
     let worked_secs = stats.data.first().map(|d| d.total).unwrap_or(0);
-    let target_hours = get_target_hours(monday, contract_periods);
+    let target_hours = if is_off_week(monday, off_weeks) {
+        0.0
+    } else {
+        get_target_hours(monday, contract_periods)
+    };
     WeekRow {
         monday,
         week_label: format_week_range(monday),
@@ -140,6 +145,12 @@ pub fn build_week_row(
         cumulative_hours: 0.0,
         from_cache,
     }
+}
+
+pub fn is_off_week(monday: NaiveDate, off_weeks: &[NaiveDate]) -> bool {
+    off_weeks
+        .iter()
+        .any(|d| get_week_start_monday(*d) == monday)
 }
 
 pub fn is_past_week(monday: NaiveDate) -> bool {

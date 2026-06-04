@@ -24,6 +24,7 @@ pub enum Screen {
     TdGeneralSettings,
     TimeDoctorSettings,
     ContractPeriods,
+    OffWeeks,
     SyncProgress,
     TimeDoctorReport,
     UpdateProgress,

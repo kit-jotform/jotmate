@@ -53,6 +53,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::TdGeneralLink => link_item(is_sel, "→ General settings"),
                 SettingRow::TimeDoctorSettings => link_item(is_sel, "→ Manage credentials"),
                 SettingRow::ContractPeriodsLink => link_item(is_sel, "→ Manage contract periods"),
+                SettingRow::OffWeeksLink => link_item(is_sel, "→ Manage off weeks"),
             }
         })
         .collect();

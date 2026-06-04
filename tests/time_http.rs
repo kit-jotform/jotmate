@@ -31,6 +31,7 @@ fn opts_for(stats_url: String, timezone: &str, no_cache: bool) -> FetchOpts {
     FetchOpts {
         timezone: timezone.to_string(),
         contract_periods: vec![],
+        off_weeks: vec![],
         no_cache,
         stats_url,
     }

@@ -1,5 +1,5 @@
 use crate::config::{ContractPeriod, UpstreamRepo};
-use crate::tui::rows::{CpListRow, CycleTarget, InputMode, RemoveRepoRow, ToggleKind};
+use crate::tui::rows::{CpListRow, CycleTarget, InputMode, OwListRow, RemoveRepoRow, ToggleKind};
 
 use super::constants::{this_monday, TIMEZONES, WEEKLY_HOURS_OPTIONS};
 use super::navigation::clamp_to_last_interactive;
@@ -30,6 +30,7 @@ impl App {
             CycleTarget::Timezone => InputMode::SelectingTimezone(self.td.timezone_idx),
             CycleTarget::CpMonday => InputMode::EditingCpMonday(self.add_cp.monday),
             CycleTarget::CpHours => InputMode::EditingCpHours(self.add_cp.hours_idx),
+            CycleTarget::OwMonday => InputMode::EditingOwMonday(self.add_ow.monday),
         };
     }
 
@@ -47,6 +48,10 @@ impl App {
                 self.add_cp.hours_idx =
                     cycle_idx(self.add_cp.hours_idx, delta, WEEKLY_HOURS_OPTIONS.len());
             }
+            CycleTarget::OwMonday => {
+                let days = if delta > 0 { 7 } else { -7 };
+                self.add_ow.monday += chrono::Duration::days(days);
+            }
         }
     }
 
@@ -61,6 +66,9 @@ impl App {
             }
             InputMode::EditingCpHours(snapshot) => {
                 self.add_cp.hours_idx = snapshot;
+            }
+            InputMode::EditingOwMonday(snapshot) => {
+                self.add_ow.monday = snapshot;
             }
             _ => {}
         }
@@ -102,6 +110,34 @@ impl App {
         let cur = self.selected_index(Screen::ContractPeriods);
         let clamped = clamp_to_last_interactive(&rows, cur, CpListRow::is_interactive);
         self.select(Screen::ContractPeriods, clamped);
+    }
+
+    pub fn confirm_delete_off_week(&mut self, index: usize) {
+        self.input_mode = InputMode::ConfirmDeleteOffWeek(index);
+    }
+
+    pub fn execute_delete_off_week(&mut self, index: usize) {
+        if index < self.td.off_weeks.len() {
+            self.td.off_weeks.remove(index);
+            self.persist_td_settings();
+        }
+        self.input_mode = InputMode::Normal;
+        let rows = self.ow_list_items();
+        let cur = self.selected_index(Screen::OffWeeks);
+        let clamped = clamp_to_last_interactive(&rows, cur, OwListRow::is_interactive);
+        self.select(Screen::OffWeeks, clamped);
+    }
+
+    pub fn save_new_off_week(&mut self) {
+        let snapped = crate::time::compute::get_week_start_monday(self.add_ow.monday);
+        if !self.td.off_weeks.contains(&snapped) {
+            self.td.off_weeks.push(snapped);
+            self.td.off_weeks.sort();
+            let i = self.selected_index(Screen::OffWeeks);
+            self.select(Screen::OffWeeks, i + 1);
+        }
+        self.persist_td_settings();
+        self.add_ow.monday = this_monday();
     }
 
     pub fn save_new_contract_period(&mut self) {

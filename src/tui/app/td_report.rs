@@ -96,6 +96,7 @@ impl App {
         let opts = crate::time::FetchOpts {
             timezone: TIMEZONES[self.td.timezone_idx].to_string(),
             contract_periods: self.td.contract_periods.clone(),
+            off_weeks: self.td.off_weeks.clone(),
             no_cache: !self.td.use_time_cache,
             stats_url: self.ctx.http.stats.clone(),
         };
@@ -106,6 +107,7 @@ impl App {
             &all_mondays,
             &opts.timezone,
             &opts.contract_periods,
+            &opts.off_weeks,
             !self.td.use_time_cache,
         );
 

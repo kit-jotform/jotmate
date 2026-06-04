@@ -1,7 +1,8 @@
 use ratatui::widgets::ListState;
 
 use crate::tui::rows::{
-    CpListRow, GeneralToggleRow, RemoveRepoRow, RepoManagerRow, SettingRow, TimeSettingRow,
+    CpListRow, GeneralToggleRow, OwListRow, RemoveRepoRow, RepoManagerRow, SettingRow,
+    TimeSettingRow,
 };
 
 use super::screen::Screen;
@@ -103,6 +104,11 @@ macro_rules! with_rows {
             Screen::ContractPeriods => {
                 let $rows = $self.cp_list_items();
                 let $is_int = CpListRow::is_interactive;
+                $body
+            }
+            Screen::OffWeeks => {
+                let $rows = $self.ow_list_items();
+                let $is_int = OwListRow::is_interactive;
                 $body
             }
             _ => $default,

@@ -81,6 +81,7 @@ pub struct TimeConfig {
     pub show_cumulative: bool,
     pub contract_periods: Option<Vec<ContractPeriod>>,
     pub reset_cumulative_from_date: Option<NaiveDate>,
+    pub off_weeks: Option<Vec<NaiveDate>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

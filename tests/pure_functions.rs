@@ -14,8 +14,9 @@ use chrono::NaiveDate;
 use jotmate::config::parse::parse_contract_periods;
 use jotmate::config::ContractPeriod;
 use jotmate::time::compute::{
-    compute_cumulative, format_hours, format_hours_signed, format_week_range, get_target_hours,
-    get_week_end_sunday, get_week_start_monday, is_past_week, weeks_to_fetch, WeekRow,
+    build_week_row, compute_cumulative, format_hours, format_hours_signed, format_week_range,
+    get_target_hours, get_week_end_sunday, get_week_start_monday, is_off_week, is_past_week,
+    weeks_to_fetch, WeekRow,
 };
 
 fn d(s: &str) -> NaiveDate {
@@ -138,6 +139,61 @@ fn target_hours_before_first_period_uses_first() {
 fn target_hours_empty_periods_is_zero() {
     // B11 — with no periods, target is 0 (balance ≡ worked hours).
     assert_eq!(get_target_hours(d("2025-01-06"), &[]), 0.0);
+}
+
+// ─── is_off_week / build_week_row off-week behavior ───────────────────────────
+
+#[test]
+fn off_week_matches_exact_monday() {
+    let off = vec![d("2026-05-04")]; // a Monday
+    assert!(is_off_week(d("2026-05-04"), &off));
+}
+
+#[test]
+fn off_week_snaps_mid_week_entry_to_its_monday() {
+    // User entered a Wednesday — must still mark that week as off.
+    let off = vec![d("2026-05-06")]; // Wed → snaps to Mon 2026-05-04
+    assert!(is_off_week(d("2026-05-04"), &off));
+}
+
+#[test]
+fn off_week_does_not_match_other_weeks() {
+    let off = vec![d("2026-05-04")];
+    assert!(!is_off_week(d("2026-05-11"), &off));
+    assert!(!is_off_week(d("2026-04-27"), &off));
+}
+
+#[test]
+fn off_week_empty_list_is_never_off() {
+    assert!(!is_off_week(d("2026-05-04"), &[]));
+}
+
+fn stats(total_secs: u64) -> jotmate::time::api::StatsResponse {
+    serde_json::from_str(&format!(r#"{{"data":[{{"total":{total_secs}}}]}}"#)).unwrap()
+}
+
+#[test]
+fn build_week_row_off_week_zeroes_target_and_credits_worked_to_balance() {
+    let periods = vec![ContractPeriod {
+        from: d("2025-01-06"),
+        weekly_hours: 40.0,
+    }];
+    let off = vec![d("2026-05-04")];
+    let row = build_week_row(d("2026-05-04"), &stats(3 * 3600), &periods, &off, false);
+    assert_eq!(row.target_hours, 0.0);
+    assert_eq!(row.balance_hours, 3.0); // worked all goes to balance
+}
+
+#[test]
+fn build_week_row_non_off_week_uses_contract_target() {
+    let periods = vec![ContractPeriod {
+        from: d("2025-01-06"),
+        weekly_hours: 40.0,
+    }];
+    let off = vec![d("2026-05-04")];
+    let row = build_week_row(d("2026-05-11"), &stats(40 * 3600), &periods, &off, false);
+    assert_eq!(row.target_hours, 40.0);
+    assert_eq!(row.balance_hours, 0.0);
 }
 
 // ─── compute_cumulative ─────────────────────────────────────────────────────

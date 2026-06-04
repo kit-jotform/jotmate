@@ -23,8 +23,8 @@ pub use screen::{MainMenuItem, MainMenuKind, Screen};
 pub use td_report::{TdReportState, TD_REPORT_VISIBLE_ROWS};
 
 pub use super::rows::{
-    CpListRow, CycleTarget, GeneralToggleRow, InputMode, RemoveRepoRow, RepoManagerRow, SettingRow,
-    TimeDoctorField, TimeSettingRow,
+    CpListRow, CycleTarget, GeneralToggleRow, InputMode, OwListRow, RemoveRepoRow, RepoManagerRow,
+    SettingRow, TimeDoctorField, TimeSettingRow,
 };
 pub use super::sync_state::{
     ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate, IP_DENIED_HINT,
@@ -51,11 +51,16 @@ pub struct TimeSettings {
     /// Deferred: keychain IPC is hundreds of ms; must not block TUI startup.
     pub password_is_set: OnceCell<bool>,
     pub contract_periods: Vec<ContractPeriod>,
+    pub off_weeks: Vec<NaiveDate>,
 }
 
 pub struct AddCpForm {
     pub monday: NaiveDate,
     pub hours_idx: usize,
+}
+
+pub struct AddOwForm {
+    pub monday: NaiveDate,
 }
 
 pub struct App {
@@ -69,6 +74,7 @@ pub struct App {
     pub sync: SyncSettings,
     pub td: TimeSettings,
     pub add_cp: AddCpForm,
+    pub add_ow: AddOwForm,
     pub sync_state: Option<SyncScreenState>,
     pub update_state: Option<crate::tui::update_state::UpdateScreenState>,
     /// `None`: check in flight · `Some(None)`: up to date · `Some(Some(v))`: newer `v`.
@@ -106,6 +112,7 @@ impl App {
             Screen::TdGeneralSettings,
             Screen::TimeDoctorSettings,
             Screen::ContractPeriods,
+            Screen::OffWeeks,
         ]
         .into_iter()
         .map(|s| (s, list_state_at(0)))
@@ -113,6 +120,14 @@ impl App {
         let update_check_rx = spawn_update_check();
         let mut contract_periods = config.time.contract_periods.clone().unwrap_or_default();
         contract_periods.sort_by_key(|p| p.from);
+        let off_weeks: Vec<NaiveDate> = config
+            .time
+            .off_weeks
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(crate::time::compute::get_week_start_monday)
+            .collect();
         let add_cp_monday = contract_periods
             .last()
             .map(|p| p.from)
@@ -142,10 +157,14 @@ impl App {
                 show_cumulative: config.time.show_cumulative,
                 password_is_set: OnceCell::new(),
                 contract_periods,
+                off_weeks,
             },
             add_cp: AddCpForm {
                 monday: add_cp_monday,
                 hours_idx: 1, // default slot in WEEKLY_HOURS_OPTIONS
+            },
+            add_ow: AddOwForm {
+                monday: this_monday(),
             },
             sync_state: None,
             update_state: None,

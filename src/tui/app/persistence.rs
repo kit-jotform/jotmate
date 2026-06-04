@@ -23,6 +23,7 @@ impl App {
             cfg.time.show_cumulative = self.td.show_cumulative;
             cfg.time.contract_periods =
                 Some(self.td.contract_periods.clone()).filter(|c| !c.is_empty());
+            cfg.time.off_weeks = Some(self.td.off_weeks.clone()).filter(|w| !w.is_empty());
         });
     }
 

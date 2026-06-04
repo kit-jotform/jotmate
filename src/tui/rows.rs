@@ -3,12 +3,14 @@ use chrono::NaiveDate;
 #[derive(Clone, PartialEq)]
 pub enum InputMode {
     Normal,
-    AddingRepo(String),         // buffer holds URL being typed
-    ConfirmDelete(String),      // holds the repo name pending deletion
-    ConfirmDeletePeriod(usize), // holds the period index pending deletion
-    SelectingTimezone(usize),   // ↑↓ cycles timezone; stored value = snapshot for cancel
-    EditingCpMonday(NaiveDate), // ↑↓ cycles monday date; stored value = snapshot for cancel
-    EditingCpHours(usize),      // ↑↓ cycles hours option; stored value = snapshot for cancel
+    AddingRepo(String),          // buffer holds URL being typed
+    ConfirmDelete(String),       // holds the repo name pending deletion
+    ConfirmDeletePeriod(usize),  // holds the period index pending deletion
+    ConfirmDeleteOffWeek(usize), // holds the off-week index pending deletion
+    SelectingTimezone(usize),    // ↑↓ cycles timezone; stored value = snapshot for cancel
+    EditingCpMonday(NaiveDate),  // ↑↓ cycles monday date; stored value = snapshot for cancel
+    EditingCpHours(usize),       // ↑↓ cycles hours option; stored value = snapshot for cancel
+    EditingOwMonday(NaiveDate),  // ↑↓ cycles off-week monday; stored value = snapshot for cancel
     EditingField { field: TimeDoctorField, buf: String },
 }
 
@@ -23,6 +25,7 @@ pub enum CycleTarget {
     Timezone,
     CpMonday,
     CpHours,
+    OwMonday,
 }
 
 #[derive(Clone, Copy)]
@@ -59,6 +62,7 @@ pub enum SettingRow {
     TdGeneralLink,
     TimeDoctorSettings,
     ContractPeriodsLink,
+    OffWeeksLink,
     Back,
 }
 
@@ -71,6 +75,7 @@ impl SettingRow {
                 | SettingRow::TdGeneralLink
                 | SettingRow::TimeDoctorSettings
                 | SettingRow::ContractPeriodsLink
+                | SettingRow::OffWeeksLink
                 | SettingRow::Back
         )
     }
@@ -157,6 +162,29 @@ impl CpListRow {
                 | CpListRow::HoursField
                 | CpListRow::SavePeriod
                 | CpListRow::Back
+        )
+    }
+}
+
+#[derive(Clone)]
+pub enum OwListRow {
+    OffWeek { index: usize, monday: NaiveDate },
+    SectionTitle(&'static str),
+    Blank,
+    Separator,
+    MondayField,
+    SaveOffWeek,
+    Back,
+}
+
+impl OwListRow {
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            OwListRow::OffWeek { .. }
+                | OwListRow::MondayField
+                | OwListRow::SaveOffWeek
+                | OwListRow::Back
         )
     }
 }
