@@ -94,26 +94,36 @@ pub fn detect_ip_denial(output: &str) -> Option<String> {
 }
 
 pub(super) async fn detect_default_branch(git: &dyn GitExec, repo: &Path) -> Option<String> {
-    if let Ok(s) = git
-        .git(repo, &["symbolic-ref", "refs/remotes/upstream/HEAD"])
-        .await
-    {
-        return Some(s.replace("refs/remotes/upstream/", ""));
+    detect_default_branch_for_remote(git, repo, "upstream").await
+}
+
+pub(super) async fn detect_default_branch_for_remote(
+    git: &dyn GitExec,
+    repo: &Path,
+    remote: &str,
+) -> Option<String> {
+    let head_ref = format!("refs/remotes/{remote}/HEAD");
+    if let Ok(s) = git.git(repo, &["symbolic-ref", &head_ref]).await {
+        let prefix = format!("refs/remotes/{remote}/");
+        return Some(s.replace(&prefix, ""));
     }
+    let main_ref = format!("refs/remotes/{remote}/main");
+    let master_ref = format!("refs/remotes/{remote}/master");
     let out = git
         .git(
             repo,
             &[
                 "for-each-ref",
                 "--format=%(refname:short)",
-                "refs/remotes/upstream/main",
-                "refs/remotes/upstream/master",
+                &main_ref,
+                &master_ref,
             ],
         )
         .await
         .ok()?;
+    let strip_prefix = format!("{remote}/");
     for line in out.lines() {
-        if let Some(name) = line.strip_prefix("upstream/") {
+        if let Some(name) = line.strip_prefix(&strip_prefix) {
             return Some(name.to_string());
         }
     }

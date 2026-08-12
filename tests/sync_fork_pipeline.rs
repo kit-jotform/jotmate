@@ -3,7 +3,7 @@
 //! Covered edge cases:
 //!   skip_fork_sync short-circuits
 //!   A11  repo path without .git → error (stale cache detection)
-//!   A10  repo without upstream remote → skip
+//!   A10  repo without upstream remote → origin-only sync fallback
 //!   A12  git fetch failure → error with clean message (no progress noise)
 //!   A18  detect_default_branch fails → skip "no default branch"
 //!   up-to-date: local == upstream sha → UpToDate
@@ -90,8 +90,9 @@ async fn missing_dotgit_reports_error() {
 }
 
 #[tokio::test]
-async fn no_upstream_remote_is_skipped() {
-    // A10 — only `origin`, no `upstream`.
+async fn no_upstream_remote_falls_back_to_origin_sync() {
+    // A10 — only `origin`, no `upstream` → enters origin-only sync path.
+    // Without branch detection stubs it skips with "no default branch".
     let git = FakeGit::new().on(&["remote"], Ok("origin\n"));
     let td = fake_repo_dir(false);
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -101,8 +102,75 @@ async fn no_upstream_remote_is_skipped() {
     assert!(matches!(result, ForkResult::Unchanged));
     let updates = collect_fork_updates(&mut rx);
     match last_terminal(&updates) {
-        ForkStatus::Skipped(msg) => assert_eq!(msg, "no upstream"),
-        other => panic!("expected Skipped(no upstream), got {other:?}"),
+        ForkStatus::Skipped(msg) => assert_eq!(msg, "no default branch"),
+        other => panic!("expected Skipped(no default branch), got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn origin_only_sync_pulls_new_commits() {
+    // No `upstream` remote, but origin has new commits → fetch + merge from origin.
+    let sha_old = "aaa1111";
+    let sha_new = "bbb2222";
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("origin\n"))
+        .on(
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/remotes/origin/main",
+                "refs/remotes/origin/master",
+            ],
+            Ok("origin/master\n"),
+        )
+        .on(&["fetch", "origin"], Ok(""))
+        .on(&["rev-parse", "master"], Ok(sha_old))
+        .on(&["rev-parse", "origin/master"], Ok(sha_new))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("master"))
+        .on(&["diff-index", "--quiet", "HEAD", "--"], Ok(""))
+        .on(&["checkout", "master"], Ok(""))
+        .on(&["merge", "origin/master", "--no-edit"], Ok(""));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+
+    assert!(matches!(result, ForkResult::Updated));
+    let updates = collect_fork_updates(&mut rx);
+    match last_terminal(&updates) {
+        ForkStatus::Done => {}
+        other => panic!("expected Done, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn origin_only_up_to_date_stays_unchanged() {
+    let sha = "ccc3333";
+    let git = FakeGit::new()
+        .on(&["remote"], Ok("origin\n"))
+        .on(
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/remotes/origin/main",
+                "refs/remotes/origin/master",
+            ],
+            Ok("origin/master\n"),
+        )
+        .on(&["fetch", "origin"], Ok(""))
+        .on(&["rev-parse", "master"], Ok(sha))
+        .on(&["rev-parse", "origin/master"], Ok(sha))
+        .on(&["rev-parse", "--abbrev-ref", "HEAD"], Ok("master"));
+    let td = fake_repo_dir(false);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let result = sync_fork(git.as_ref(), 0, td.path(), &tx, &opts(false, false, false)).await;
+
+    assert!(matches!(result, ForkResult::Unchanged));
+    let updates = collect_fork_updates(&mut rx);
+    match last_terminal(&updates) {
+        ForkStatus::UpToDate => {}
+        other => panic!("expected UpToDate, got {other:?}"),
     }
 }
 

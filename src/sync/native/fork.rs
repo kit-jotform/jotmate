@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 
 use crate::tui::app::{ForkStatus, SyncUpdate};
 
-use super::git::{detect_default_branch, GitExec};
+use super::git::{detect_default_branch, detect_default_branch_for_remote, GitExec};
 
 pub struct ForkOpts {
     pub skip_fork_sync: bool,
@@ -47,12 +47,10 @@ pub async fn sync_fork(
             return ForkResult::Error("no remotes".into());
         }
     };
-    if !remotes.lines().any(|l| l.trim() == "upstream") {
-        let _ = tx.send(SyncUpdate::Fork(
-            idx,
-            ForkStatus::Skipped("no upstream".into()),
-        ));
-        return ForkResult::Unchanged;
+    let has_upstream = remotes.lines().any(|l| l.trim() == "upstream");
+
+    if !has_upstream {
+        return sync_origin_only(git, idx, repo, tx, opts).await;
     }
 
     // External `git pull upstream` would otherwise hide new commits from RDS.
@@ -253,6 +251,178 @@ pub async fn sync_fork(
                 ForkStatus::Error(format!(
                     "`git stash pop` failed after sync — restore or resolve conflicts in this repo: {e}"
                 )),
+            ));
+            return ForkResult::Error("stash pop failed".into());
+        }
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Done));
+    ForkResult::Updated
+}
+
+async fn sync_origin_only(
+    git: &dyn GitExec,
+    idx: usize,
+    repo: &Path,
+    tx: &mpsc::UnboundedSender<SyncUpdate>,
+    opts: &ForkOpts,
+) -> ForkResult {
+    let default_branch = match detect_default_branch_for_remote(git, repo, "origin").await {
+        Some(b) => b,
+        None => {
+            let _ = tx.send(SyncUpdate::Fork(
+                idx,
+                ForkStatus::Skipped("no default branch".into()),
+            ));
+            return ForkResult::Unchanged;
+        }
+    };
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::FetchingUpstream));
+    if !opts.skip_git_fetch {
+        if let Err(e) = git.git(repo, &["fetch", "origin"]).await {
+            let msg = extract_fetch_error(&e);
+            let _ = tx.send(SyncUpdate::Fork(
+                idx,
+                ForkStatus::Error(format!("fetch: {msg}")),
+            ));
+            return ForkResult::Error(msg);
+        }
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::CheckingDiff));
+
+    let local_commit = git
+        .git(repo, &["rev-parse", &default_branch])
+        .await
+        .unwrap_or_default();
+    let origin_ref = format!("origin/{default_branch}");
+    let origin_commit = git
+        .git(repo, &["rev-parse", &origin_ref])
+        .await
+        .unwrap_or_default();
+
+    if origin_commit.is_empty() {
+        let _ = tx.send(SyncUpdate::Fork(
+            idx,
+            ForkStatus::Skipped("no origin ref".into()),
+        ));
+        return ForkResult::Unchanged;
+    }
+
+    let current_branch = git
+        .git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .await
+        .unwrap_or_default();
+
+    if local_commit == origin_commit {
+        let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::UpToDate));
+
+        let on_feature_branch = !current_branch.is_empty() && current_branch != default_branch;
+        if on_feature_branch && !opts.skip_rebase {
+            let needs_rebase = git
+                .git(
+                    repo,
+                    &["merge-base", "--is-ancestor", &default_branch, "HEAD"],
+                )
+                .await
+                .is_err();
+            if needs_rebase {
+                return rebase_feature_onto_default(
+                    git,
+                    idx,
+                    repo,
+                    tx,
+                    &default_branch,
+                    &current_branch,
+                )
+                .await;
+            }
+        }
+
+        return ForkResult::Unchanged;
+    }
+
+    let dirty = git
+        .git(repo, &["diff-index", "--quiet", "HEAD", "--"])
+        .await
+        .is_err();
+    let mut stashed = false;
+    if dirty {
+        let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Stashing));
+        match git
+            .git(repo, &["stash", "push", "-m", "Auto-stash before sync"])
+            .await
+        {
+            Ok(out) => stashed = !out.contains("No local changes to save"),
+            Err(e) => {
+                let _ = tx.send(SyncUpdate::Fork(
+                    idx,
+                    ForkStatus::Error(format!("stash push failed: {e}")),
+                ));
+                return ForkResult::Error("stash push failed".into());
+            }
+        }
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::CheckingOut));
+    if let Err(e) = git.git(repo, &["checkout", &default_branch]).await {
+        if stashed {
+            let _ = git.git(repo, &["stash", "pop"]).await;
+        }
+        let _ = tx.send(SyncUpdate::Fork(
+            idx,
+            ForkStatus::Error(format!("checkout: {e}")),
+        ));
+        return ForkResult::Error(e);
+    }
+
+    let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Merging));
+    if let Err(e) = git.git(repo, &["merge", &origin_ref, "--no-edit"]).await {
+        if stashed {
+            let _ = git.git(repo, &["stash", "pop"]).await;
+        }
+        let _ = tx.send(SyncUpdate::Fork(
+            idx,
+            ForkStatus::Error(format!("merge: {e}")),
+        ));
+        return ForkResult::Error(e);
+    }
+
+    if !current_branch.is_empty() && current_branch != default_branch {
+        if let Err(e) = git.git(repo, &["checkout", &current_branch]).await {
+            if stashed {
+                let _ = git.git(repo, &["stash", "pop"]).await;
+            }
+            let _ = tx.send(SyncUpdate::Fork(
+                idx,
+                ForkStatus::Error(format!("checkout back: {e}")),
+            ));
+            return ForkResult::Error(e);
+        }
+
+        if !opts.skip_rebase {
+            let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Rebasing));
+            if git.git(repo, &["rebase", &default_branch]).await.is_err() {
+                let _ = git.git(repo, &["rebase", "--abort"]).await;
+                if stashed {
+                    let _ = git.git(repo, &["stash", "pop"]).await;
+                }
+                let _ = tx.send(SyncUpdate::Fork(
+                    idx,
+                    ForkStatus::Error("rebase conflict".into()),
+                ));
+                return ForkResult::Error("rebase conflict".into());
+            }
+        }
+    }
+
+    if stashed {
+        let _ = tx.send(SyncUpdate::Fork(idx, ForkStatus::Unstashing));
+        if let Err(e) = git.git(repo, &["stash", "pop"]).await {
+            let _ = tx.send(SyncUpdate::Fork(
+                idx,
+                ForkStatus::Error(format!("stash pop failed: {e}")),
             ));
             return ForkResult::Error("stash pop failed".into());
         }
