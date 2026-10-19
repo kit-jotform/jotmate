@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::path::Path;
+use std::process::Stdio;
 use tokio::process::Command;
 
 #[derive(Clone, Debug)]
@@ -23,7 +24,13 @@ pub struct SubprocessGit;
 #[async_trait]
 impl GitExec for SubprocessGit {
     async fn git(&self, repo: &Path, args: &[&str]) -> Result<String, String> {
-        let output = Command::new("git")
+        let mut cmd = Command::new("git");
+        // Credential prompts write to the TTY behind the spinner and hang sync forever; fail fast instead.
+        cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null());
+        if std::env::var_os("GIT_SSH_COMMAND").is_none() {
+            cmd.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
+        }
+        let output = cmd
             .args(["-C", &repo.to_string_lossy()])
             .args(args)
             .output()
