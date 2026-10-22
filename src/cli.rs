@@ -13,10 +13,72 @@ pub enum Commands {
     Sync(SyncArgs),
     /// Check TimeDoctor work-hour stats
     Time(TimeArgs),
+    /// Check weekly work hours from Ar-Ge Portal PDKS records
+    Pdks(PdksArgs),
+    /// View or update your Jotmate profile
+    Profile(ProfileArgs),
     /// Edit default flags and credentials
     Settings,
     /// Check for and install a newer release
     Update,
+}
+
+#[derive(Args, Clone, Debug, Default)]
+pub struct ProfileArgs {
+    /// Set developer status (true or false)
+    #[arg(long)]
+    pub developer: Option<bool>,
+    /// Set office: hacettepe, izmir, odtu, istanbul
+    #[arg(long)]
+    pub office: Option<String>,
+    /// Set part-time status (true or false)
+    #[arg(long)]
+    pub part_time: Option<bool>,
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct PdksArgs {
+    #[command(subcommand)]
+    pub command: Option<PdksCommand>,
+
+    /// Any date in the week to report (YYYY-MM-DD). Defaults to the current week.
+    #[arg(long)]
+    pub week: Option<chrono::NaiveDate>,
+
+    /// Portal company id
+    #[arg(long, default_value_t = 21)]
+    pub company_id: u64,
+
+    /// Portal term id. Omit to select the term(s) that cover the requested week.
+    #[arg(long)]
+    pub period_id: Option<u64>,
+
+    /// Portal employee id. Omit when the account can see only one employee.
+    #[arg(long)]
+    pub personnel_id: Option<u64>,
+
+    /// Required weekly hours
+    #[arg(long, default_value_t = crate::config::PDKS_WEEKLY_TARGET_HOURS)]
+    pub target_hours: f64,
+}
+
+impl Default for PdksArgs {
+    fn default() -> Self {
+        Self {
+            command: None,
+            week: None,
+            company_id: 21,
+            period_id: None,
+            personnel_id: None,
+            target_hours: crate::config::PDKS_WEEKLY_TARGET_HOURS,
+        }
+    }
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum PdksCommand {
+    /// Open the secure portal sign-in window
+    Login,
 }
 
 #[derive(Args, Clone, Debug, Default)]

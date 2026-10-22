@@ -37,6 +37,39 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                 SettingRow::Separator(label) => separator_item(label),
 
                 SettingRow::Back => back_item(is_sel),
+                SettingRow::ProfileDeveloper => link_item(
+                    is_sel,
+                    &format!(
+                        "Developer: {}",
+                        if app.profile.is_developer {
+                            "✓"
+                        } else {
+                            "○"
+                        }
+                    ),
+                ),
+                SettingRow::ProfileOffice => link_item(
+                    is_sel,
+                    &format!(
+                        "Office: {}",
+                        app.profile
+                            .office
+                            .map(crate::config::Office::label)
+                            .unwrap_or("Not selected")
+                    ),
+                ),
+                SettingRow::ProfilePartTime => link_item(
+                    is_sel,
+                    &format!(
+                        "Part-time: {}",
+                        if app.profile.is_part_time {
+                            "✓"
+                        } else {
+                            "○"
+                        }
+                    ),
+                ),
+                SettingRow::ClearPdksSession => link_item(is_sel, "Clear saved portal session"),
                 SettingRow::SyncGeneralLink => link_item(is_sel, "→ General settings"),
                 SettingRow::ManageRepos => link_item(is_sel, "→ Manage upstream repos"),
                 SettingRow::TdGeneralLink => link_item(is_sel, "→ General settings"),

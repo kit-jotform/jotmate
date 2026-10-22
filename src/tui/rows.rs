@@ -60,6 +60,10 @@ pub enum SettingRow {
     Separator(&'static str),
     Divider,
     Blank,
+    ProfileDeveloper,
+    ProfileOffice,
+    ProfilePartTime,
+    ClearPdksSession,
     SyncGeneralLink,
     ManageRepos,
     TdGeneralLink,
@@ -74,6 +78,10 @@ impl SettingRow {
         matches!(
             self,
             SettingRow::SyncGeneralLink
+                | SettingRow::ProfileDeveloper
+                | SettingRow::ProfileOffice
+                | SettingRow::ProfilePartTime
+                | SettingRow::ClearPdksSession
                 | SettingRow::ManageRepos
                 | SettingRow::TdGeneralLink
                 | SettingRow::TimeDoctorSettings

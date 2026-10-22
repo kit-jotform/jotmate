@@ -21,6 +21,7 @@ pub(super) fn handle_main(app: &mut App, code: KeyCode) -> Action {
             match item.kind {
                 MainMenuKind::Sync => return Action::StartSync,
                 MainMenuKind::TimeDoctor => app.launch_td_report(),
+                MainMenuKind::ArgePortal => app.launch_pdks_report(),
                 MainMenuKind::Update => app.launch_update(),
                 MainMenuKind::Settings => go_to(app, Screen::Settings),
                 MainMenuKind::Exit => return Action::Back,

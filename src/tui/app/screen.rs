@@ -9,6 +9,7 @@ pub struct MainMenuItem {
 pub enum MainMenuKind {
     Sync,
     TimeDoctor,
+    ArgePortal,
     Update,
     Settings,
     Exit,
@@ -27,5 +28,6 @@ pub enum Screen {
     OffWeeks,
     SyncProgress,
     TimeDoctorReport,
+    PdksReport,
     UpdateProgress,
 }

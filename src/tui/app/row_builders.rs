@@ -8,22 +8,53 @@ use super::App;
 
 impl App {
     pub fn settings_items(&self) -> Vec<SettingRow> {
-        vec![
-            SettingRow::Separator(SECTION_RDS_SYNC),
+        let mut rows = vec![
+            SettingRow::Separator("Profile"),
             SettingRow::Blank,
-            SettingRow::SyncGeneralLink,
-            SettingRow::ManageRepos,
+            SettingRow::ProfileDeveloper,
+            SettingRow::ProfileOffice,
+            SettingRow::ProfilePartTime,
             SettingRow::Blank,
-            SettingRow::Separator(SECTION_TIME_DOCTOR),
-            SettingRow::Blank,
-            SettingRow::TdGeneralLink,
-            SettingRow::TimeDoctorSettings,
-            SettingRow::ContractPeriodsLink,
-            SettingRow::OffWeeksLink,
-            SettingRow::Blank,
-            SettingRow::Divider,
-            SettingRow::Back,
-        ]
+        ];
+        if self.profile.is_developer {
+            rows.extend([
+                SettingRow::Separator(SECTION_RDS_SYNC),
+                SettingRow::Blank,
+                SettingRow::SyncGeneralLink,
+                SettingRow::ManageRepos,
+                SettingRow::Blank,
+            ]);
+        }
+        if self.profile.is_part_time {
+            rows.extend([
+                SettingRow::Separator(SECTION_TIME_DOCTOR),
+                SettingRow::Blank,
+                SettingRow::TdGeneralLink,
+                SettingRow::TimeDoctorSettings,
+                SettingRow::ContractPeriodsLink,
+                SettingRow::OffWeeksLink,
+                SettingRow::Blank,
+            ]);
+        }
+        if !self.profile.is_part_time
+            && !matches!(
+                self.profile.office,
+                Some(
+                    crate::config::Office::Izmir
+                        | crate::config::Office::Odtu
+                        | crate::config::Office::Istanbul
+                )
+            )
+        {
+            rows.extend([
+                SettingRow::Separator("Ar-Ge Portal"),
+                SettingRow::Blank,
+                SettingRow::ClearPdksSession,
+                SettingRow::Blank,
+            ]);
+        }
+        rows.extend([SettingRow::Divider, SettingRow::Back]);
+        rows
     }
 
     pub fn sync_general_items(&self) -> Vec<GeneralToggleRow> {

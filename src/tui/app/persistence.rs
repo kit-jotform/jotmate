@@ -27,6 +27,15 @@ impl App {
         });
     }
 
+    pub fn persist_pdks_targets(&self) {
+        let targets = self.pdks_weekly_targets.clone();
+        self.mutate_and_save(|cfg| cfg.pdks.weekly_targets = targets);
+    }
+    pub fn persist_profile(&self) {
+        let profile = self.profile.clone();
+        self.mutate_and_save(|cfg| cfg.profile = profile);
+    }
+
     fn mutate_and_save(&self, mutate: impl FnOnce(&mut crate::config::Config)) {
         if let Ok(mut config) = crate::config::load(&self.ctx.paths) {
             mutate(&mut config);

@@ -2,6 +2,7 @@ use std::ops::ControlFlow;
 
 use crossterm::event::KeyCode;
 
+use crate::config::Office;
 use crate::tui::app::{App, CycleTarget, GeneralToggleRow, InputMode, Screen, SettingRow};
 
 use super::helpers::{go_to, handle_cycle, list_activate_row};
@@ -16,6 +17,29 @@ pub(super) fn handle_settings(app: &mut App, code: KeyCode) -> Action {
     };
     match row {
         Some(SettingRow::Back) => app.screen = Screen::MainMenu,
+        Some(SettingRow::ProfileDeveloper) => {
+            app.profile.is_developer = !app.profile.is_developer;
+            app.persist_profile();
+        }
+        Some(SettingRow::ProfileOffice) => {
+            let index = app
+                .profile
+                .office
+                .and_then(|selected| Office::ALL.iter().position(|office| *office == selected));
+            app.profile.office = match index {
+                None => Some(Office::Hacettepe),
+                Some(index) if index + 1 == Office::ALL.len() => None,
+                Some(index) => Some(Office::ALL[index + 1]),
+            };
+            app.persist_profile();
+        }
+        Some(SettingRow::ProfilePartTime) => {
+            app.profile.is_part_time = !app.profile.is_part_time;
+            app.persist_profile();
+        }
+        Some(SettingRow::ClearPdksSession) => {
+            let _ = crate::pdks::clear_saved_session();
+        }
         Some(SettingRow::SyncGeneralLink) => go_to(app, Screen::SyncGeneralSettings),
         Some(SettingRow::ManageRepos) => go_to(app, Screen::RepoManager),
         Some(SettingRow::TdGeneralLink) => go_to(app, Screen::TdGeneralSettings),

@@ -40,6 +40,8 @@ All subcommands work without opening the TUI — useful in scripts or for a quic
 ```sh
 jf sync          # sync enabled forks with upstream
 jf time          # show TimeDoctor work hours
+jf pdks          # show the current week's Ar-Ge Portal PDKS hours
+jf profile       # view or update the local user profile
 jf settings      # open the settings screen
 ```
 
@@ -65,6 +67,23 @@ Flags can be combined. `--sync-all` and `--only` are mutually exclusive. `--rds-
 jf time --no-cache            # bypass week cache, re-fetch from TimeDoctor API
 jf time --skip-current-week   # exclude the current incomplete week
 ```
+
+### `jf pdks` options
+
+```sh
+jf pdks login                 # open the Ar-Ge Portal sign-in window
+jf pdks --week 2026-10-19     # calculate a selected week's first-in / last-out totals
+```
+
+### `jf profile` options
+
+```sh
+jf profile                                                    # show the current profile
+jf profile --developer true --office hacettepe --part-time false
+jf profile --office none                                      # clear the selected office
+```
+
+The profile controls which tools appear in the TUI: Sync is available to developers; Time Doctor is shown for part-time users; Ar-Ge Portal is available when the office is not selected or is Hacettepe. A part-time developer sees both Sync and Time Doctor.
 
 ## Settings
 
@@ -94,11 +113,20 @@ Repos to sync are managed under **Manage Repos** — toggle individual repos on/
 
 Configure your email, password (stored in the system keychain), timezone, and contract periods (weekly hour targets) from the TUI settings screen.
 
+### Profile and Ar-Ge Portal settings
+
+The top-level **Profile** section in Settings edits developer status, office, and part-time status without opening another screen. When Ar-Ge Portal is available, Settings also includes **Clear saved portal session** to remove the portal account from the system keychain before signing in again.
+
 ## Configuration file
 
 Config lives at the platform config dir — `~/Library/Application Support/jotmate/config.toml` on macOS, `~/.config/jotmate/config.toml` on Linux. It is edited automatically by the settings screen, but manual edits are also fine.
 
 ```toml
+[profile]
+is_developer = true
+office = "hacettepe" # or omit this field for no office selection
+is_part_time = false
+
 [sync]
 use_cache = true
 skip_fork_sync = false
@@ -120,6 +148,12 @@ show_cumulative = true
 ```
 
 TimeDoctor credentials (password / session cookie) are stored in the system keychain, never in the config file.
+
+## Ar-Ge Portal PDKS
+
+`jf pdks` calculates each day's work as the difference between that day's first entry and last exit, then compares the selected week's total with the 45-hour target. It uses the raw PDKS entry/exit list rather than trusting a precomputed duration.
+
+Run `jf pdks login` to open the portal in Jotmate's sign-in window. Complete the normal portal sign-in and CAPTCHA there; Jotmate copies the session cookie into the system keychain. After that, `jf pdks` fetches punch records over HTTP and prints the weekly report. When the session expires, run `jf pdks login` again. Use `jf pdks --period-id ... --personnel-id ...` if the account exposes more than one period or employee.
 
 ## Project structure
 
