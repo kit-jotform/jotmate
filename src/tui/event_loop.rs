@@ -26,6 +26,7 @@ pub(super) async fn event_loop(
 
         let tick = match app.screen {
             Screen::TimeDoctorReport => handle_td_report_tick(terminal, app).await?,
+            Screen::PdksReport => handle_pdks_report_tick(terminal, app).await?,
             Screen::SyncProgress => handle_sync_progress_tick(app)?,
             Screen::UpdateProgress => handle_update_progress_tick(app)?,
             Screen::MainMenu => handle_main_menu_tick(app)?,
@@ -75,6 +76,17 @@ fn dispatch_key(
         }
         Action::Continue => None,
     }
+}
+
+async fn handle_pdks_report_tick(
+    _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut App,
+) -> Result<Option<LoopOutcome>> {
+    app.poll_pdks_report();
+    let Some(key) = poll_key(Some(Duration::from_millis(150)))? else {
+        return Ok(None);
+    };
+    Ok(dispatch_key(app, key, |_| {}))
 }
 
 async fn handle_td_report_tick(

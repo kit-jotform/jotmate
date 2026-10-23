@@ -6,11 +6,14 @@ use ratatui::widgets::ListState;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 
-use crate::config::{ContractPeriod, UpstreamRepo, DEFAULT_TIMEZONE};
+use crate::config::{
+    ContractPeriod, Office, ProfileConfig, UpstreamRepo, DEFAULT_TIMEZONE, PDKS_WEEKLY_TARGET_HOURS,
+};
 
 mod constants;
 mod mutations;
 mod navigation;
+mod pdks_report;
 mod persistence;
 mod row_builders;
 mod screen;
@@ -19,6 +22,7 @@ mod td_report;
 mod update;
 
 pub use constants::WEEKLY_HOURS_OPTIONS;
+pub use pdks_report::PdksReportState;
 pub use screen::{MainMenuItem, MainMenuKind, Screen};
 pub use td_report::{TdReportState, TD_REPORT_VISIBLE_ROWS};
 
@@ -64,6 +68,7 @@ pub struct AddOwForm {
 }
 
 pub struct App {
+    pub profile: ProfileConfig,
     pub ctx: crate::ctx::Ctx,
     pub screen: Screen,
     pub list_states: HashMap<Screen, ListState>,
@@ -86,6 +91,12 @@ pub struct App {
         Option<tokio::sync::oneshot::Receiver<Result<Vec<crate::time::compute::WeekRow>, String>>>,
     pub td_report_started_at: Option<std::time::Instant>,
     pub td_report_elapsed_secs: Option<f64>,
+    pub pdks_report: PdksReportState,
+    pub pdks_report_rx: Option<tokio::sync::oneshot::Receiver<Result<crate::pdks::Report, String>>>,
+    pub pdks_week: NaiveDate,
+    pub pdks_target_hours: f64,
+    pub pdks_target_editing: bool,
+    pub pdks_weekly_targets: Vec<crate::config::PdksWeeklyTarget>,
 }
 
 impl App {
@@ -135,6 +146,7 @@ impl App {
         let td_tz = config.time.timezone.as_deref().unwrap_or(DEFAULT_TIMEZONE);
         Ok(Self {
             ctx,
+            profile: config.profile.clone(),
             screen: Screen::MainMenu,
             list_states,
             td_report: TdReportState::Loading,
@@ -175,22 +187,43 @@ impl App {
             td_report_rx: None,
             td_report_started_at: None,
             td_report_elapsed_secs: None,
+            pdks_report: PdksReportState::Loading { tick: 0 },
+            pdks_report_rx: None,
+            pdks_week: this_monday(),
+            pdks_target_hours: PDKS_WEEKLY_TARGET_HOURS,
+            pdks_target_editing: false,
+            pdks_weekly_targets: config.pdks.weekly_targets.clone(),
         })
     }
 
     pub fn main_menu_items(&self) -> Vec<MainMenuItem> {
-        let mut items = vec![
-            MainMenuItem {
+        let mut items = vec![];
+        if self.profile.is_developer {
+            items.push(MainMenuItem {
                 kind: MainMenuKind::Sync,
                 name: "Sync".into(),
                 desc: "Sync RDS to upstream".into(),
-            },
-            MainMenuItem {
+            });
+        }
+        if self.profile.is_part_time {
+            items.push(MainMenuItem {
                 kind: MainMenuKind::TimeDoctor,
                 name: "Time Doctor".into(),
                 desc: "Track your work hours".into(),
-            },
-        ];
+            });
+        }
+        if !self.profile.is_part_time
+            && !matches!(
+                self.profile.office,
+                Some(Office::Izmir | Office::Odtu | Office::Istanbul)
+            )
+        {
+            items.push(MainMenuItem {
+                kind: MainMenuKind::ArgePortal,
+                name: "Ar-Ge Portal".into(),
+                desc: "Track PDKS work hours".into(),
+            });
+        }
         if let Some(Some(version)) = &self.available_update {
             items.push(MainMenuItem {
                 kind: MainMenuKind::Update,

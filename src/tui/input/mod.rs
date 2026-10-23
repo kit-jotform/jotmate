@@ -7,6 +7,7 @@ mod helpers;
 mod keys;
 mod main_menu;
 mod off_weeks;
+mod pdks_report;
 mod repos;
 mod settings;
 mod sync;
@@ -18,6 +19,7 @@ use contract::{execute_pending_period_delete, handle_contract_periods};
 use helpers::{handle_cycle, handle_text_input, handle_yes_no};
 use main_menu::handle_main;
 use off_weeks::{execute_pending_off_week_delete, handle_off_weeks};
+use pdks_report::handle_pdks_report;
 use repos::{
     apply_new_repo_url, execute_pending_repo_delete, handle_remove_repos, handle_repo_manager,
 };
@@ -70,6 +72,7 @@ pub fn handle_key(app: &mut App, code: KeyCode) -> Action {
         },
         Screen::SyncProgress => handle_sync_progress(app, code),
         Screen::TimeDoctorReport => handle_td_report(app, code),
+        Screen::PdksReport => handle_pdks_report(app, code),
         Screen::UpdateProgress => handle_update_progress(app, code),
     }
 }

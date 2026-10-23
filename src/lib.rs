@@ -4,6 +4,8 @@ pub mod cli;
 pub mod config;
 pub mod ctx;
 pub mod error;
+pub mod pdks;
+pub mod profile;
 pub mod sync;
 pub mod time;
 pub mod tui;

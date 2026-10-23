@@ -4,9 +4,68 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
+    pub profile: ProfileConfig,
+    #[serde(default)]
     pub sync: SyncConfig,
     #[serde(default)]
     pub time: TimeConfig,
+    #[serde(default)]
+    pub pdks: PdksConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileConfig {
+    #[serde(default = "default_true")]
+    pub is_developer: bool,
+    #[serde(default)]
+    pub office: Option<Office>,
+    #[serde(default)]
+    pub is_part_time: bool,
+}
+
+impl Default for ProfileConfig {
+    fn default() -> Self {
+        Self {
+            is_developer: true,
+            office: None,
+            is_part_time: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Office {
+    #[default]
+    Hacettepe,
+    Izmir,
+    Odtu,
+    Istanbul,
+}
+
+impl Office {
+    pub const ALL: [Self; 4] = [Self::Hacettepe, Self::Izmir, Self::Odtu, Self::Istanbul];
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Hacettepe => "Hacettepe",
+            Self::Izmir => "Izmir",
+            Self::Odtu => "ODTU",
+            Self::Istanbul => "Istanbul",
+        }
+    }
+}
+
+/// Per-week PDKS target-hour exceptions. Weeks not listed here use 45 hours.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PdksConfig {
+    #[serde(default)]
+    pub weekly_targets: Vec<PdksWeeklyTarget>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PdksWeeklyTarget {
+    pub week: NaiveDate,
+    pub target_hours: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +134,8 @@ impl Default for SyncConfig {
 pub const TIMEDOCTOR_COMPANY_ID: &str = "Xms4iFqBgQAEjLy2";
 pub const DEFAULT_TIMEZONE: &str = "Europe/Istanbul";
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
+pub const PDKS_DAILY_TARGET_HOURS: f64 = 9.0;
+pub const PDKS_WEEKLY_TARGET_HOURS: f64 = 45.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TimeConfig {

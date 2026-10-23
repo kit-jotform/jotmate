@@ -16,6 +16,12 @@ async fn main() -> Result<()> {
         Some(Commands::Time(args)) => {
             time::run(&ctx, args).await?;
         }
+        Some(Commands::Pdks(args)) => {
+            jotmate::pdks::run(args).await?;
+        }
+        Some(Commands::Profile(args)) => {
+            jotmate::profile::run(&ctx, args)?;
+        }
         Some(Commands::Settings) => {
             tui::run_settings(ctx).await?;
         }
