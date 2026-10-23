@@ -5,12 +5,13 @@
 //! that cookie over HTTP to fetch punch records and print the weekly report.
 
 use anyhow::{Context, Result};
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, Timelike};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tao::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -38,9 +39,7 @@ const LOGIN_PROBE: &str = r#"(() => {
       const userResponse = await fetch('/Home/GetUserInfoForClient', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
       });
       const user = JSON.parse(await userResponse.text());
       if (!user) return;
@@ -57,7 +56,6 @@ const LOGIN_PROBE: &str = r#"(() => {
   ping();
   setInterval(ping, 1500);
 })()"#;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Punch {
     at: NaiveDateTime,
@@ -81,6 +79,12 @@ pub struct ReportDay {
     pub is_still_in_office: bool,
 }
 
+impl ReportDay {
+    pub fn target_exit(&self) -> NaiveDateTime {
+        self.first + chrono::Duration::seconds((PDKS_DAILY_TARGET_HOURS * 3600.0) as i64)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Report {
     pub week: NaiveDate,
@@ -91,14 +95,14 @@ pub struct Report {
 
 pub async fn run(args: PdksArgs) -> Result<()> {
     match args.command {
-        Some(PdksCommand::Login) => return open_login_window(),
+        Some(PdksCommand::Login | PdksCommand::LoginHelper) => return login(),
         None => {}
     }
 
     if !(0.0..=PDKS_WEEKLY_TARGET_HOURS).contains(&args.target_hours) {
         anyhow::bail!("--target-hours must be between 0 and {PDKS_WEEKLY_TARGET_HOURS}");
     }
-    let report = fetch_report(args).await?;
+    let report = fetch_report_after_login(args).await?;
     print_report(&report);
     Ok(())
 }
@@ -110,8 +114,20 @@ pub async fn fetch_report(args: PdksArgs) -> Result<Report> {
     Ok(build_report(week, args.target_hours, &punches))
 }
 
+async fn fetch_report_after_login(args: PdksArgs) -> Result<Report> {
+    match fetch_report(args.clone()).await {
+        Ok(report) => Ok(report),
+        Err(error) if needs_login(&error) => {
+            clear_saved_session()?;
+            ensure_session()?;
+            fetch_report(args).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub fn ensure_session() -> Result<()> {
-    if load_session()?.is_some() {
+    if has_saved_session()? {
         return Ok(());
     }
     let cookie = capture_portal_cookie()?
@@ -119,14 +135,18 @@ pub fn ensure_session() -> Result<()> {
     save_session(&cookie)
 }
 
+pub fn has_saved_session() -> Result<bool> {
+    Ok(load_session()?.is_some())
+}
+
 /// Forget the portal login stored in the system keychain.
 pub fn clear_saved_session() -> Result<()> {
     keychain_delete(KEY_SESSION)
 }
 
-fn open_login_window() -> Result<()> {
+pub fn login() -> Result<()> {
     println!(
-        "Sign in to Ar-Ge Portal in the window that opens. Complete the CAPTCHA; the window closes once the session cookie is saved."
+        "Sign in to Ar-Ge Portal in the window that opens. The window closes once the session cookie is saved."
     );
     let cookie = capture_portal_cookie()?.ok_or_else(|| {
         anyhow::anyhow!(
@@ -136,6 +156,13 @@ fn open_login_window() -> Result<()> {
     save_session(&cookie)?;
     println!("Portal session saved. Run `jf pdks` to calculate hours.");
     Ok(())
+}
+
+pub fn needs_login(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("No saved portal session")
+        || message.contains("Portal session expired")
+        || message.contains("No portal term was returned")
 }
 
 fn capture_portal_cookie() -> Result<Option<String>> {
@@ -164,15 +191,24 @@ fn capture_portal_cookie() -> Result<Option<String>> {
         .context("Could not start the Ar-Ge Portal view")?;
 
     let mut cookie_header = None;
+    let mut close_deadline = None;
     event_loop.run_return(|event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        if close_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            *control_flow = ControlFlow::Exit;
+            return;
+        }
+        *control_flow = close_deadline
+            .map(ControlFlow::WaitUntil)
+            .unwrap_or(ControlFlow::Wait);
         if logged_in.load(Ordering::SeqCst) && cookie_header.is_none() {
             match webview.cookies() {
                 Ok(cookies) => {
                     let header = format_cookie_header(&cookies);
                     if !header.is_empty() {
                         cookie_header = Some(header);
-                        *control_flow = ControlFlow::Exit;
+                        window.set_visible(false);
+                        close_deadline = Some(Instant::now() + Duration::from_millis(50));
+                        *control_flow = ControlFlow::WaitUntil(close_deadline.unwrap());
                         return;
                     }
                 }
@@ -186,7 +222,9 @@ fn capture_portal_cookie() -> Result<Option<String>> {
             ..
         } = event
         {
-            *control_flow = ControlFlow::Exit;
+            window.set_visible(false);
+            close_deadline = Some(Instant::now() + Duration::from_millis(50));
+            *control_flow = ControlFlow::WaitUntil(close_deadline.unwrap());
         }
     });
     Ok(cookie_header)
@@ -672,12 +710,15 @@ fn build_report_at(
     let days: Vec<ReportDay> = days
         .into_iter()
         .filter_map(|(date, entries)| {
+            let has_entry = entries.iter().any(|punch| punch.state == PunchState::Entry);
             let first = entries
                 .iter()
                 .find(|punch| punch.state == PunchState::Entry)
                 .or_else(|| entries.first())?;
             let last_recorded = entries.last()?;
-            let is_still_in_office = last_recorded.state == PunchState::Entry && date == now.date();
+            let is_still_in_office = has_entry
+                && date == now.date()
+                && (last_recorded.state == PunchState::Entry || now.hour() < 15);
             let last = if is_still_in_office {
                 now
             } else {
@@ -711,7 +752,7 @@ fn print_report(report: &Report) {
     for day in &report.days {
         let hours = day.worked_secs as f64 / 3600.0;
         println!(
-            "{}  {} – {}{}  {}  ({})",
+            "{}  {} – {}{}  {}  ({}){}",
             day.date.format("%a %d.%m"),
             day.first.format("%H:%M"),
             if day.is_still_in_office {
@@ -726,6 +767,11 @@ fn print_report(report: &Report) {
             },
             format_hours(hours),
             crate::time::compute::format_hours_signed(hours - PDKS_DAILY_TARGET_HOURS),
+            if day.is_still_in_office {
+                format!("  leave at {}", day.target_exit().format("%H:%M"))
+            } else {
+                String::new()
+            },
         );
     }
     let worked = report.worked_secs as f64 / 3600.0;
@@ -851,5 +897,27 @@ mod tests {
         );
         assert!(!report.days[0].is_still_in_office);
         assert_eq!(report.days[0].worked_secs, 9 * 3600);
+    }
+
+    #[test]
+    fn treats_an_early_exit_before_three_as_still_in_office() {
+        let day = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
+        let report = build_report_at(
+            get_week_start_monday(day),
+            45.0,
+            &[
+                Punch {
+                    at: day.and_hms_opt(9, 0, 0).unwrap(),
+                    state: PunchState::Entry,
+                },
+                Punch {
+                    at: day.and_hms_opt(12, 0, 0).unwrap(),
+                    state: PunchState::Exit,
+                },
+            ],
+            day.and_hms_opt(14, 30, 0).unwrap(),
+        );
+        assert!(report.days[0].is_still_in_office);
+        assert_eq!(report.days[0].worked_secs, 5 * 3600 + 30 * 60);
     }
 }

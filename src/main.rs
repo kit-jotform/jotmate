@@ -19,6 +19,9 @@ async fn main() -> Result<()> {
         Some(Commands::Pdks(args)) => {
             jotmate::pdks::run(args).await?;
         }
+        Some(Commands::Login) => {
+            jotmate::pdks::login()?;
+        }
         Some(Commands::Profile(args)) => {
             jotmate::profile::run(&ctx, args)?;
         }
