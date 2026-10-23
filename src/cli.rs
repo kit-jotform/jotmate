@@ -15,6 +15,8 @@ pub enum Commands {
     Time(TimeArgs),
     /// Check weekly work hours from Ar-Ge Portal PDKS records
     Pdks(PdksArgs),
+    /// Sign in to Ar-Ge Portal
+    Login,
     /// View or update your Jotmate profile
     Profile(ProfileArgs),
     /// Edit default flags and credentials
@@ -79,6 +81,8 @@ impl Default for PdksArgs {
 pub enum PdksCommand {
     /// Open the secure portal sign-in window
     Login,
+    #[command(hide = true)]
+    LoginHelper,
 }
 
 #[derive(Args, Clone, Debug, Default)]

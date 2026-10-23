@@ -36,7 +36,14 @@ pub fn draw_pdks_report(f: &mut ratatui::Frame, app: &App) {
                 format!("{} ", SPINNER[*tick as usize % SPINNER.len()]),
                 Style::default().fg(C_ACCENT),
             ),
-            Span::styled("Fetching PDKS report…", Style::default().fg(C_MUTED)),
+            Span::styled(
+                if app.pdks_login_rx.is_some() {
+                    "Waiting for portal sign-in…"
+                } else {
+                    "Fetching PDKS report…"
+                },
+                Style::default().fg(C_MUTED),
+            ),
         ])],
         PdksReportState::Error(error) => vec![
             Line::from(Span::styled(
@@ -115,9 +122,12 @@ pub fn draw_pdks_report(f: &mut ratatui::Frame, app: &App) {
                     ),
                     Span::styled(
                         if day.is_still_in_office {
-                            "  in office"
+                            format!(
+                                "  in office · leave at {}",
+                                day.target_exit().format("%H:%M")
+                            )
                         } else {
-                            ""
+                            String::new()
                         },
                         Style::default().fg(C_MUTED),
                     ),

@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDate};
+use std::process::{Command, Stdio};
 
 use crate::config::{PDKS_DAILY_TARGET_HOURS, PDKS_WEEKLY_TARGET_HOURS};
 
@@ -59,11 +60,14 @@ impl App {
         self.pdks_report = PdksReportState::Loading { tick: 0 };
         self.pdks_report_rx = None;
 
-        if let Err(error) = crate::pdks::ensure_session() {
-            self.pdks_report = PdksReportState::Error(error.to_string());
-            return;
+        match crate::pdks::has_saved_session() {
+            Ok(true) => self.fetch_pdks_report(),
+            Ok(false) => self.start_pdks_login(),
+            Err(error) => self.pdks_report = PdksReportState::Error(error.to_string()),
         }
+    }
 
+    fn fetch_pdks_report(&mut self) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.pdks_report_rx = Some(rx);
         let args = crate::cli::PdksArgs {
@@ -80,7 +84,50 @@ impl App {
         });
     }
 
+    fn start_pdks_login(&mut self) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.pdks_login_rx = Some(rx);
+        std::thread::spawn(move || {
+            let result = (|| -> anyhow::Result<()> {
+                let executable = std::env::current_exe()?;
+                let status = Command::new(executable)
+                    .args(["pdks", "login-helper"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()?;
+                if status.success() {
+                    Ok(())
+                } else {
+                    anyhow::bail!("Portal sign-in was cancelled or did not complete.")
+                }
+            })();
+            let _ = tx.send(result.map_err(|error| error.to_string()));
+        });
+    }
+
     pub fn poll_pdks_report(&mut self) -> bool {
+        if let Some(rx) = &mut self.pdks_login_rx {
+            match rx.try_recv() {
+                Ok(Ok(())) => {
+                    self.pdks_login_rx = None;
+                    self.reload_pdks_report();
+                    return true;
+                }
+                Ok(Err(error)) => {
+                    self.pdks_login_rx = None;
+                    self.pdks_report = PdksReportState::Error(error);
+                    return true;
+                }
+                Err(tokio::sync::oneshot::error::TryRecvError::Empty) => return true,
+                Err(_) => {
+                    self.pdks_login_rx = None;
+                    self.pdks_report =
+                        PdksReportState::Error("Portal sign-in did not complete.".into());
+                    return true;
+                }
+            }
+        }
         if let Some(rx) = &mut self.pdks_report_rx {
             match rx.try_recv() {
                 Ok(Ok(report)) => {
@@ -90,7 +137,12 @@ impl App {
                 }
                 Ok(Err(error)) => {
                     self.pdks_report_rx = None;
-                    self.pdks_report = PdksReportState::Error(error);
+                    if crate::pdks::needs_login(&anyhow::anyhow!(error.clone())) {
+                        let _ = crate::pdks::clear_saved_session();
+                        self.reload_pdks_report();
+                    } else {
+                        self.pdks_report = PdksReportState::Error(error);
+                    }
                     return true;
                 }
                 Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
