@@ -710,15 +710,18 @@ fn build_report_at(
     let days: Vec<ReportDay> = days
         .into_iter()
         .filter_map(|(date, entries)| {
-            let has_entry = entries.iter().any(|punch| punch.state == PunchState::Entry);
+            let states = effective_punch_states(&entries);
+            let has_entry = states.contains(&PunchState::Entry);
             let first = entries
                 .iter()
-                .find(|punch| punch.state == PunchState::Entry)
-                .or_else(|| entries.first())?;
+                .zip(&states)
+                .find(|(_, state)| **state == PunchState::Entry)
+                .map(|(punch, _)| *punch)
+                .or_else(|| entries.first().copied())?;
             let last_recorded = entries.last()?;
             let is_still_in_office = has_entry
                 && date == now.date()
-                && (last_recorded.state == PunchState::Entry || now.hour() < 15);
+                && (states.last() == Some(&PunchState::Entry) || now.hour() < 15);
             let last = if is_still_in_office {
                 now
             } else {
@@ -740,6 +743,24 @@ fn build_report_at(
         worked_secs,
         days,
     }
+}
+
+fn effective_punch_states(entries: &[&Punch]) -> Vec<PunchState> {
+    let mut previous = None;
+    entries
+        .iter()
+        .map(|punch| {
+            let state = match punch.state {
+                PunchState::Unknown => match previous {
+                    Some(PunchState::Entry) => PunchState::Exit,
+                    _ => PunchState::Entry,
+                },
+                state => state,
+            };
+            previous = Some(state);
+            state
+        })
+        .collect()
 }
 
 fn print_report(report: &Report) {
@@ -919,5 +940,55 @@ mod tests {
         );
         assert!(report.days[0].is_still_in_office);
         assert_eq!(report.days[0].worked_secs, 5 * 3600 + 30 * 60);
+    }
+
+    #[test]
+    fn infers_missing_punch_states_in_sequence() {
+        let day = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
+        let punches = [
+            Punch {
+                at: day.and_hms_opt(8, 0, 0).unwrap(),
+                state: PunchState::Unknown,
+            },
+            Punch {
+                at: day.and_hms_opt(10, 0, 0).unwrap(),
+                state: PunchState::Unknown,
+            },
+        ];
+        assert_eq!(
+            effective_punch_states(&punches.iter().collect::<Vec<_>>()),
+            vec![PunchState::Entry, PunchState::Exit]
+        );
+
+        let report = build_report_at(
+            get_week_start_monday(day),
+            45.0,
+            &punches,
+            day.and_hms_opt(14, 0, 0).unwrap(),
+        );
+        assert!(report.days[0].is_still_in_office);
+        assert_eq!(report.days[0].worked_secs, 6 * 3600);
+    }
+
+    #[test]
+    fn uses_an_inferred_exit_after_three() {
+        let day = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
+        let report = build_report_at(
+            get_week_start_monday(day),
+            45.0,
+            &[
+                Punch {
+                    at: day.and_hms_opt(8, 0, 0).unwrap(),
+                    state: PunchState::Unknown,
+                },
+                Punch {
+                    at: day.and_hms_opt(10, 0, 0).unwrap(),
+                    state: PunchState::Unknown,
+                },
+            ],
+            day.and_hms_opt(16, 0, 0).unwrap(),
+        );
+        assert!(!report.days[0].is_still_in_office);
+        assert_eq!(report.days[0].worked_secs, 2 * 3600);
     }
 }
