@@ -21,7 +21,7 @@ use tao::{
 use wry::{WebContext, WebViewBuilder};
 
 use crate::cli::{PdksArgs, PdksCommand};
-use crate::config::{PDKS_DAILY_TARGET_HOURS, PDKS_WEEKLY_TARGET_HOURS};
+use crate::config::{PDKS_DAILY_MAX_HOURS, PDKS_DAILY_TARGET_HOURS, PDKS_WEEKLY_TARGET_HOURS};
 use crate::time::compute::{format_hours, get_week_start_monday};
 
 const BASE_URL: &str = "https://argeportal.hacettepeteknokent.com.tr";
@@ -83,6 +83,14 @@ impl ReportDay {
     pub fn target_exit(&self) -> NaiveDateTime {
         self.first + chrono::Duration::seconds((PDKS_DAILY_TARGET_HOURS * 3600.0) as i64)
     }
+
+    pub fn counted_secs(&self) -> i64 {
+        self.worked_secs.min((PDKS_DAILY_MAX_HOURS * 3600.0) as i64)
+    }
+
+    pub fn excess_secs(&self) -> i64 {
+        self.worked_secs - self.counted_secs()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +99,12 @@ pub struct Report {
     pub target_hours: f64,
     pub worked_secs: i64,
     pub days: Vec<ReportDay>,
+}
+
+impl Report {
+    pub fn raw_worked_secs(&self) -> i64 {
+        self.days.iter().map(|day| day.worked_secs).sum()
+    }
 }
 
 pub async fn run(args: PdksArgs) -> Result<()> {
@@ -736,7 +750,7 @@ fn build_report_at(
             })
         })
         .collect();
-    let worked_secs = days.iter().map(|day| day.worked_secs).sum();
+    let worked_secs = days.iter().map(ReportDay::counted_secs).sum();
     Report {
         week,
         target_hours,
@@ -771,7 +785,19 @@ fn print_report(report: &Report) {
         end.format("%d.%m.%Y")
     );
     for day in &report.days {
-        let hours = day.worked_secs as f64 / 3600.0;
+        let raw_hours = day.worked_secs as f64 / 3600.0;
+        let counted_hours = day.counted_secs() as f64 / 3600.0;
+        let raw_balance = raw_hours - PDKS_DAILY_TARGET_HOURS;
+        let counted_balance = counted_hours - PDKS_DAILY_TARGET_HOURS;
+        let balance_display = if day.excess_secs() > 0 {
+            format!(
+                "{} -> {}",
+                crate::time::compute::format_hours_signed(raw_balance),
+                crate::time::compute::format_hours_signed(counted_balance)
+            )
+        } else {
+            crate::time::compute::format_hours_signed(counted_balance)
+        };
         println!(
             "{}  {} – {}{}  {}  ({}){}",
             day.date.format("%a %d.%m"),
@@ -786,8 +812,8 @@ fn print_report(report: &Report) {
             } else {
                 ""
             },
-            format_hours(hours),
-            crate::time::compute::format_hours_signed(hours - PDKS_DAILY_TARGET_HOURS),
+            format_hours(raw_hours),
+            balance_display,
             if day.is_still_in_office {
                 format!("  leave at {}", day.target_exit().format("%H:%M"))
             } else {
@@ -990,5 +1016,31 @@ mod tests {
         );
         assert!(!report.days[0].is_still_in_office);
         assert_eq!(report.days[0].worked_secs, 2 * 3600);
+    }
+
+    #[test]
+    fn caps_counted_work_at_eleven_hours_per_day() {
+        let day = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
+        let report = build_report_at(
+            get_week_start_monday(day),
+            45.0,
+            &[
+                Punch {
+                    at: day.and_hms_opt(8, 0, 0).unwrap(),
+                    state: PunchState::Entry,
+                },
+                Punch {
+                    at: day.and_hms_opt(21, 0, 0).unwrap(),
+                    state: PunchState::Exit,
+                },
+            ],
+            day.and_hms_opt(22, 0, 0).unwrap(),
+        );
+
+        assert_eq!(report.days[0].worked_secs, 13 * 3600);
+        assert_eq!(report.days[0].counted_secs(), 11 * 3600);
+        assert_eq!(report.days[0].excess_secs(), 2 * 3600);
+        assert_eq!(report.raw_worked_secs(), 13 * 3600);
+        assert_eq!(report.worked_secs, 11 * 3600);
     }
 }

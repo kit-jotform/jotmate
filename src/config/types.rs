@@ -135,6 +135,7 @@ pub const TIMEDOCTOR_COMPANY_ID: &str = "Xms4iFqBgQAEjLy2";
 pub const DEFAULT_TIMEZONE: &str = "Europe/Istanbul";
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
 pub const PDKS_DAILY_TARGET_HOURS: f64 = 9.0;
+pub const PDKS_DAILY_MAX_HOURS: f64 = 11.0;
 pub const PDKS_WEEKLY_TARGET_HOURS: f64 = 45.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
