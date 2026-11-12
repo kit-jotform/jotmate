@@ -49,7 +49,7 @@ impl App {
             rows.extend([
                 SettingRow::Separator("Ar-Ge Portal"),
                 SettingRow::Blank,
-                SettingRow::ClearPdksSession,
+                SettingRow::ClearPdksLogin,
                 SettingRow::Blank,
             ]);
         }

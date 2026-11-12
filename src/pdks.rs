@@ -8,9 +8,10 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, Timelike};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Write;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tao::{
     event::{Event, WindowEvent},
@@ -27,7 +28,52 @@ use crate::time::compute::{format_hours, get_week_start_monday};
 const BASE_URL: &str = "https://argeportal.hacettepeteknokent.com.tr";
 const KEYCHAIN_SERVICE: &str = "jotmate-pdks";
 const KEY_SESSION: &str = "session-cookie";
+const KEY_EMAIL: &str = "email";
+const KEY_PASSWORD: &str = "password";
 const LOGIN_PROBE: &str = r#"(() => {
+  if (window.location.origin !== __PORTAL_ORIGIN__) return;
+  const savedEmail = __SAVED_EMAIL__;
+  const savedPassword = __SAVED_PASSWORD__;
+  const fields = () => ({
+    email: document.querySelector('input[name="Email"]'),
+    password: document.querySelector('input[name="Sifre"]')
+  });
+  const setValue = (input, value) => {
+    if (!input || !value || input.value) return;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (setter) setter.call(input, value);
+    else input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const fillCredentials = () => {
+    const { email, password } = fields();
+    if (!email || !password) return false;
+    setValue(email, savedEmail);
+    setValue(password, savedPassword);
+    return true;
+  };
+  const captureCredentials = () => {
+    const { email, password } = fields();
+    if (email?.value && password?.value) {
+      window.ipc.postMessage(JSON.stringify({
+        credentials: { email: email.value, password: password.value }
+      }));
+    }
+  };
+  document.addEventListener('submit', captureCredentials, true);
+  document.addEventListener('input', event => {
+    if (event.target.matches('input[name="Email"], input[name="Sifre"]')) {
+      captureCredentials();
+    }
+  }, true);
+  document.addEventListener('click', event => {
+    if (event.target.closest('#login-button')) captureCredentials();
+  }, true);
+  const fillTimer = setInterval(() => {
+    if (fillCredentials()) clearInterval(fillTimer);
+  }, 250);
+
   const hasId = value => {
     if (Array.isArray(value)) return value.some(hasId);
     if (!value || typeof value !== 'object') return false;
@@ -56,6 +102,17 @@ const LOGIN_PROBE: &str = r#"(() => {
   ping();
   setInterval(ping, 1500);
 })()"#;
+
+#[derive(Clone)]
+struct PortalCredentials {
+    email: String,
+    password: String,
+}
+
+struct CapturedLogin {
+    cookie: String,
+    credentials: Option<PortalCredentials>,
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Punch {
     at: NaiveDateTime,
@@ -144,30 +201,45 @@ pub fn ensure_session() -> Result<()> {
     if has_saved_session()? {
         return Ok(());
     }
-    let cookie = capture_portal_cookie()?
+    let login = capture_portal_login()?
         .ok_or_else(|| anyhow::anyhow!("Portal window was closed before sign-in completed."))?;
-    save_session(&cookie)
+    save_login(&login)
 }
 
 pub fn has_saved_session() -> Result<bool> {
     Ok(load_session()?.is_some())
 }
 
-/// Forget the portal login stored in the system keychain.
+/// Forget the portal session stored in the system keychain.
 pub fn clear_saved_session() -> Result<()> {
     keychain_delete(KEY_SESSION)
+}
+
+/// Forget the saved portal session and autofill credentials.
+pub fn clear_saved_login() -> Result<()> {
+    keychain_delete(KEY_SESSION)?;
+    keychain_delete(KEY_EMAIL)?;
+    keychain_delete(KEY_PASSWORD)?;
+    if let Some(path) = webview_data_dir() {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("Could not clear the portal browser data"),
+        }
+    }
+    Ok(())
 }
 
 pub fn login() -> Result<()> {
     println!(
         "Sign in to Ar-Ge Portal in the window that opens. The window closes once the session cookie is saved."
     );
-    let cookie = capture_portal_cookie()?.ok_or_else(|| {
+    let login = capture_portal_login()?.ok_or_else(|| {
         anyhow::anyhow!(
             "Window closed before a portal session was available. Sign in, then run `jf pdks login` again."
         )
     })?;
-    save_session(&cookie)?;
+    save_login(&login)?;
     println!("Portal session saved. Run `jf pdks` to calculate hours.");
     Ok(())
 }
@@ -179,26 +251,44 @@ pub fn needs_login(error: &anyhow::Error) -> bool {
         || message.contains("No portal term was returned")
 }
 
-fn capture_portal_cookie() -> Result<Option<String>> {
+fn capture_portal_login() -> Result<Option<CapturedLogin>> {
+    let saved_credentials = load_credentials()?;
+    let login_probe = login_probe(saved_credentials.as_ref())?;
     let logged_in = Arc::new(AtomicBool::new(false));
     let logged_in_ipc = logged_in.clone();
+    let captured_credentials = Arc::new(Mutex::new(None));
+    let captured_credentials_ipc = captured_credentials.clone();
     let mut event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("Jotmate · Ar-Ge Portal")
         .with_inner_size(tao::dpi::LogicalSize::new(1120.0, 800.0))
         .build(&event_loop)
         .context("Could not open the Ar-Ge Portal window")?;
-    let mut context = WebContext::new(dirs::cache_dir().map(|p| p.join("jotmate/pdks-webview")));
+    let mut context = WebContext::new(webview_data_dir());
     let webview = WebViewBuilder::new_with_web_context(&mut context)
         .with_url(BASE_URL)
-        .with_initialization_script(LOGIN_PROBE)
+        .with_initialization_script(&login_probe)
         .with_ipc_handler(move |request| {
-            if serde_json::from_str::<Value>(request.body())
-                .ok()
-                .and_then(|value| value.get("loggedIn")?.as_bool())
-                == Some(true)
-            {
+            let Ok(value) = serde_json::from_str::<Value>(request.body()) else {
+                return;
+            };
+            if value.get("loggedIn").and_then(Value::as_bool) == Some(true) {
                 logged_in_ipc.store(true, Ordering::SeqCst);
+            }
+            let credentials = value.get("credentials");
+            let email = credentials
+                .and_then(|value| value.get("email"))
+                .and_then(Value::as_str);
+            let password = credentials
+                .and_then(|value| value.get("password"))
+                .and_then(Value::as_str);
+            if let (Some(email), Some(password)) = (email, password) {
+                if let Ok(mut captured) = captured_credentials_ipc.lock() {
+                    *captured = Some(PortalCredentials {
+                        email: email.to_owned(),
+                        password: password.to_owned(),
+                    });
+                }
             }
         })
         .build(&window)
@@ -241,7 +331,28 @@ fn capture_portal_cookie() -> Result<Option<String>> {
             *control_flow = ControlFlow::WaitUntil(close_deadline.unwrap());
         }
     });
-    Ok(cookie_header)
+    let credentials = captured_credentials
+        .lock()
+        .ok()
+        .and_then(|credentials| credentials.clone());
+    Ok(cookie_header.map(|cookie| CapturedLogin {
+        cookie,
+        credentials,
+    }))
+}
+
+fn login_probe(credentials: Option<&PortalCredentials>) -> Result<String> {
+    let origin = serde_json::to_string(BASE_URL)?;
+    let email = serde_json::to_string(&credentials.map(|value| value.email.as_str()))?;
+    let password = serde_json::to_string(&credentials.map(|value| value.password.as_str()))?;
+    Ok(LOGIN_PROBE
+        .replace("__PORTAL_ORIGIN__", &origin)
+        .replace("__SAVED_EMAIL__", &email)
+        .replace("__SAVED_PASSWORD__", &password))
+}
+
+fn webview_data_dir() -> Option<std::path::PathBuf> {
+    dirs::cache_dir().map(|path| path.join("jotmate/pdks-webview"))
 }
 
 fn format_cookie_header(cookies: &[wry::cookie::Cookie<'_>]) -> String {
@@ -537,6 +648,23 @@ fn save_session(cookie: &str) -> Result<()> {
     keychain_set(KEY_SESSION, cookie)
 }
 
+fn load_credentials() -> Result<Option<PortalCredentials>> {
+    Ok(
+        match (keychain_get(KEY_EMAIL)?, keychain_get(KEY_PASSWORD)?) {
+            (Some(email), Some(password)) => Some(PortalCredentials { email, password }),
+            _ => None,
+        },
+    )
+}
+
+fn save_login(login: &CapturedLogin) -> Result<()> {
+    if let Some(credentials) = &login.credentials {
+        keychain_set(KEY_EMAIL, &credentials.email)?;
+        keychain_set(KEY_PASSWORD, &credentials.password)?;
+    }
+    save_session(&login.cookie)
+}
+
 fn keychain_get(account: &str) -> Result<Option<String>> {
     let out = Command::new("security")
         .args([
@@ -559,14 +687,14 @@ fn keychain_get(account: &str) -> Result<Option<String>> {
         return Ok(None);
     }
     anyhow::bail!(
-        "Could not read the PDKS session from Keychain: {}",
+        "Could not read the PDKS login from Keychain: {}",
         String::from_utf8_lossy(&out.stderr).trim()
     )
 }
 
 fn keychain_set(account: &str, value: &str) -> Result<()> {
     let _ = keychain_delete(account);
-    let status = Command::new("security")
+    let mut child = Command::new("security")
         .args([
             "add-generic-password",
             "-s",
@@ -574,17 +702,28 @@ fn keychain_set(account: &str, value: &str) -> Result<()> {
             "-a",
             account,
             "-w",
-            value,
-            "-U",
         ])
+        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()
+        .spawn()
         .context("security CLI not found")?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .context("Could not open Keychain input")?;
+    for _ in 0..2 {
+        stdin
+            .write_all(value.as_bytes())
+            .and_then(|()| stdin.write_all(b"\n"))
+            .context("Could not write the PDKS login to Keychain")?;
+    }
+    drop(stdin);
+    let status = child.wait().context("Could not wait for Keychain")?;
     if status.success() {
         Ok(())
     } else {
-        anyhow::bail!("Could not save the PDKS session to Keychain")
+        anyhow::bail!("Could not save the PDKS login to Keychain")
     }
 }
 
@@ -604,7 +743,7 @@ fn keychain_delete(account: &str) -> Result<()> {
     if status.success() || status.code() == Some(44) {
         Ok(())
     } else {
-        anyhow::bail!("Could not clear the PDKS session from Keychain")
+        anyhow::bail!("Could not clear the PDKS login from Keychain")
     }
 }
 
@@ -835,6 +974,32 @@ fn print_report(report: &Report) {
 mod tests {
     use super::*;
     use chrono::Datelike;
+
+    #[test]
+    fn login_probe_safely_embeds_saved_credentials() {
+        let credentials = PortalCredentials {
+            email: "dev@example.com".into(),
+            password: "quote\" slash\\ newline\n".into(),
+        };
+        let script = login_probe(Some(&credentials)).unwrap();
+
+        assert!(script.contains(r#"const savedEmail = "dev@example.com";"#));
+        assert!(script.contains(r#"const savedPassword = "quote\" slash\\ newline\n";"#));
+        assert!(script.contains(
+            r#"window.location.origin !== "https://argeportal.hacettepeteknokent.com.tr""#
+        ));
+        assert!(!script.contains("__PORTAL_ORIGIN__"));
+        assert!(!script.contains("__SAVED_EMAIL__"));
+        assert!(!script.contains("__SAVED_PASSWORD__"));
+    }
+
+    #[test]
+    fn login_probe_uses_null_without_saved_credentials() {
+        let script = login_probe(None).unwrap();
+
+        assert!(script.contains("const savedEmail = null;"));
+        assert!(script.contains("const savedPassword = null;"));
+    }
 
     #[test]
     fn extracts_dates_from_named_and_grid_cells() {

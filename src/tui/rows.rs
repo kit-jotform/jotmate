@@ -63,7 +63,7 @@ pub enum SettingRow {
     ProfileDeveloper,
     ProfileOffice,
     ProfilePartTime,
-    ClearPdksSession,
+    ClearPdksLogin,
     SyncGeneralLink,
     ManageRepos,
     TdGeneralLink,
@@ -81,7 +81,7 @@ impl SettingRow {
                 | SettingRow::ProfileDeveloper
                 | SettingRow::ProfileOffice
                 | SettingRow::ProfilePartTime
-                | SettingRow::ClearPdksSession
+                | SettingRow::ClearPdksLogin
                 | SettingRow::ManageRepos
                 | SettingRow::TdGeneralLink
                 | SettingRow::TimeDoctorSettings

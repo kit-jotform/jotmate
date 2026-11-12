@@ -37,8 +37,8 @@ pub(super) fn handle_settings(app: &mut App, code: KeyCode) -> Action {
             app.profile.is_part_time = !app.profile.is_part_time;
             app.persist_profile();
         }
-        Some(SettingRow::ClearPdksSession) => {
-            let _ = crate::pdks::clear_saved_session();
+        Some(SettingRow::ClearPdksLogin) => {
+            let _ = crate::pdks::clear_saved_login();
         }
         Some(SettingRow::SyncGeneralLink) => go_to(app, Screen::SyncGeneralSettings),
         Some(SettingRow::ManageRepos) => go_to(app, Screen::RepoManager),
