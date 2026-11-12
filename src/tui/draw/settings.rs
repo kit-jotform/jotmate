@@ -69,7 +69,7 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                         }
                     ),
                 ),
-                SettingRow::ClearPdksSession => link_item(is_sel, "Clear saved portal session"),
+                SettingRow::ClearPdksLogin => link_item(is_sel, "Clear saved portal login"),
                 SettingRow::SyncGeneralLink => link_item(is_sel, "→ General settings"),
                 SettingRow::ManageRepos => link_item(is_sel, "→ Manage upstream repos"),
                 SettingRow::TdGeneralLink => link_item(is_sel, "→ General settings"),
