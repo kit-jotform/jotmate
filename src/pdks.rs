@@ -693,16 +693,21 @@ fn keychain_get(account: &str) -> Result<Option<String>> {
 }
 
 fn keychain_set(account: &str, value: &str) -> Result<()> {
+    // Hex keeps secret bytes out of argv and the interactive command parser.
+    let hex: String = value
+        .as_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let command = format!("add-generic-password -s {KEYCHAIN_SERVICE} -a {account} -X {hex}\n");
+    // security's interactive reader has a fixed 4096-byte buffer.
+    anyhow::ensure!(
+        command.len() < 4096,
+        "PDKS Keychain value exceeds the security CLI input limit"
+    );
     let _ = keychain_delete(account);
     let mut child = Command::new("security")
-        .args([
-            "add-generic-password",
-            "-s",
-            KEYCHAIN_SERVICE,
-            "-a",
-            account,
-            "-w",
-        ])
+        .arg("-i")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -712,14 +717,10 @@ fn keychain_set(account: &str, value: &str) -> Result<()> {
         .stdin
         .take()
         .context("Could not open Keychain input")?;
-    for _ in 0..2 {
-        stdin
-            .write_all(value.as_bytes())
-            .and_then(|()| stdin.write_all(b"\n"))
-            .context("Could not write the PDKS login to Keychain")?;
-    }
+    let write_result = stdin.write_all(command.as_bytes());
     drop(stdin);
     let status = child.wait().context("Could not wait for Keychain")?;
+    write_result.context("Could not write the PDKS login to Keychain")?;
     if status.success() {
         Ok(())
     } else {
