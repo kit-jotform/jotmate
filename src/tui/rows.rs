@@ -1,5 +1,7 @@
 use chrono::NaiveDate;
 
+use crate::config::Office;
+
 #[derive(Clone, PartialEq)]
 pub enum InputMode {
     Normal,
@@ -8,6 +10,7 @@ pub enum InputMode {
     ConfirmDeletePeriod(usize),
     ConfirmDeleteOffWeek(usize),
     SelectingTimezone(usize),
+    SelectingOffice(Option<Office>),
     EditingCpMonday(NaiveDate),
     EditingCpHours(usize),
     EditingOwMonday(NaiveDate),
@@ -23,6 +26,7 @@ pub enum TimeDoctorField {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum CycleTarget {
     Timezone,
+    Office,
     CpMonday,
     CpHours,
     OwMonday,

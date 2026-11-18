@@ -2,13 +2,15 @@ use std::ops::ControlFlow;
 
 use crossterm::event::KeyCode;
 
-use crate::config::Office;
 use crate::tui::app::{App, CycleTarget, GeneralToggleRow, InputMode, Screen, SettingRow};
 
 use super::helpers::{go_to, handle_cycle, list_activate_row};
 use super::Action;
 
 pub(super) fn handle_settings(app: &mut App, code: KeyCode) -> Action {
+    if matches!(app.input_mode, InputMode::SelectingOffice(_)) {
+        return handle_cycle(app, code, CycleTarget::Office);
+    }
     let row = match list_activate_row(app, code, Screen::MainMenu, Screen::Settings, |a| {
         a.settings_items()
     }) {
@@ -21,18 +23,7 @@ pub(super) fn handle_settings(app: &mut App, code: KeyCode) -> Action {
             app.profile.is_developer = !app.profile.is_developer;
             app.persist_profile();
         }
-        Some(SettingRow::ProfileOffice) => {
-            let index = app
-                .profile
-                .office
-                .and_then(|selected| Office::ALL.iter().position(|office| *office == selected));
-            app.profile.office = match index {
-                None => Some(Office::Hacettepe),
-                Some(index) if index + 1 == Office::ALL.len() => None,
-                Some(index) => Some(Office::ALL[index + 1]),
-            };
-            app.persist_profile();
-        }
+        Some(SettingRow::ProfileOffice) => app.enter_cycle(CycleTarget::Office),
         Some(SettingRow::ProfilePartTime) => {
             app.profile.is_part_time = !app.profile.is_part_time;
             app.persist_profile();

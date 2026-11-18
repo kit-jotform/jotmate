@@ -3,9 +3,9 @@ use ratatui::widgets::{List, ListItem};
 use crate::tui::app::{App, GeneralToggleRow, InputMode, Screen, SettingRow};
 
 use super::{
-    back_item, blank_item, divider_item, draw_screen_header, hint_navigate_action,
+    back_item, blank_item, divider_item, draw_screen_header, field_state, hint_navigate_action,
     inline_field_item, link_item, separator_item, sub_screen_setup, toggle_item, FieldState,
-    FIELD_LABEL_W_TZ,
+    FIELD_LABEL_W, FIELD_LABEL_W_TZ,
 };
 
 pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
@@ -21,7 +21,13 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
         layout.get("title"),
         layout.get("divider"),
         "Settings",
-        hint_navigate_action("enter"),
+        hint_navigate_action(
+            if matches!(setting_rows.get(selected), Some(SettingRow::ProfileOffice)) {
+                "change"
+            } else {
+                "enter"
+            },
+        ),
     );
 
     let items: Vec<ListItem> = setting_rows
@@ -48,15 +54,17 @@ pub fn draw_settings(f: &mut ratatui::Frame, app: &App) {
                         }
                     ),
                 ),
-                SettingRow::ProfileOffice => link_item(
-                    is_sel,
-                    &format!(
-                        "Office: {}",
-                        app.profile
-                            .office
-                            .map(crate::config::Office::label)
-                            .unwrap_or("Not selected")
+                SettingRow::ProfileOffice => inline_field_item(
+                    "Office",
+                    app.profile
+                        .office
+                        .map(crate::config::Office::label)
+                        .unwrap_or("Not selected"),
+                    field_state(
+                        is_sel,
+                        matches!(app.input_mode, InputMode::SelectingOffice(_)),
                     ),
+                    FIELD_LABEL_W,
                 ),
                 SettingRow::ProfilePartTime => link_item(
                     is_sel,

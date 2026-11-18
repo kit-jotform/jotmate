@@ -1,4 +1,4 @@
-use crate::config::{normalize_repo_url, ContractPeriod, UpstreamRepo};
+use crate::config::{normalize_repo_url, ContractPeriod, Office, UpstreamRepo};
 use crate::tui::rows::{CpListRow, CycleTarget, InputMode, OwListRow, RemoveRepoRow, ToggleKind};
 
 use super::constants::{this_monday, DEFAULT_HOURS_IDX, TIMEZONES, WEEKLY_HOURS_OPTIONS};
@@ -29,6 +29,7 @@ impl App {
     pub fn enter_cycle(&mut self, target: CycleTarget) {
         self.input_mode = match target {
             CycleTarget::Timezone => InputMode::SelectingTimezone(self.td.timezone_idx),
+            CycleTarget::Office => InputMode::SelectingOffice(self.profile.office),
             CycleTarget::CpMonday => InputMode::EditingCpMonday(self.add_cp.monday),
             CycleTarget::CpHours => InputMode::EditingCpHours(self.add_cp.hours_idx),
             CycleTarget::OwMonday => InputMode::EditingOwMonday(self.add_ow.monday),
@@ -40,6 +41,16 @@ impl App {
             CycleTarget::Timezone => {
                 self.td.timezone_idx = cycle_idx(self.td.timezone_idx, delta, TIMEZONES.len());
                 self.persist_td_settings();
+            }
+            CycleTarget::Office => {
+                let index = self
+                    .profile
+                    .office
+                    .and_then(|selected| Office::ALL.iter().position(|office| *office == selected))
+                    .map_or(0, |index| index + 1);
+                let next = cycle_idx(index, delta, Office::ALL.len() + 1);
+                self.profile.office = next.checked_sub(1).map(|index| Office::ALL[index]);
+                self.persist_profile();
             }
             CycleTarget::CpMonday => {
                 let days = if delta > 0 { 7 } else { -7 };
@@ -61,6 +72,10 @@ impl App {
             InputMode::SelectingTimezone(snapshot) => {
                 self.td.timezone_idx = snapshot;
                 self.persist_td_settings();
+            }
+            InputMode::SelectingOffice(snapshot) => {
+                self.profile.office = snapshot;
+                self.persist_profile();
             }
             InputMode::EditingCpMonday(snapshot) => {
                 self.add_cp.monday = snapshot;
