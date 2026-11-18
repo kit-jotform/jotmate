@@ -9,7 +9,11 @@ pub(super) fn handle_sync_progress(app: &mut App, code: KeyCode) -> Action {
     let is_running = !app.sync_is_complete();
     match code {
         KeyCode::Up | KeyCode::Down => {
-            let total = app.sync_state.as_ref().map(|s| s.repos.len()).unwrap_or(0);
+            let total = app
+                .sync_state
+                .as_ref()
+                .map(|s| s.repos.iter().map(|r| r.row_count()).sum())
+                .unwrap_or(0);
             let delta = if code == KeyCode::Up { -1 } else { 1 };
             app.sync_scroll = clamp_scroll(app.sync_scroll, delta, total, 6);
         }

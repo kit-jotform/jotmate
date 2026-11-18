@@ -12,6 +12,7 @@ impl App {
             ToggleKind::UseCache => &mut self.sync.use_cache,
             ToggleKind::SkipForkSync => &mut self.sync.skip_fork_sync,
             ToggleKind::SkipRebase => &mut self.sync.skip_rebase,
+            ToggleKind::SkipWorktreeRebase => &mut self.sync.skip_worktree_rebase,
             ToggleKind::SkipRdsSync => &mut self.sync.skip_rds_sync,
             ToggleKind::SmartSync => &mut self.sync.smart_sync,
             ToggleKind::SkipCurrentWeek => &mut self.td.skip_current_week,

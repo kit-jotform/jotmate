@@ -103,21 +103,26 @@ pub struct RepoSyncState {
     pub path: PathBuf,
     pub fork_status: ForkStatus,
     pub rds_status: RdsStatus,
+    pub worktrees: Vec<WorktreeSyncState>,
     pub started_at: Option<Instant>,
     pub elapsed_secs: f64,
 }
 
 impl RepoSyncState {
     pub fn is_complete(&self) -> bool {
-        self.fork_status.is_terminal() && self.rds_status.is_terminal()
+        self.fork_status.is_terminal()
+            && self.rds_status.is_terminal()
+            && self.worktrees.iter().all(|w| w.status.is_terminal())
     }
 
     pub fn is_active(&self) -> bool {
-        !self.fork_status.is_terminal() || !self.rds_status.is_terminal()
+        !self.is_complete()
     }
 
     pub fn has_error(&self) -> bool {
-        self.fork_status.is_error() || self.rds_status.is_error()
+        self.fork_status.is_error()
+            || self.rds_status.is_error()
+            || self.worktrees.iter().any(|w| w.status.is_error())
     }
 
     pub fn is_skipped(&self) -> bool {
@@ -127,13 +132,36 @@ impl RepoSyncState {
                 ForkStatus::Skipped(_) | ForkStatus::UpToDate,
                 RdsStatus::Skipped(_)
             )
-        )
+        ) && self
+            .worktrees
+            .iter()
+            .all(|w| matches!(w.status, ForkStatus::Skipped(_) | ForkStatus::UpToDate))
     }
+
+    pub fn update_worktree(&mut self, worktree: WorktreeSyncState) {
+        if let Some(existing) = self.worktrees.iter_mut().find(|w| w.path == worktree.path) {
+            *existing = worktree;
+        } else {
+            self.worktrees.push(worktree);
+        }
+    }
+
+    pub fn row_count(&self) -> usize {
+        1 + 2 * self.worktrees.len()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WorktreeSyncState {
+    pub path: PathBuf,
+    pub branch: Option<String>,
+    pub status: ForkStatus,
 }
 
 pub enum SyncUpdate {
     Fork(usize, ForkStatus),
     Rds(usize, RdsStatus),
+    Worktree(usize, WorktreeSyncState),
     Elapsed(usize, f64),
 }
 

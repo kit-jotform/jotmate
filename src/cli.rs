@@ -107,6 +107,10 @@ pub struct SyncArgs {
     #[arg(long)]
     pub skip_rebase: bool,
 
+    /// Skip rebasing linked worktrees after fork sync
+    #[arg(long)]
+    pub skip_worktree_rebase: bool,
+
     /// Skip running ./sync in each repo
     #[arg(long)]
     pub skip_rds_sync: bool,

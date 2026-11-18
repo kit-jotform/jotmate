@@ -79,8 +79,16 @@ impl App {
             GeneralToggleRow::Toggle {
                 kind: ToggleKind::SkipRebase,
                 label: "Rebase",
-                hint: "rebase branch after merge",
+                hint: "rebase current branch",
                 on: !self.sync.skip_rebase,
+                indent: true,
+                disabled: self.sync.skip_fork_sync,
+            },
+            GeneralToggleRow::Toggle {
+                kind: ToggleKind::SkipWorktreeRebase,
+                label: "Worktree rebase",
+                hint: "rebase linked branches locally",
+                on: !self.sync.skip_worktree_rebase,
                 indent: true,
                 disabled: self.sync.skip_fork_sync,
             },

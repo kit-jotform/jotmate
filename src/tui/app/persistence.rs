@@ -7,6 +7,7 @@ impl App {
             cfg.sync.use_cache = self.sync.use_cache;
             cfg.sync.skip_fork_sync = self.sync.skip_fork_sync;
             cfg.sync.skip_rebase = self.sync.skip_rebase;
+            cfg.sync.skip_worktree_rebase = self.sync.skip_worktree_rebase;
             cfg.sync.skip_rds_sync = self.sync.skip_rds_sync;
             cfg.sync.smart_sync = self.sync.smart_sync;
             cfg.sync.upstream_repos = self.sync.repos.clone();

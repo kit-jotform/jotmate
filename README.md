@@ -54,12 +54,15 @@ jf sync --rds-only                 # skip fork sync, run only RDS (./sync) in ea
 jf sync -S                         # --no-smart-sync: run RDS unconditionally, don't skip
 jf sync --no-cache                 # ignore repo path cache, rediscover repos
 jf sync --skip-fork-sync           # skip fork sync for this run
-jf sync --skip-rebase              # skip rebasing current branch after fork sync
+jf sync --skip-rebase              # skip rebasing current branch
+jf sync --skip-worktree-rebase     # skip rebasing linked worktrees
 jf sync --skip-rds-sync            # skip RDS sync for this run
 jf sync --skip-fetch               # skip git fetch upstream (use already-fetched refs)
 ```
 
 Flags can be combined. `--sync-all` and `--only` are mutually exclusive. `--rds-only` and `--skip-rds-sync` are mutually exclusive.
+
+Linked Git worktrees are rebased sequentially onto the updated default branch. Local changes, including staged and untracked files, are stashed before a worktree rebase and restored afterwards. Rebase conflicts are aborted before restoring changes; if restoring fails, the stash is retained for recovery. Locked, prunable, detached, or in-progress worktrees are left untouched. Each worktree has its own progress and result in the TUI. Linked worktree rebases do not push branches or run `./sync`. RDS upload runs only from the discovered repo directory. `Worktree rebase` is ON by default and can be disabled independently in Settings → General settings under RDS Sync, or with `--skip-worktree-rebase`. `Rebase` / `--skip-rebase` controls only the discovered repo’s current branch. Both require fork sync to be enabled.
 
 ### `jf time` options
 
@@ -102,6 +105,7 @@ jf
 | Use repo path cache | ON | Cache discovered repo paths; skip home-directory scan on subsequent runs |
 | Fork sync | ON | Fetch upstream, merge into default branch, push to origin |
 | → Rebase | ON | After fork sync, rebase current branch onto default branch |
+| → Worktree rebase | ON | Rebase linked worktrees locally; independent of Rebase |
 | RDS sync | ON | Run `./sync` in each repo to sync files to the Remote Dev Server |
 | → Smart sync | ON | Skip RDS sync for repos with no upstream changes, clean working tree, and nothing ahead/behind origin |
 
@@ -131,6 +135,7 @@ is_part_time = false
 use_cache = true
 skip_fork_sync = false
 skip_rebase = false
+skip_worktree_rebase = false
 skip_rds_sync = false
 smart_sync = true
 

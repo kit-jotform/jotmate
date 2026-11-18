@@ -161,3 +161,74 @@ enabled = true
     let cfg = config::load(tc.paths()).unwrap();
     assert_eq!(cfg.sync.upstream_repos.len(), 2, "no dedup at load time");
 }
+
+#[test]
+fn worktree_rebase_defaults_on_for_existing_configs() {
+    let tc = TestCtx::new();
+    assert!(!config::load(tc.paths()).unwrap().sync.skip_worktree_rebase);
+    tc.write_config("[sync]\nskip_rebase = true\n");
+    let cfg = config::load(tc.paths()).unwrap();
+    assert!(cfg.sync.skip_rebase);
+    assert!(!cfg.sync.skip_worktree_rebase);
+    let app = app_from(&tc);
+    assert!(app.sync_general_items().into_iter().any(|row| matches!(
+        row,
+        jotmate::tui::app::GeneralToggleRow::Toggle {
+            label: "Worktree rebase",
+            on: true,
+            disabled: false,
+            ..
+        }
+    )));
+}
+
+#[test]
+fn worktree_rebase_toggle_persists_independently() {
+    use jotmate::tui::app::GeneralToggleRow;
+    let tc = TestCtx::new();
+    let mut app = app_from(&tc);
+    let kind = app
+        .sync_general_items()
+        .into_iter()
+        .find_map(|row| match row {
+            GeneralToggleRow::Toggle {
+                kind,
+                label: "Worktree rebase",
+                on: true,
+                disabled: false,
+                ..
+            } => Some(kind),
+            _ => None,
+        })
+        .expect("worktree rebase defaults to ON");
+    app.toggle_by_kind(kind);
+    let saved = config::load(tc.paths()).unwrap();
+    assert!(saved.sync.skip_worktree_rebase);
+    assert!(!saved.sync.skip_rebase);
+    let mut reloaded = app_from(&tc);
+    assert!(reloaded
+        .sync_general_items()
+        .into_iter()
+        .any(|row| matches!(
+            row,
+            GeneralToggleRow::Toggle {
+                label: "Worktree rebase",
+                on: false,
+                ..
+            }
+        )));
+    reloaded.toggle_by_kind(kind);
+    assert!(!config::load(tc.paths()).unwrap().sync.skip_worktree_rebase);
+    reloaded.sync.skip_fork_sync = true;
+    assert!(reloaded
+        .sync_general_items()
+        .into_iter()
+        .any(|row| matches!(
+            row,
+            GeneralToggleRow::Toggle {
+                label: "Worktree rebase",
+                disabled: true,
+                ..
+            }
+        )));
+}

@@ -165,3 +165,39 @@ fn config_use_cache_false_survives_default_args() {
     let plan = plan_sync(SyncArgs::default(), &cfg).unwrap();
     assert!(!plan.use_cache);
 }
+
+#[test]
+fn worktree_rebase_setting_and_cli_flag_are_independent_of_current_branch() {
+    let mut cfg = config_with(vec![upstream("a", true)]);
+    let plan = plan_sync(SyncArgs::default(), &cfg).unwrap();
+    assert!(!plan.opts.skip_worktree_rebase);
+    assert!(!plan.opts.skip_rebase);
+
+    cfg.sync.skip_worktree_rebase = true;
+    let plan = plan_sync(SyncArgs::default(), &cfg).unwrap();
+    assert!(plan.opts.skip_worktree_rebase);
+    assert!(!plan.opts.skip_rebase);
+
+    cfg.sync.skip_worktree_rebase = false;
+    let plan = plan_sync(
+        SyncArgs {
+            skip_worktree_rebase: true,
+            ..Default::default()
+        },
+        &cfg,
+    )
+    .unwrap();
+    assert!(plan.opts.skip_worktree_rebase);
+    assert!(!plan.opts.skip_rebase);
+
+    let plan = plan_sync(
+        SyncArgs {
+            skip_rebase: true,
+            ..Default::default()
+        },
+        &cfg,
+    )
+    .unwrap();
+    assert!(!plan.opts.skip_worktree_rebase);
+    assert!(plan.opts.skip_rebase);
+}

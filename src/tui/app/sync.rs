@@ -69,6 +69,7 @@ impl App {
                 path,
                 fork_status: ForkStatus::Pending,
                 rds_status: RdsStatus::Pending,
+                worktrees: Vec::new(),
                 started_at: None,
                 elapsed_secs: 0.0,
             })
@@ -94,6 +95,11 @@ impl App {
                 SyncUpdate::Rds(idx, status) => {
                     if let Some(repo) = state.repos.get_mut(idx) {
                         repo.rds_status = status;
+                    }
+                }
+                SyncUpdate::Worktree(idx, worktree) => {
+                    if let Some(repo) = state.repos.get_mut(idx) {
+                        repo.update_worktree(worktree);
                     }
                 }
                 SyncUpdate::Elapsed(idx, secs) => {

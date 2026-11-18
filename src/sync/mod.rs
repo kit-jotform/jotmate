@@ -74,6 +74,7 @@ pub fn plan_sync(mut args: SyncArgs, config: &Config) -> Result<SyncPlan> {
         skip_fork_sync: args.skip_fork_sync,
         skip_git_fetch: args.skip_fetch,
         skip_rebase: args.skip_rebase,
+        skip_worktree_rebase: args.skip_worktree_rebase || config.sync.skip_worktree_rebase,
         skip_rds_sync: args.skip_rds_sync,
         smart_sync: !args.no_smart_sync,
     };

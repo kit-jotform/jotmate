@@ -13,6 +13,8 @@ pub mod git;
 mod headless;
 pub mod rds;
 pub mod rds_state;
+mod stash;
+mod worktrees;
 
 pub use git::{detect_ip_denial, GitExec, RdsError, SubprocessGit};
 pub use headless::run_headless;
@@ -27,6 +29,7 @@ pub struct SyncOpts {
     pub skip_fork_sync: bool,
     pub skip_git_fetch: bool,
     pub skip_rebase: bool,
+    pub skip_worktree_rebase: bool,
     pub skip_rds_sync: bool,
     pub smart_sync: bool,
 }
@@ -42,6 +45,7 @@ pub async fn run_tui(
         skip_fork_sync,
         skip_git_fetch,
         skip_rebase,
+        skip_worktree_rebase,
         skip_rds_sync,
         smart_sync,
     } = opts;
@@ -62,6 +66,7 @@ pub async fn run_tui(
                 skip_fork_sync,
                 skip_git_fetch,
                 skip_rebase,
+                skip_worktree_rebase,
             };
             let fork_result = sync_fork(git.as_ref(), idx, &path, &tx, &fork_opts).await;
 

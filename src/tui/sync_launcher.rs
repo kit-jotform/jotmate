@@ -100,6 +100,7 @@ fn start_real_sync(app: &mut App, enabled: &[UpstreamRepo], paths: HashMap<Strin
         skip_fork_sync: app.sync.skip_fork_sync,
         skip_git_fetch: false,
         skip_rebase: app.sync.skip_rebase,
+        skip_worktree_rebase: app.sync.skip_worktree_rebase,
         skip_rds_sync: app.sync.skip_rds_sync,
         smart_sync: app.sync.smart_sync,
     };

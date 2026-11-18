@@ -31,7 +31,8 @@ pub use super::rows::{
     SettingRow, TimeDoctorField, TimeSettingRow,
 };
 pub use super::sync_state::{
-    ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate, IP_DENIED_HINT,
+    ForkStatus, RdsStatus, RepoSyncState, SyncPhase, SyncScreenState, SyncUpdate,
+    WorktreeSyncState, IP_DENIED_HINT,
 };
 
 use constants::{this_monday, timezone_index, DEFAULT_HOURS_IDX};
@@ -41,6 +42,7 @@ pub struct SyncSettings {
     pub use_cache: bool,
     pub skip_fork_sync: bool,
     pub skip_rebase: bool,
+    pub skip_worktree_rebase: bool,
     pub skip_rds_sync: bool,
     pub smart_sync: bool,
     pub repos: Vec<UpstreamRepo>,
@@ -158,6 +160,7 @@ impl App {
                 use_cache: config.sync.use_cache,
                 skip_fork_sync: config.sync.skip_fork_sync,
                 skip_rebase: config.sync.skip_rebase,
+                skip_worktree_rebase: config.sync.skip_worktree_rebase,
                 skip_rds_sync: config.sync.skip_rds_sync,
                 smart_sync: config.sync.smart_sync,
                 repos: config.sync.upstream_repos.clone(),

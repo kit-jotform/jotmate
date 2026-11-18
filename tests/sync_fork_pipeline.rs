@@ -35,6 +35,7 @@ fn opts(skip_fork_sync: bool, skip_git_fetch: bool, skip_rebase: bool) -> ForkOp
         skip_fork_sync,
         skip_git_fetch,
         skip_rebase,
+        skip_worktree_rebase: false,
     }
 }
 

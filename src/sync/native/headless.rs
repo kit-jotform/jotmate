@@ -33,6 +33,7 @@ pub async fn run_headless(
             path: path.clone(),
             fork_status: ForkStatus::Pending,
             rds_status: RdsStatus::Pending,
+            worktrees: Vec::new(),
             started_at: None,
             elapsed_secs: 0.0,
         })
@@ -108,6 +109,11 @@ fn apply_update(states: &mut [RepoSyncState], msg: SyncUpdate) {
                 r.rds_status = status;
             }
         }
+        SyncUpdate::Worktree(idx, worktree) => {
+            if let Some(repo) = states.get_mut(idx) {
+                repo.update_worktree(worktree);
+            }
+        }
         SyncUpdate::Elapsed(idx, secs) => {
             if let Some(r) = states.get_mut(idx) {
                 r.elapsed_secs = secs;
@@ -162,6 +168,7 @@ fn print_errors(states: &[RepoSyncState]) {
     }
     let all_ip_denied = errored.iter().all(|r| {
         !matches!(r.fork_status, ForkStatus::Error(_))
+            && !r.worktrees.iter().any(|w| w.status.is_error())
             && matches!(r.rds_status, RdsStatus::IpDenied(_))
     });
     if all_ip_denied {
@@ -175,6 +182,15 @@ fn print_errors(states: &[RepoSyncState]) {
                 repo.name
             );
             continue;
+        }
+        for worktree in &repo.worktrees {
+            if let ForkStatus::Error(message) = &worktree.status {
+                println!(
+                    "  {ANSI_DANGEROUS}{} / {}{ANSI_RESET}  {ANSI_MUTED}{message}{ANSI_RESET}",
+                    repo.name,
+                    worktree.path.display()
+                );
+            }
         }
         match &repo.rds_status {
             RdsStatus::IpDenied(detail) => {

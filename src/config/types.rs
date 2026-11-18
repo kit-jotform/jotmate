@@ -113,6 +113,8 @@ pub struct SyncConfig {
     #[serde(default)]
     pub skip_rebase: bool,
     #[serde(default)]
+    pub skip_worktree_rebase: bool,
+    #[serde(default)]
     pub skip_rds_sync: bool,
     #[serde(default = "default_true")]
     pub smart_sync: bool,
@@ -125,6 +127,7 @@ impl Default for SyncConfig {
             use_cache: true,
             skip_fork_sync: false,
             skip_rebase: false,
+            skip_worktree_rebase: false,
             skip_rds_sync: false,
             smart_sync: true,
         }

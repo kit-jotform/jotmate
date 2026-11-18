@@ -138,7 +138,7 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
     let area = f.area();
     let engine = LayoutEngine::new(area);
 
-    let (error_count, repo_count, all_ip_denied) = app
+    let (error_count, row_count, all_ip_denied) = app
         .sync_state
         .as_ref()
         .map(|s| {
@@ -146,16 +146,21 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
             let all_denied = !errored.is_empty()
                 && errored.iter().all(|r| {
                     !matches!(r.fork_status, ForkStatus::Error(_))
+                        && !r.worktrees.iter().any(|w| w.status.is_error())
                         && matches!(r.rds_status, RdsStatus::IpDenied(_))
                 });
-            (errored.len() as u16, s.repos.len() as u16, all_denied)
+            (
+                errored.len() as u16,
+                s.repos.iter().map(|r| r.row_count()).sum::<usize>() as u16,
+                all_denied,
+            )
         })
         .unwrap_or((0, 0, false));
     let errors_block_height = if all_ip_denied { 1 } else { error_count };
 
-    let is_scrollable = repo_count > LIST_VISIBLE;
+    let is_scrollable = row_count > LIST_VISIBLE;
 
-    let visible_rows = repo_count.min(LIST_VISIBLE);
+    let visible_rows = row_count.min(LIST_VISIBLE);
     let list_height = 2 + visible_rows;
 
     let mut layout = ScreenLayout::new()
@@ -228,7 +233,7 @@ fn draw_syncing(f: &mut ratatui::Frame, app: &App) {
         let data_lines: Vec<Line> = state
             .repos
             .iter()
-            .map(|repo| repo_row(repo, tick))
+            .flat_map(|repo| repo_rows(repo, tick))
             .collect();
         let list_area = inset_rect(
             engine.place(&Widget::anon(UI_WIDTH, HAlign::Left), rows.get("list")),
@@ -302,6 +307,27 @@ fn build_header() -> Line<'static> {
             header_style,
         ),
     ])
+}
+
+fn repo_rows(repo: &RepoSyncState, tick: usize) -> Vec<Line<'static>> {
+    let mut rows = vec![repo_row(repo, tick)];
+    for worktree in &repo.worktrees {
+        let branch = worktree.branch.as_deref().unwrap_or("(detached)");
+        let detail = match &worktree.status {
+            ForkStatus::Skipped(reason) => format!("skipped: {reason}"),
+            ForkStatus::Error(reason) => format!("error: {reason}"),
+            status => status.label().to_string(),
+        };
+        rows.push(Line::styled(
+            format!("     ↳ {branch}"),
+            Style::default().fg(C_MUTED),
+        ));
+        rows.push(Line::styled(
+            format!("       rebase: {detail}"),
+            Style::default().fg(status_color(&worktree.status)),
+        ));
+    }
+    rows
 }
 
 fn repo_row(repo: &RepoSyncState, tick: usize) -> Line<'static> {
@@ -379,9 +405,79 @@ fn error_message(repo: &RepoSyncState) -> String {
     if let ForkStatus::Error(msg) = &repo.fork_status {
         return msg.clone();
     }
+    if let Some(worktree) = repo.worktrees.iter().find(|w| w.status.is_error()) {
+        if let ForkStatus::Error(message) = &worktree.status {
+            return format!("{}: {message}", worktree.path.display());
+        }
+    }
     match &repo.rds_status {
         RdsStatus::Error(msg) => msg.clone(),
         RdsStatus::IpDenied(detail) => format!("{IP_DENIED_HINT} ({detail})"),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::app::WorktreeSyncState;
+    use ratatui::{backend::TestBackend, Terminal};
+    use std::path::PathBuf;
+
+    fn repo(status: ForkStatus) -> RepoSyncState {
+        RepoSyncState {
+            name: "frontend".into(),
+            path: PathBuf::from("/repo"),
+            fork_status: ForkStatus::Done,
+            rds_status: RdsStatus::Skipped("--skip-rds-sync".into()),
+            worktrees: vec![WorktreeSyncState {
+                path: PathBuf::from("/linked"),
+                branch: Some(format!("feature/{}", "long-branch-".repeat(8))),
+                status,
+            }],
+            started_at: None,
+            elapsed_secs: 1.0,
+        }
+    }
+
+    fn rendered(repo: &RepoSyncState, height: u16, scroll: usize) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(79, height)).unwrap();
+        terminal
+            .draw(|frame| {
+                draw_scroll_table(
+                    frame,
+                    frame.area(),
+                    build_header(),
+                    repo_rows(repo, 0),
+                    scroll,
+                );
+            })
+            .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .chunks(79)
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn worktree_result_is_visible_without_extra_repo_detail_rows() {
+        let repo = repo(ForkStatus::Done);
+        assert_eq!(repo_rows(&repo, 0).len(), repo.row_count());
+        let text = rendered(&repo, 8, 0);
+        assert!(!text.contains("RDS:"));
+        assert!(text.contains("rebase: done"));
+        assert!(text.contains("feature/long-branch"));
+    }
+
+    #[test]
+    fn worktree_skip_reason_is_visible_and_scroll_can_reach_last_row() {
+        let repo = repo(ForkStatus::Skipped("locked or prunable".into()));
+        let text = rendered(&repo, 4, repo.row_count());
+        assert!(text.contains("rebase: skipped: locked or prunable"));
+        assert!(matches!(repo.fork_status, ForkStatus::Done));
     }
 }

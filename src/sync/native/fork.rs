@@ -9,6 +9,7 @@ pub struct ForkOpts {
     pub skip_fork_sync: bool,
     pub skip_git_fetch: bool,
     pub skip_rebase: bool,
+    pub skip_worktree_rebase: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,6 +41,16 @@ pub async fn sync_fork(
         return ForkResult::Error(msg);
     }
 
+    super::worktrees::sync_fork(git, idx, repo, tx, opts).await
+}
+
+pub(super) async fn sync_checkout(
+    git: &dyn GitExec,
+    idx: usize,
+    repo: &Path,
+    tx: &mpsc::UnboundedSender<SyncUpdate>,
+    opts: &ForkOpts,
+) -> ForkResult {
     let remotes = match git.git(repo, &["remote"]).await {
         Ok(r) => r,
         Err(e) => {

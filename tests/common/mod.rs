@@ -277,7 +277,7 @@ impl FakeGit {
 
 #[async_trait]
 impl GitExec for FakeGit {
-    async fn git(&self, _repo: &Path, args: &[&str]) -> std::result::Result<String, String> {
+    async fn git(&self, repo: &Path, args: &[&str]) -> std::result::Result<String, String> {
         let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
         self.calls.lock().unwrap().push(args_owned.clone());
 
@@ -295,6 +295,12 @@ impl GitExec for FakeGit {
                 }
                 return rule.response.clone();
             }
+        }
+        if args == ["worktree", "list", "--porcelain", "-z"] {
+            return Ok(format!(
+                "worktree {}\0branch refs/heads/main\0\0",
+                repo.display()
+            ));
         }
         Err(format!(
             "FakeGit: no rule matched args: {}",
